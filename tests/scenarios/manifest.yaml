@@ -162,8 +162,8 @@ scenarios:
     file: 25-persona-recall-sharpening.md
     title: Persona recall sharpening
     tier: design_only
-    reason: This synthetic reviewer evaluation is intentionally manual and has no recorded
-      validation pass in the scenario file.
+    reason: The dated comparison covers three paired cases, but a fourth pair is incomplete;
+      clean controls, holdouts, and the unused-validator and loud-failure checks remain unverified.
   - number: 26
     file: 26-parallel-reviewer-fanout.md
     title: Parallel reviewer fan-out stays batched
@@ -180,6 +180,5 @@ scenarios:
     file: 28-reviewer-working-tree.md
     title: Reviewers do not mutate the shared working tree
     tier: design_only
-    reason: Bats pins the addendum text and its link from every reviewer, but reviewer
-      conduct in a live host run (no destructive git, mutation testing on a copy) is not
-      automatable from this repo and has no recorded pass.
+    reason: The dated clean-checkout observation and addendum checks do not establish
+      preservation of dirty edits, mutation testing on a copy, or head re-verification.

@@ -103,14 +103,18 @@ definitions, not through spawn-time arguments.
 
 Installer and update fixtures pass on macOS 27.0.1 for all four host layouts. These checks cover file placement, refresh, uninstall ownership, and update pinning; they do not start a host or prove that it completes a review.
 
-| Host | Installer fixtures | Live review of this snapshot |
+| Host | Installer fixtures | Observed runtime evidence |
 | --- | --- | --- |
 | Cursor | Passed | Not verified |
 | Claude Code | Passed | Not verified |
-| Codex | Passed | Not verified |
+| Codex | Passed | [Changed-default host fixtures](tests/scenarios/24-adversary-full-default.md#changed-default-fixture-run-2026-11-14) at `90e5593`; injected receipts and local remotes |
 | opencode | Passed | Not verified |
 
 CI runs the helper checks on Ubuntu. Native Windows use is unverified. The [scenario manifest](tests/scenarios/manifest.yaml) distinguishes deterministic checks, historical manual observations, and behavior that remains a design fixture.
+
+[Scenario 25](tests/scenarios/25-persona-recall-sharpening.md#observed-comparison-2026-11-14)
+records actual Codex reviewer dispatch on bounded synthetic inputs. Its
+incomplete comparison does not justify changing the default panel.
 
 ## Usage
 

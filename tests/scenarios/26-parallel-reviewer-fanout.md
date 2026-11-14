@@ -55,6 +55,13 @@ launch reviewer or gate subagents.
 
 ## Manual runs
 
+- Date: 2026-11-14
+- Host: Codex through Witch, prompts frozen at `90e5593`
+- Target: [Scenario 25's paired fixtures](25-persona-recall-sharpening.md#observed-comparison-2026-11-14)
+- Reviewer fan-out: observed as one batch per arm, with one native launch per persona and results awaited after all launches.
+- Delta-gate fan-out: not observed; the [fresh host fixture](24-adversary-full-default.md#changed-default-fixture-run-2026-11-14) used injected gate receipts.
+- Limits: `cost_saver` and a host without parallel support were not exercised; one later panel was incomplete after registration and native approval-review failures.
+
 - Date: 2026-10-28
 - Host: Claude Code, skill read through its install symlink from the branch of
   PR #157
@@ -91,5 +98,5 @@ launch reviewer or gate subagents.
 ## Validation status
 
 **Status:** `design_only`
-**Evidence:** see the partial observations in the 2026-10-28 and 2026-09-10 run blocks above.
-**Missing evidence:** dated host runs covering delta-gate batching (check 2), conditional fallback (check 3), `cost_saver` model routing (check 5), and a run whose orchestrator did not write the reviewer-budget recipe.
+**Evidence:** See the partial Codex observation from 2026-11-14 and the historical Claude observations above.
+**Missing evidence:** Dated host runs covering delta-gate batching (check 2), conditional fallback (check 3), `cost_saver` model routing (check 5), and independent adherence to the reviewer-budget recipe.

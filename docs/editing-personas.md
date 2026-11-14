@@ -151,6 +151,9 @@ When citing results, identify the reviewed revisions and findings, and state
 the limits of the evidence. Use the [labeling protocol](../tools/recall-harness/label.md)
 to keep corpus judgments reproducible.
 
+[Scenario 25](../tests/scenarios/25-persona-recall-sharpening.md#paired-panel-procedure)
+defines the bounded synthetic comparison and records its observed limits.
+
 ## Mutation-test the contract
 
 `tests/bats/test_manifest_drift_localization.bats` swaps a fixture manifest

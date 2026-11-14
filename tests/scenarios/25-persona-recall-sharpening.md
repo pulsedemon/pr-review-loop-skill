@@ -44,7 +44,89 @@ Check 4 is automated. The other checks require actual reviewer responses; docume
 
 Run this optional evaluation after changing the relevant persona behavior. Record fixture contents, prompt revisions, findings, and limitations with any reported result. The [evaluation guidance](../../docs/editing-personas.md#evaluating-reviewer-changes) governs how to use those results.
 
+## Paired panel procedure
+
+The [reviewer-quality fixtures](../fixtures/reviewer-quality/README.md) contain
+three defective/corrected pairs. Export each case into its own Git repository
+and make a base-to-head diff containing that case alone. Give reviewers its
+README as the PR body, the diff, head SHA, changed files, persona prompt,
+linked addenda, and output schema. Keep the case table, expected answers,
+paired variant, and other arm's responses outside their context.
+
+Before dispatch, run each case's command checks independently. The defective
+variants must fail on their stated seed; their counterparts must pass. Freeze
+the tracked inputs, skill revision, effective promotion settings, actual model
+and effort, and prompt format. Exclude generated caches from the input export.
+
+Compare the default panel with `approvers_required=correctness,tests,security`.
+Each arm gets one independent panel pass and one fresh adversary with that
+arm's full raw responses. Alternate arm order by case. Validate responses with
+`validate_reviewer_output.py`, dedupe with the canonical matcher, and apply
+`promote_findings.py` with the frozen settings. Preserve raw findings and final
+partitions. A missing response, changed route, or failed launch makes the pair
+incomplete; do not resample it or count it as approval.
+
+Hide arm and reviewer identities before judging findings against the frozen
+code. Group repeated reports of the same defect and record its affected
+locations. Record usefulness, low-value findings, false findings, unsupported
+blocker classifications, and each seed's final partition. A seed mentioned
+only as a suggestion does not count as a retained blocker.
+
+Start with cases 01-04. Only after complete pilot pairs retain both defects as
+blockers without additional false blockers in the smaller arm, run cases 05-06
+as frozen holdouts. The bound is six pairs, at most 96 reviewer invocations
+including adversaries. Do not tune prompts or expand the sample mid-run.
+Recommend the smaller override only when all six pairs complete, all seeded
+blockers survive in both arms, and it reduces measured usage or time without
+additional false blockers or low-value findings. Keep the default panel intact.
+
+## Observed comparison, 2026-11-14
+
+The Codex parent used Witch-routed `gpt-6.1-sol`, high effort, for both panels
+and adversaries. Inputs and skill were frozen at
+`90e55936e7b8584562c6856033e47cbf7361073a`, with promotion settings
+`0/false/false`. Three paired cases completed. Case 04's smaller arm completed,
+but its full panel had registration timeouts and one native approval-review
+failure before launch. That pair is incomplete; no holdouts ran.
+
+| Case | Full: useful / low-value / false | Smaller: useful / low-value / false | Seed retained as blocker |
+| --- | --- | --- | --- |
+| 01, schema enforcement | 3 / 1 / 0 | 4 / 1 / 0 | Both arms |
+| 02, corrected schema | 3 / 2 / 0 | 2 / 3 / 0 | No schema-seed finding |
+| 03, unavailable checker | 2 / 1 / 0 | 1 / 1 / 0 | Both arms |
+
+These are unique issue counts per case and arm after blinded judgment, not
+raw report counts. Both arms also classified a test for the inert greeting
+fixture as a blocker. That gap is factual but low-value, with no supported
+reason to block the validation command. It is counted as low-value above and
+as an unsupported blocker separately.
+
+The corrected schema control still had unseeded numeric-input defects, and
+the validator fixtures failed developer Ruff 0.16.0 despite passing the
+repository-pinned Ruff 0.15.13. Those findings were reproduced and fixed in the
+shipped fixtures after freezing the comparison. They remain useful findings
+in this record; the original controls were not clean approvals. The two arms
+missed different additional defects. No promotion occurred, and every returned
+review response passed schema validation. The completed groups left their
+tracked fixture checkouts unchanged.
+
+For the three complete pairs, summed reviewer-phase time was 643.3 seconds
+for the full panel and 500.5 seconds for the smaller panel. Each phase runs
+from its first report-file creation to its last final write; panel and
+adversary durations are added, excluding parent orchestration gaps. This is
+one-pass timing, not total loop duration or a cost estimate. Token and monetary
+usage were unavailable.
+
+The result does not support a smaller-panel recommendation: the required
+sample is incomplete, its controls contained additional defects, and the
+smaller arm produced more low-value findings across the completed pairs.
+The exact frozen revision above remains the replay input; current fixtures
+include the verified repairs. Raw responses, blinded judgments, timing, and
+fixture snapshots were retained locally under ignored
+`docs/superpowers/reviews/2026-11-14-review-quality/`.
+
 ## Validation status
 
 **Status:** `design_only`
-**Missing evidence:** Add a dated run of these synthetic fixtures before claiming their reviewer behavior is validated.
+**Evidence:** The dated comparison above covers three complete pairs and records the incomplete fourth pair.
+**Missing evidence:** Complete clean controls and holdouts, plus the unused-validator and loud-failure checks, before claiming this whole scenario passed.
