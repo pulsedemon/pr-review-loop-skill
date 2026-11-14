@@ -5,15 +5,20 @@ from pathlib import Path
 from jsonschema import Draft202012Validator, ValidationError
 
 
+def reject_constant(value):
+    raise ValueError(f"invalid JSON constant: {value}")
+
+
 def main():
     try:
         schema = json.loads((Path(__file__).parent / "templates/state.schema.json").read_text())
-        record = json.load(sys.stdin)
+        raw = sys.stdin.read()
+        record = json.loads(raw, parse_constant=reject_constant)
         Draft202012Validator(schema).validate(record)
-    except (OSError, json.JSONDecodeError, ValidationError) as exc:
+    except (OSError, ValueError, ValidationError) as exc:
         print(str(exc), file=sys.stderr)
         return 2
-    print(json.dumps(record))
+    sys.stdout.write(raw)
     return 0
 
 
