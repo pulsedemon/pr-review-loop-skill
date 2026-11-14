@@ -12,13 +12,12 @@ Reads one JSON object on stdin. The findings input has two mutually exclusive sh
   findings:           list of deduped findings (single-list mode), OR
   panel_findings:     list of panel findings    (split mode; merged with the next field
   adversary_findings: list of adversary findings via _merge_adversary before partitioning;
-  a matched adversary blocker outranks a panel nit at the merge, not via a promotion path)
+  an in-scope adversary blocker retains its diagnostic payload when matched to a suggestion or nit)
 
 Other required top-level fields (both modes):
 
   suggestion_promotion_threshold: int (>=0); 0 disables multi_source promotion
-  adversary_promotion:            bool; false disables the adversary_endorsed path
-                                  and the blocker-over-nit merge override
+  adversary_promotion:            bool; false disables suggestion endorsement promotion
   adversary_solo_promotion:       bool; false disables the solo-adversary path
   demoted:                        list of this iteration's demoted entries
 
@@ -50,28 +49,25 @@ from finding_matcher import is_match as _is_match  # noqa: E402
 _MAX_EVIDENCE_FILE_BYTES = 5 * 1024 * 1024
 
 
-def _merge_adversary(panel: list, adversary: list, escalate: bool) -> list:
-    """Return a merged finding list with source_reviewers unioned on matches.
-
-    scope disagreements stay separate so a deferral cannot endorse or absorb
-    an actionable finding. an in-scope adversary blocker can override a nit.
-    """
+def _merge_adversary(panel: list, adversary: list) -> list:
+    """keep scope disagreements separate and retain an explicit blocker's diagnostics."""
     merged = [dict(p, source_reviewers=list(p.get("source_reviewers", []))) for p in panel]
     for adv in adversary:
         matched = False
-        for p in merged:
+        for index, p in enumerate(merged):
             if p.get("scope") != adv.get("scope") or not _is_match(p, adv):
                 continue
-            blocker_over_nit = (
-                escalate
-                and p.get("severity") == "nit"
+            if (
+                p.get("severity") in ("suggestion", "nit")
                 and adv.get("severity") == "blocker"
                 and adv.get("scope") == "in_scope"
-            )
-            if blocker_over_nit:
-                p["severity"] = "blocker"
-            if "adversary" not in p["source_reviewers"]:
-                p["source_reviewers"].append("adversary")
+            ):
+                sources = p["source_reviewers"]
+                if p.get("reviewer") and p["reviewer"] not in sources:
+                    sources.append(p["reviewer"])
+                merged[index] = dict(adv, source_reviewers=sources)
+            if "adversary" not in merged[index]["source_reviewers"]:
+                merged[index]["source_reviewers"].append("adversary")
             matched = True
         if not matched:
             merged.append(
@@ -100,7 +96,7 @@ def _plain_deferred(f: dict) -> str:
     file_ = f.get("file", "?")
     line = f.get("line", "?")
     summary = f.get("summary", "")
-    return f"{file_}:{line} — {summary}"
+    return f"`{file_}:{line}`: {summary}"
 
 
 def _provenance(f: dict, promoted_by: str, reason: str) -> dict:
@@ -144,11 +140,7 @@ def _objected(finding_evidence: dict, demoted: list) -> bool:
 
 
 def _adversary_endorsed_eligible(f: dict, endorsement_promotion: bool) -> bool:
-    """True when adversary endorsed a panel suggestion (>=2 distinct sources incl. adversary).
-
-    Path runs before multi-source. Fires regardless of threshold to preserve PR #5
-    behavior: endorsement promotes regardless of multi-persona count.
-    """
+    """endorsement promotion is independent of the multi-source threshold."""
     if not endorsement_promotion:
         return False
     if f.get("severity") != "suggestion":
@@ -160,15 +152,7 @@ def _adversary_endorsed_eligible(f: dict, endorsement_promotion: bool) -> bool:
 
 
 def _verify_evidence(ev: dict) -> tuple:
-    """Return (True, '') on success, (False, '<reason>') on the first check that fails.
-
-    finding_evidence.file is sourced from LLM JSON, so the path is treated as
-    untrusted: rejected if absolute or if it escapes cwd, and the read is
-    capped at _MAX_EVIDENCE_FILE_BYTES. The cap and containment together
-    prevent the verification from being abused as a side-channel oracle on
-    arbitrary host files (the failure reason is echoed back into PR
-    comments/state via promote_findings.py output).
-    """
+    """bound untrusted evidence reads to repository files; return validity and a failure reason."""
     raw = ev["file"]
     if not isinstance(raw, str) or not raw:
         return False, f"file must be non-empty string (got {raw!r})"
@@ -322,7 +306,6 @@ def main() -> int:
     if has_findings and has_split:
         _die("provide either 'findings' or 'panel_findings'+'adversary_findings', not both")
 
-    # validated before the merge below reads adversary_promotion
     _require(data, "suggestion_promotion_threshold", int)
     _require(data, "adversary_promotion", bool)
     _require(data, "adversary_solo_promotion", bool)
@@ -331,9 +314,7 @@ def main() -> int:
     if has_split:
         _require(data, "panel_findings", list)
         _require(data, "adversary_findings", list)
-        findings = _merge_adversary(
-            data["panel_findings"], data["adversary_findings"], data["adversary_promotion"]
-        )
+        findings = _merge_adversary(data["panel_findings"], data["adversary_findings"])
     else:
         _require(data, "findings", list)
         findings = data["findings"]

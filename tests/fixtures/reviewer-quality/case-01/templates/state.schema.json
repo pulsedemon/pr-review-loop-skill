@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "addressed",
+    "deferred"
+  ],
+  "properties": {
+    "addressed": {
+      "type": "array",
+      "description": "Each entry requires string pr and cause fields.",
+      "items": {
+        "type": "object"
+      }
+    },
+    "deferred": {
+      "type": "array",
+      "description": "Each entry requires string pr and cause fields.",
+      "items": {
+        "type": "object"
+      }
+    }
+  }
+}

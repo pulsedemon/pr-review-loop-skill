@@ -52,9 +52,9 @@ For PRs at or under the threshold with `pr_scope=auto` (and whenever `pr_scope=f
 - **allow_draft** (optional, default `false`): allow the loop to run against a draft PR
 - **pr_scope** (optional, default `auto`): controls the PR-scope check in Step 3.5. `auto` runs the LOC count and only prompts the user if total new LOC exceeds `max_new_loc`. `false` skips both the count and the prompt entirely. `true` runs the count and prompts/spawns the agent unconditionally (useful for testing).
 - **max_new_loc** (optional, default `1000`): new-LOC threshold for the Step 3.5 check.
-- **suggestion_promotion_threshold** (optional, default `2`): multi-source promotion threshold for §4c. See [`docs/synthesis.md#synthesis-knobs`](docs/synthesis.md#synthesis-knobs).
-- **adversary_promotion** (optional, default `true`): whether the adversary can raise a matched panel finding's severity (§4d.0.5 endorsement; merge-layer nit override). See [`docs/adversary.md#adversary-knobs`](docs/adversary.md#adversary-knobs).
-- **adversary_solo_promotion** (optional, default `true`): whether the evidence-gated solo-adversary path (§4d.0.5) can promote. See [`docs/adversary.md#adversary-knobs`](docs/adversary.md#adversary-knobs).
+- **suggestion_promotion_threshold** (optional, default `0`): multi-source promotion threshold for §4c. See [`docs/synthesis.md#synthesis-knobs`](docs/synthesis.md#synthesis-knobs).
+- **adversary_promotion** (optional, default `false`): whether an adversary endorsement promotes a matched panel suggestion. See [`docs/adversary.md#adversary-knobs`](docs/adversary.md#adversary-knobs).
+- **adversary_solo_promotion** (optional, default `false`): whether the evidence-gated solo-adversary path (§4d.0.5) can promote. See [`docs/adversary.md#adversary-knobs`](docs/adversary.md#adversary-knobs).
 - **adversary_panel_visibility** (optional, default `"full"`): what the adversary sees of the panel (`"blind"`/`"verdicts_only"`/`"full"`). See [`docs/adversary.md#adversary-knobs`](docs/adversary.md#adversary-knobs).
 - **delta_gate** (optional, default `true`): when `true`, iterations ≥ 2 run only the personas the §4a.1 delta-gate selects (plus open-blocker carryover); `false` runs the full panel every iteration. See [`docs/delta-gate.md`](docs/delta-gate.md).
 - **delta_gate_min_candidates** (optional, default `4`): below this many gate candidates, §4a.1 skips the pre-pass and runs all candidates directly.
@@ -119,7 +119,7 @@ Operates in-place in the user's current checkout. Run `bash "$SKILL_ROOT/scripts
 bash "$SKILL_ROOT/scripts/state_init.sh" <owner> <repo> <pr_number> <max_iterations> <dry_run>
 ```
 
-Creates `<git-dir>/pr-loop/state.json`, never tracked, following `templates/state.schema.json`. If the script reports state already exists for this PR, resume: Step 3.5 applies its resume rules first (a recorded abort re-emits `SCOPE_SPLIT_RECOMMENDED` → Step 5), then Step 3.6 dispatches; the automation contract allows no reset prompt. A same-PR file whose loop already finished Step 5 (`completed_at` set) is reinitialized by the script, never resumed. If it exists for a different PR, refuse. `<git-dir>` is the output of `git rev-parse --git-dir`: `.git` in an ordinary clone, an absolute path such as `/repo/.git/worktrees/<name>` in a linked worktree.
+Creates `<git-dir>/pr-loop/state.json`, never tracked, following `templates/state.schema.json`. If the script reports state already exists for this PR, resume: Step 3.5 applies its resume rules first (a recorded abort re-emits `SCOPE_SPLIT_RECOMMENDED` → Step 5), then Step 3.6 dispatches; the automation contract allows no reset prompt. A same-PR file whose loop already finished Step 5 (`completed_at` set) is reinitialized by the script, never resumed. If it exists for a different PR, refuse. `<git-dir>` is the output of `git rev-parse --git-dir`: `.git` in an ordinary clone, an absolute path such as `/repo/.git/worktrees/<name>` in a linked worktree. On a fresh run, persist explicit promotion overrides before synthesis; on resume, use recorded values.
 
 ### Step 3.5: PR-scope check (optional)
 

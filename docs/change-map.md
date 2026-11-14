@@ -76,8 +76,9 @@ dependent surfaces and caveats. Edits not listed here are routed by the
 - **Source of truth:** `scripts/promote_findings.py` (the only place a
   `suggestion` is promoted to `blocker`); the matcher rule lives in
   `scripts/match_findings.py` and canonically in `docs/synthesis.md`
-- **Dependent surfaces:** `docs/synthesis.md` (canonical matcher-rule prose);
-  the `suggestion_promotion_threshold` knob referenced in `SKILL.md`
+- **Dependent surfaces:** `docs/synthesis.md`, `docs/adversary.md`, and
+  `reviewers/adversary.md`; public inputs in `SKILL.md` and fresh-run defaults in
+  `scripts/pr_loop_state.py`. Preserve historical metric fallbacks when changing defaults.
 - **Validate:** `bash tests/run.sh`
 - *Caveat:* if you are editing only the reason *enum strings* in reviewer
   JSON, the source of truth is `reviewers/output.schema.json` instead.

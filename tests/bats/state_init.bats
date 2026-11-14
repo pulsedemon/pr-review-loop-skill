@@ -119,7 +119,7 @@ JSON'
   # Stub jq so any schema-maximum read returns a value that disagrees with
   # ADVERSARY_CAP=2 from scripts/_adversary_caps.sh. The rest of state_init's
   # jq calls (which take --argjson / --arg flags) pass through to real jq via
-  # the absolute path captured in setup() — `command -v jq` at stub run-time
+  # the absolute path captured in setup(): `command -v jq` at stub run-time
   # would resolve back to the stub itself.
   stub_cmd jq "
     if [[ \"\$*\" == *.maximum* ]]; then
@@ -167,14 +167,14 @@ JSON'
   # helper alongside it. state_init.sh resolves HERE via `dirname "$0"`, so
   # the helper lookup at "${HERE}/_adversary_caps.sh" will fail. Without the
   # readability guard added to state_init.sh, `set -euo pipefail` would trip
-  # on the `.` builtin and exit 1 — silently bypassing the documented exit-6
+  # on the `.` builtin and exit 1: silently bypassing the documented exit-6
   # ladder. This test pins the guard so a future refactor can't regress it.
   local fake_scripts="${BATS_TEST_TMPDIR}/fake_scripts"
   mkdir -p "$fake_scripts"
   cp "${SCRIPTS}/state_init.sh" "${fake_scripts}/state_init.sh"
   # state_init.sh also reads templates/state.schema.json via "${HERE}/../templates".
   # The guard runs BEFORE that read, so the missing templates dir doesn't matter
-  # here — but the test fails fast if the guard regresses and we fall through.
+  # here: but the test fails fast if the guard regresses and we fall through.
   run bash "${fake_scripts}/state_init.sh" o r 42
   [[ "$status" -eq 6 ]] || {
     echo "expected exit 6, got $status"
@@ -190,7 +190,7 @@ JSON'
 @test "schema cap unreadable (jq returns null) exits 6 with field-name error" {
   # When jq -r prints "null" (the path was renamed or removed), the guard at
   # scripts/state_init.sh's `[[ ! "$SCHEMA_CAP" =~ ^[0-9]+$ ]]` must trip and
-  # surface the field-name in stderr — distinct from the value-mismatch path
+  # surface the field-name in stderr: distinct from the value-mismatch path
   # which says "disagrees with schema maximum".
   stub_cmd jq "
     if [[ \"\$*\" == *.maximum* ]]; then
@@ -243,9 +243,9 @@ JSON'
     .approvers_required == "all" and
     (.approvers_required_list | length) == 11 and
     (.approvers_required_list[-1] == "blind_spots") and
-    .suggestion_promotion_threshold == 2 and
-    .adversary_promotion == true and
-    .adversary_solo_promotion == true and
+    .suggestion_promotion_threshold == 0 and
+    .adversary_promotion == false and
+    .adversary_solo_promotion == false and
     .adversary_panel_visibility == "full" and
     .shallow_adversary_runs == 0 and
     (has("shallow_approval_adversary_runs") | not)

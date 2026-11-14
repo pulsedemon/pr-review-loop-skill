@@ -50,6 +50,16 @@ remote. The failure here trips the same `EXTERNAL_PUSH` terminal status from the
 other direction, via the Step 3.6 dirty-tree guard, on a local mutation no external
 push caused.
 
+## Partial observation, 2026-11-14
+
+The [paired reviewer runs](25-persona-recall-sharpening.md#observed-comparison-2026-11-14)
+delivered the working-tree addendum and exact head SHA to each persona and
+adversary. Completed groups left their tracked fixture checkouts unchanged.
+The inputs were clean and reviewers used a native read-only sandbox. This does
+not establish preservation of an orchestrator's dirty edit, mutation testing on
+a scratch copy, or re-verification against head while the checkout is dirty.
+Those conduct checks remain pending.
+
 ## Validation status
 
 **Status:** `design_only`

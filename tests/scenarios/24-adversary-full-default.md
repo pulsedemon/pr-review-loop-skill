@@ -80,6 +80,43 @@ of nonempty findings or adversary finding quality.
 
 _Validated with the Codex host on 2026-09-18: PASS._
 
+## Changed-default fixture run, 2026-11-14
+
+A fresh Codex parent exercised the helpers at
+`90e55936e7b8584562c6856033e47cbf7361073a` with injected reviewer, adversary,
+gate, metadata, comment, and CI receipts. All executed helper and schema files
+were byte-checked against that pin after the parent checkout advanced. Fixtures
+used real commits and owned local bare remotes; Git allowed only file transport.
+The GitHub adapter recorded calls and rejected unsupported requests.
+
+| Case | Observed host behavior |
+| --- | --- |
+| Fresh defaults | `state_init.sh` stored `0/false/false`; matching, endorsed, and solo anchored suggestions stayed nonblocking; no edit or remote change |
+| Explicit adversary blocker matched to a nit | Promotion retained the blocker's own diagnostics and combined provenance; the host reproduced the schema defect, repaired it, verified the command, committed, and pushed locally |
+| Invalid required panel response | Validation rejected the verdict; history retained the error and completion returned `REVIEW_INCOMPLETE`, with unchanged tracked bytes and no review push or summary write |
+| Iteration-2 delta selection | Four validated gate receipts plus blocker carryover selected `correctness/tests`; zero blockers forced a five-persona sweep before completion, still in iteration 2 |
+
+The fixture repair moved from
+`1e6ce836f5fbd82d9eaabe8851ef939853067bcf` to
+`10370f9f27a8998519f0e6a4d086d3747ecee049`. The full sweep retained one
+nonblocking nit in its promotion output, replaced the partial review receipts,
+and passed the actual completion helper at that unchanged repaired head.
+This bounded fixture did not post a summary or record terminal success.
+
+The run took 703.2 seconds; tokens and cost were unavailable. Raw commands,
+receipts, source hashes, state, remote snapshots, and the host's decisions were
+retained locally under ignored
+`docs/superpowers/reviews/2026-11-14-review-quality/host-check/`.
+
+These cases establish the fresh host's decisions and real helper/Git behavior.
+They do not establish actual reviewer dispatch, parallel gates, model quality,
+live GitHub/CI, another parent host, or all checks in this scenario. In
+particular, the invalid response here came from a required panel persona;
+the dated adversary-specific cases above remain historical evidence.
+
+For actual panel/adversary dispatch and GitHub completion, see the
+[live approval-path record](27-comment-reply-disposition.md#live-github-approval-path-2026-11-14).
+
 ## Validation status
 
 **Status:** `manual_validated`

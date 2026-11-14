@@ -1,4 +1,4 @@
-"""Tests for report.py — fixture-driven rendering."""
+"""Tests for report.py: fixture-driven rendering."""
 
 import csv
 import json
@@ -8,13 +8,13 @@ from pathlib import Path
 
 import pytest
 from _shared import finding_id
-from collect_pr_corpus import (  # type: ignore[import-not-found]  # noqa: E402  — sibling module made importable by conftest.py
+from collect_pr_corpus import (  # type: ignore[import-not-found]  # noqa: E402 : sibling module made importable by conftest.py
     CORPUS_VERSION,
     corpus_filename,
     matched_filename,
 )
 from report import (
-    _candidate_cause,  # type: ignore[import-not-found]  # noqa: E402  — sibling module made importable by conftest.py
+    _candidate_cause,  # type: ignore[import-not-found]  # noqa: E402 : sibling module made importable by conftest.py
 )
 
 HARNESS = Path(__file__).resolve().parents[1]
@@ -116,7 +116,7 @@ def _render_with_unmatched_records(tmp_path, unmatched, labels_rows=None) -> str
     via `_write_labels` so the lookup at report.py joins correctly.
     Each labels_rows entry is the same 5-tuple shape `_write_labels`
     already accepts: `(pr, bucket, finding_id, label, notes)`. Passing
-    a mismatched owner/repo/pr is structurally impossible — that was
+    a mismatched owner/repo/pr is structurally impossible: that was
     the original fixture-mismatch bug this helper exists to prevent.
 
     `external_findings` is populated to mirror the unmatched JSONL
@@ -320,7 +320,7 @@ def test_candidate_cause_falls_back_when_no_keywords_hit():
 def test_candidate_cause_groups_schema_constraint_summaries_without_schema_token():
     """Schema-constraint summaries that describe a 'required list' or
     'additional properties' without using 'schema'/'type' must still route
-    to type_design — these are the documented-but-unenforced patterns the
+    to type_design: these are the documented-but-unenforced patterns the
     type_design persona sharpens for."""
     summary = (
         "The new object form for history[].addressed[]/deferred[] doesn't require "
@@ -336,7 +336,7 @@ def test_candidate_cause_groups_schema_constraint_summaries_without_schema_token
     assert "type design" in _candidate_cause("mutually exclusive flags both representable")
     assert "type design" in _candidate_cause("schema does not validate the cap")
     # 'invariant' is the only other single-word key in the type_design tuple
-    # (besides 'schema') — labels.csv carries 'missing invariant check' as a
+    # (besides 'schema'): labels.csv carries 'missing invariant check' as a
     # real_miss note, so this routing is load-bearing.
     assert "type design" in _candidate_cause("missing invariant check on the response")
     # A representative sample of the new multi-word keys, so a future narrowing
@@ -380,7 +380,7 @@ def test_candidate_cause_does_not_steal_from_other_buckets():
     # The reorder put type_design AFTER config/env + concurrency, so a summary
     # mixing a type_design token with a concurrency/config signal must land
     # in the earlier bucket. ('config' wins over 'concurrency' here only
-    # because of tuple ordering — both are upstream of type_design, which
+    # because of tuple ordering: both are upstream of type_design, which
     # is the invariant being pinned.)
     assert "type design" not in _candidate_cause("schema race on async config reload")
     assert "type design" not in _candidate_cause("schema race condition in async handler")
@@ -389,7 +389,7 @@ def test_candidate_cause_does_not_steal_from_other_buckets():
 
 def test_report_warns_when_matched_unmatched_mismatch_anchored(tmp_path):
     """If A1 regenerated the corpus but A2 didn't rerun, the bucket totals
-    are stale relative to the corpus — report.py must surface that loudly
+    are stale relative to the corpus: report.py must surface that loudly
     rather than letting downstream sections silently mislead the reader."""
     (tmp_path / "corpus").mkdir()
     # Corpus says 3 anchored externals.
@@ -586,14 +586,6 @@ def test_report_skips_near_miss_section_when_all_scores_null(tmp_path):
 
 
 def test_report_near_miss_section_floats_real_miss_above_25_row_cap(tmp_path):
-    """Labeled real_miss rows must appear in the rendered (capped) section even
-    when their score is below 25 higher-scoring unlabeled rows.
-
-    Pins the (is_real_miss desc, score desc) sort key at report.py:454. A
-    future change that drops the `-int(r.is_real_miss)` term from the sort key
-    would silently drop labeled real_miss off the visible 25 — corrupting the
-    Phase 1 decision-rule input the section exists to surface.
-    """
     # 28 unlabeled high-score rows + 2 labeled real_miss low-score rows.
     # Without the is_real_miss sort priority, both real_miss rows would be
     # cut off by the 25-row cap (their scores are below all 28 unlabeled).
@@ -601,7 +593,7 @@ def test_report_near_miss_section_floats_real_miss_above_25_row_cap(tmp_path):
         {
             "finding_id": f"fid_hi_{i:02d}",
             "external": {"file": "x.py", "line": 100 + i, "summary": f"hi summary {i}"},
-            "best_near_miss_score": 0.30 + i * 0.005,  # 0.300..0.435 — all unlabeled
+            "best_near_miss_score": 0.30 + i * 0.005,  # 0.300..0.435: all unlabeled
             "best_near_miss_loop_summary": f"hi loop {i}",
             "best_near_miss_line_delta": 0,
         }
@@ -645,14 +637,6 @@ def test_report_near_miss_section_floats_real_miss_above_25_row_cap(tmp_path):
 
 
 def test_report_near_miss_section_renders_decision_rule_statistic_and_histogram(tmp_path):
-    """The Phase 1 decision-rule statistic line and the real_miss score
-    histogram are the diagnostic outputs the section exists to ship.
-
-    Pins report.py:418-451: a regression that drops the statistic line,
-    miscounts rm_ge_045, swaps bin edges, or skips the histogram block would
-    currently pass every other test but corrupt the Phase 1 decision-rule
-    verdict — the PR's stated purpose.
-    """
     # 5 real_miss rows: 3 with score >= 0.45, 2 below. Decision-rule = 60.0%.
     # Bin distribution: [0.00-0.10):0, [0.10-0.20):1 (0.10), [0.20-0.30):1 (0.20),
     # [0.30-0.40):0, [0.40-0.45):0, [0.45-0.50):2 (0.45, 0.49), [0.50-0.75):1 (0.55).
@@ -696,7 +680,7 @@ def test_report_near_miss_histogram_includes_line_gate_only_bin(tmp_path):
     Pins report.py's bin list against a regression that removes the final
     bins or rebounds them short of 1.0.
     """
-    # 3 real_miss rows: scores 0.65, 0.80, 1.00 — all line-gate-only.
+    # 3 real_miss rows: scores 0.65, 0.80, 1.00: all line-gate-only.
     unmatched = [
         {
             "finding_id": f"rm_{i:02d}",
@@ -725,16 +709,6 @@ def test_report_near_miss_histogram_includes_line_gate_only_bin(tmp_path):
 
 
 def test_report_near_miss_renders_when_line_delta_field_absent(tmp_path):
-    """Back-compat: older harness JSONL has best_near_miss_score but no
-    best_near_miss_line_delta key. report.py reads via .get(...) so the row
-    must still render — with the `line_delta=` segment suppressed.
-
-    Pins report.py:315 (`u.get('best_near_miss_line_delta')  # may be None on
-    older JSONL`) and report.py:464 (the conditional `line_delta_str`). A
-    regression that switched .get to subscript access would silently break
-    older-JSONL handling and still pass every other test, since all other
-    fixtures pass an explicit integer line_delta.
-    """
     output = _render_with_unmatched_records(
         tmp_path,
         unmatched=[
@@ -792,15 +766,15 @@ def test_report_near_miss_diagnostic_suppressed_when_no_real_miss_labels(tmp_pat
 
 def test_candidate_cause_groups_correctness_summaries():
     """generic schema and failure tokens must not hide correctness findings."""
-    # b7afe29bdb71 — routed to "type design" on a bare `schema` token.
+    # b7afe29bdb71: routed to "type design" on a bare `schema` token.
     assert "correctness" in _candidate_cause(
         "`EXPECTED_SCHEMA_ID_PREFIX` is hard-coded to the major.minor.patch directory"
     )
-    # ebf2e7b79f2b — unguarded None.get().
+    # ebf2e7b79f2b: unguarded None.get().
     assert "correctness" in _candidate_cause(
         "`yaml.safe_load()` can return None (empty frontmatter) or a non-mapping type"
     )
-    # ae6e19ba7827 — routed to "type design"; it is a detection bypass.
+    # ae6e19ba7827: routed to "type design"; it is a detection bypass.
     assert "correctness" in _candidate_cause(
         "`is_shallow()` treats any non-empty list as sufficient, which allows a bypass"
     )
@@ -933,6 +907,94 @@ def _loop_record(fid, summary="a loop finding nobody else raised"):
     }
 
 
+def test_useful_rate_separates_low_value_and_corroboration(tmp_path):
+    judgments = (
+        ["loop_true_positive"] * 3
+        + ["loop_low_value"] * 5
+        + ["loop_false_positive"] * 2
+        + ["loop_unjudgeable"] * 2
+        + [""] * 4
+    )
+    records = [_loop_record(f"manual-{i}", f"finding {i}") for i in range(len(judgments))]
+    corroborated = [
+        {"file": f"matched-{i}.py", "line": 1, "summary": f"matched finding {i}"} for i in range(2)
+    ]
+    _corpus_path(tmp_path, 1).write_text(
+        json.dumps(
+            _corpus_record(
+                1,
+                loop_findings=[r["loop_finding"] for r in records] + corroborated,
+                external_findings=corroborated,
+            )
+        )
+    )
+    _write_jsonl(
+        _jsonl_path(tmp_path, "matched", 1),
+        [
+            {"finding_id": f"matched-{i}", "external": finding, "matched_loop": finding}
+            for i, finding in enumerate(corroborated)
+        ],
+    )
+    _write_jsonl(_jsonl_path(tmp_path, "unmatched", 1), [])
+    _write_loop_unmatched(tmp_path, 1, records)
+    _write_labels(
+        tmp_path / "labels.csv",
+        [
+            (1, "loop_unmatched", record["finding_id"], label, "manual judgment")
+            for record, label in zip(records, judgments, strict=True)
+            if label
+        ],
+    )
+
+    out = _run(tmp_path)
+
+    assert "PIPELINE WARNING" not in out
+    assert "Precision: 83.3% (10/12)" in out
+    assert "Useful rate among manually judged, uncorroborated loop findings: 30.0% (3/10)" in out
+    assert "Manual judgment coverage: 62.5% (10/16)" in out
+    assert "- loop_true_positive: 3" in out
+    assert "- loop_low_value: 5" in out
+    assert "- loop_false_positive: 2" in out
+
+
+@pytest.mark.parametrize("corroborated_count", [0, 2])
+def test_useful_rate_without_manual_judgments_is_unmeasured(tmp_path, corroborated_count):
+    corroborated = [
+        {"file": f"matched-{i}.py", "line": 1, "summary": f"matched finding {i}"}
+        for i in range(corroborated_count)
+    ]
+    records = [] if corroborated_count else [_loop_record("unlabeled")]
+    _corpus_path(tmp_path, 1).write_text(
+        json.dumps(
+            _corpus_record(
+                1,
+                loop_findings=corroborated + [r["loop_finding"] for r in records],
+                external_findings=corroborated,
+            )
+        )
+    )
+    _write_jsonl(
+        _jsonl_path(tmp_path, "matched", 1),
+        [
+            {"finding_id": f"matched-{i}", "external": finding, "matched_loop": finding}
+            for i, finding in enumerate(corroborated)
+        ],
+    )
+    _write_jsonl(_jsonl_path(tmp_path, "unmatched", 1), [])
+    _write_loop_unmatched(tmp_path, 1, records)
+    _write_labels(tmp_path / "labels.csv", [])
+
+    out = _run(tmp_path)
+
+    assert "PIPELINE WARNING" not in out
+    assert "Useful rate among manually judged, uncorroborated loop findings: n/a" in out
+    if corroborated_count:
+        assert "Precision: 100.0% (2/2)" in out
+        assert "Manual judgment coverage: n/a, no uncorroborated loop findings" in out
+    else:
+        assert "Manual judgment coverage: 0.0% (0/1)" in out
+
+
 def test_precision_counts_corroborated_and_hand_labeled(tmp_path):
     """Denominator is corroborated + the three judged labels. Corroborated pairs
     count as true positives: an issue an external reviewer also raised is real."""
@@ -989,7 +1051,7 @@ def test_precision_omitted_when_nothing_is_judged(tmp_path):
     _write_loop_unmatched(tmp_path, 1, [_loop_record("x1")])
     _write_labels(tmp_path / "labels.csv", [])
     out = _run(tmp_path)
-    assert "Precision: n/a — no loop findings judged yet" in out
+    assert "Precision: n/a: no loop findings judged yet" in out
     assert "1 loop finding(s) unlabeled" in out
 
 
@@ -1072,7 +1134,7 @@ def test_loop_side_invariant_flags_stale_a2_output(tmp_path):
     _jsonl_path(tmp_path, "matched", 1).write_text("")
     _jsonl_path(tmp_path, "unmatched", 1).parent.mkdir(parents=True, exist_ok=True)
     _jsonl_path(tmp_path, "unmatched", 1).write_text("")
-    # No loop_unmatched file at all — exactly what stale A2 output looks like.
+    # No loop_unmatched file at all: exactly what stale A2 output looks like.
     _write_labels(tmp_path / "labels.csv", [])
     out = _run(tmp_path)
     assert "PIPELINE WARNING" in out

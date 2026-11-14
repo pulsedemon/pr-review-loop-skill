@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import NamedTuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _shared import finding_id  # noqa: E402
+from _shared import finding_id, require_corpus_version, require_nested_layout  # noqa: E402
 from collect_pr_corpus import (  # type: ignore[import-not-found]  # noqa: E402
     CORPUS_VERSION,
     matched_filename,
@@ -53,50 +53,6 @@ class NearMissRow(NamedTuple):
     is_real_miss: bool
 
 
-def _require_corpus_version(corpus: dict, corpus_path: Path) -> None:
-    """Refuse corpora older than CORPUS_VERSION. Mirrors match_external's
-    guard so report.py also fails loud on a stale corpus rather than
-    silently rolling up records into ('', '') repo buckets."""
-    version = corpus.get("corpus_version")
-    if version != CORPUS_VERSION:
-        raise RuntimeError(
-            f"{corpus_path}: corpus_version={version!r}, expected "
-            f"{CORPUS_VERSION}. Re-run collect_pr_corpus.py to regenerate."
-        )
-
-
-def _require_nested_layout(corpus_dir: Path, corpora: list) -> None:
-    """Refuse a corpus dir with stray flat-layout files. Two cases:
-
-    - MIXED: nested files plus a stray `pr-*.json` at the top level. The
-      pre-PR-30 short-circuit (`if corpora: return`) skipped this, so a
-      flat-only PR sitting beside the nested tree was silently omitted from
-      the counts (the PR #13 `real_miss`).
-    - FLAT-ONLY: `pr-*.json` at the top level with no nested files. `glob`
-      yields [] and A2/report would otherwise exit 0 with no work, swallowing
-      the schema-mismatch signal the CORPUS_VERSION bump exists to surface.
-
-    A missing dir is a no-op (report.py calls this with corpora=[] before its
-    own dir check)."""
-    if not corpus_dir.is_dir():
-        return
-    stray_flat = list(corpus_dir.glob("pr-*.json"))
-    if stray_flat and corpora:
-        raise RuntimeError(
-            f"{corpus_dir}: mixed corpus layout detected "
-            f"({len(stray_flat)} stray flat pr-*.json file(s) at the top level "
-            f"alongside the nested <owner>/<repo>/pr-<N>.json tree). "
-            f"Clean the stray files and re-run collect_pr_corpus.py."
-        )
-    if stray_flat and not corpora:
-        raise RuntimeError(
-            f"{corpus_dir}: legacy flat corpus layout detected "
-            f"({len(stray_flat)} pr-*.json file(s) at the top level). "
-            f"Re-run collect_pr_corpus.py to regenerate under "
-            f"<owner>/<repo>/pr-<N>.json (CORPUS_VERSION={CORPUS_VERSION})."
-        )
-
-
 def _load_jsonl(path: Path) -> list[dict]:
     if not path.exists() or path.stat().st_size == 0:
         return []
@@ -118,7 +74,7 @@ def _require_scorer(rows: list[dict], path: Path) -> None:
         if scorer != EXPECTED_SCORER:
             raise SystemExit(
                 f"{path}: record scored by {scorer!r}, expected {EXPECTED_SCORER!r}. "
-                "Re-run A2 (match_external.py) before A4 — these scores are on a "
+                "Re-run A2 (match_external.py) before A4: these scores are on a "
                 "different scale than this report interprets."
             )
 
@@ -165,7 +121,7 @@ def _load_labels(
         for col in _REQUIRED_LABEL_COLUMNS:
             if col not in fieldnames:
                 raise RuntimeError(
-                    f"labels.csv missing required column '{col}' — schema "
+                    f"labels.csv missing required column '{col}': schema "
                     "is owner,repo,pr,bucket,finding_id,label,notes"
                 )
         for row in reader:
@@ -173,13 +129,13 @@ def _load_labels(
             valid = _BUCKET_LABELS.get(bucket)
             if valid is None:
                 raise RuntimeError(
-                    f"labels.csv: unknown bucket {bucket!r} — expected one of "
+                    f"labels.csv: unknown bucket {bucket!r}: expected one of "
                     f"{', '.join(sorted(_BUCKET_LABELS))}"
                 )
             # An empty label is a deliberate "not judged yet" row, not a typo.
             if label and label not in valid:
                 raise RuntimeError(
-                    f"labels.csv: label {label!r} is not valid for bucket {bucket!r} — "
+                    f"labels.csv: label {label!r} is not valid for bucket {bucket!r}: "
                     f"expected one of {', '.join(sorted(valid))}"
                 )
             key = (row["owner"], row["repo"], row["pr"], bucket, row["finding_id"])
@@ -311,7 +267,7 @@ def _candidate_cause(summary: str) -> str:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="A4 — render REPORT.md")
+    parser = argparse.ArgumentParser(description="A4: render REPORT.md")
     parser.add_argument("--corpus-dir", type=Path, default=DEFAULT_CORPUS_DIR)
     parser.add_argument(
         "--unmatched-dir",
@@ -330,7 +286,7 @@ def main() -> int:
     args = parser.parse_args()
 
     corpora = sorted(args.corpus_dir.glob("*/*/pr-*.json")) if args.corpus_dir.is_dir() else []
-    _require_nested_layout(args.corpus_dir, corpora)
+    require_nested_layout(args.corpus_dir, corpora, CORPUS_VERSION)
     labels = _load_labels(args.labels)
 
     out = io.StringIO()
@@ -343,10 +299,8 @@ def main() -> int:
     total_unmatched = 0
     total_unanchored_external = 0
     total_unanchored_loop = 0
-    # Precision counters. `corroborated` is the matched count: an external
-    # reviewer independently raised the same issue. The rest are hand-applied
-    # judgments; non-corroboration is never inferred as a false positive because
-    # the external reviewer has its own recall problem.
+    # matched summaries establish overlap, not independent discovery or usefulness.
+    # uncorroborated findings require manual judgments.
     precision_counts: Counter = Counter()
 
     sampled_prs = total_sample = total_judged_sample = total_false = 0
@@ -361,7 +315,7 @@ def main() -> int:
     # counts are stale relative to the source.
     # Tuple shape: (owner, repo, pr, anchored_external, matched, unmatched).
     invariant_violations: list[tuple[str, str, int, int, int, int]] = []
-    # Filtered to score not None — null-score rows have no same-file loop
+    # Filtered to score not None: null-score rows have no same-file loop
     # finding and so carry no diagnostic signal.
     near_miss_rows: list[NearMissRow] = []
     # Per-repo totals for the "## By owner/repo" section.
@@ -375,7 +329,7 @@ def main() -> int:
 
     for corpus_path in corpora:
         corpus = json.loads(corpus_path.read_text())
-        _require_corpus_version(corpus, corpus_path)
+        require_corpus_version(corpus, corpus_path, CORPUS_VERSION)
         if corpus.get("skipped"):
             continue
         pr = corpus["pr"]
@@ -541,7 +495,7 @@ def main() -> int:
     # accumulated from PRs in invariant_violations, so they're misleading on
     # their own without this disclaimer above them.
     if invariant_violations:
-        out.write("## PIPELINE WARNING — stale matcher outputs\n\n")
+        out.write("## PIPELINE WARNING: stale matcher outputs\n\n")
         out.write(
             "For the following PRs, `matched + unmatched != anchored_external`. "
             "Most likely cause: A1 (collect_pr_corpus.py) was re-run but A2 "
@@ -558,7 +512,7 @@ def main() -> int:
         out.write("\n")
 
     if loop_invariant_violations:
-        out.write("## PIPELINE WARNING — stale loop-side matcher outputs\n\n")
+        out.write("## PIPELINE WARNING: stale loop-side matcher outputs\n\n")
         out.write(
             "For the following PRs, `corroborated + loop_unmatched != anchored "
             "loop findings`. Same cause as above, and it silently understates the "
@@ -587,7 +541,7 @@ def main() -> int:
     # Label distribution.
     out.write("## Label distribution\n\n")
     if not label_distribution:
-        out.write("_(no labels yet — populate `labels.csv` and re-run)_\n\n")
+        out.write("_(no labels yet: populate `labels.csv` and re-run)_\n\n")
     else:
         for (bucket, label), count in sorted(label_distribution.items()):
             out.write(f"- {bucket} / {label}: {count}\n")
@@ -601,17 +555,17 @@ def main() -> int:
         for cause, items in sorted(miss_groups.items(), key=lambda kv: -len(kv[1])):
             out.write(f"### {cause} ({len(items)} miss{'es' if len(items) != 1 else ''})\n\n")
             for owner, repo, pr, summary in items:
-                out.write(f"- {owner}/{repo} PR #{pr} — {summary}\n")
+                out.write(f"- {owner}/{repo} PR #{pr}: {summary}\n")
             out.write("\n")
 
     # Matcher near-misses (Phase 1 diagnostic). Surfaces unmatched externals
-    # that have a same-file loop finding — i.e., the matcher is the gate that
+    # that have a same-file loop finding: i.e., the matcher is the gate that
     # fired, not (necessarily) persona recall. The score on a near-miss row is
     # whatever _best_near_miss computed: containment, the same scorer the match
     # gate uses. It is typically below CONTAINMENT_THRESHOLD (because anything
     # at or above it within ±HARNESS_LINE_WINDOW would have matched), but can
     # also be at or above when the line-window gate rather than the overlap gate
-    # blocked the match — _best_near_miss intentionally applies no line window
+    # blocked the match: _best_near_miss intentionally applies no line window
     # so the diagnostic distinguishes the two.
     #
     # Sort key is (is_real_miss desc, score desc): labeled real_miss rows
@@ -625,10 +579,10 @@ def main() -> int:
     # divided by total real_miss with non-null near-miss) is computed from
     # the FULL near_miss_rows list (uncapped) and emitted on its own line
     # above the capped section. Phase 1's 30%/0.45 threshold is read from
-    # this single source — never hand-counted from the rendered rows.
+    # this single source: never hand-counted from the rendered rows.
     #
     # Section is omitted entirely if no unmatched record carried a
-    # same-file loop finding (all scores null) — that's a different signal
+    # same-file loop finding (all scores null): that's a different signal
     # (no co-location at all) and the cap-at-25 list would be empty noise.
     if near_miss_rows:
         out.write("## Matcher near-misses (unmatched externals with a same-file loop finding)\n\n")
@@ -650,7 +604,7 @@ def main() -> int:
             # reads as a falsified verdict on an unlabeled corpus.
             out.write(
                 "Near-miss diagnostic: no real_miss labels on rows with a same-file "
-                "loop finding yet — decision-rule statistic is not computable.\n\n"
+                "loop finding yet: decision-rule statistic is not computable.\n\n"
             )
         # Histogram over real_miss near-miss scores. Spec calls the 30%/0.45
         # thresholds "starting points, not load-bearing"; surfacing the full
@@ -660,12 +614,12 @@ def main() -> int:
         # [0.50-1.01) bins capture line-gate-only near-misses (same-file loop
         # finding far from the external line with high summary overlap); these
         # are unmatched not because the overlap was too low but because the line
-        # window blocked the match — _best_near_miss applies no line gate so
+        # window blocked the match: _best_near_miss applies no line gate so
         # they show up here. The boundary is CONTAINMENT_THRESHOLD: below it the
         # overlap gate fired, at or above it the line gate did. Bin counts must
         # sum to n; without the final bins those rows would be silently dropped
         # from the distribution. 0.45 is an explicit bin edge so the
-        # decision-rule cut is visible at a glance — the rows in [0.45, 0.50)
+        # decision-rule cut is visible at a glance: the rows in [0.45, 0.50)
         # are the marginal ones that flip the matcher-recall verdict.
         if rm_total:
             bins = [
@@ -684,7 +638,7 @@ def main() -> int:
                 out.write(f"  [{lo:.2f}-{hi:.2f}): {c}\n")
             out.write(
                 "Histogram is the source of truth if the 30%/0.45 statistic looks "
-                "borderline — the spec explicitly calls the thresholds starting points.\n\n"
+                "borderline: the spec explicitly calls the thresholds starting points.\n\n"
             )
         # Sort key prioritizes labeled real_miss above the 25-row visual cap; see
         # comment block above.
@@ -696,11 +650,11 @@ def main() -> int:
         for r in near_miss_rows[:25]:
             tag = " [real_miss]" if r.is_real_miss else ""
             # line_delta_str surfaces when summary similarity is high but the same-file
-            # loop finding is spatially far from the external — a high score with
+            # loop finding is spatially far from the external: a high score with
             # delta>HARNESS_LINE_WINDOW is summary-similar prose, not the same finding.
             line_delta_str = f" line_delta={r.line_delta}" if r.line_delta is not None else ""
             out.write(
-                f"- {r.owner}/{r.repo} PR #{r.pr} score={r.score:.2f}{line_delta_str}{tag} — "
+                f"- {r.owner}/{r.repo} PR #{r.pr} score={r.score:.2f}{line_delta_str}{tag}: "
                 f"external: {r.ext_summary[:200]} | loop: {r.loop_summary[:200]}\n"
             )
         out.write("\n")
@@ -718,7 +672,7 @@ def main() -> int:
         out.write("\n")
 
     # In-flight (open) PRs collected with --include-open. Excluded from totals
-    # because their head-of-branch state isn't reproducible — re-running A1
+    # because their head-of-branch state isn't reproducible: re-running A1
     # later produces a different record for the same PR number.
     if in_flight:
         out.write("## In-flight PRs (excluded from totals)\n\n")
@@ -745,7 +699,7 @@ def main() -> int:
         if rate > MATCHED_FALSE_WARN_THRESHOLD:
             out.write(f"matched_false rate: {rate:.1%}\n\n")
             out.write(
-                f"**MATCHER QUALITY WARNING** — matched_false rate {rate:.1%} is above 10%. "
+                f"**MATCHER QUALITY WARNING**: matched_false rate {rate:.1%} is above 10%. "
                 "Tune `scripts/match_findings.py` before trusting unmatched-driven groups.\n"
             )
         else:
@@ -779,7 +733,7 @@ def main() -> int:
         for label in ("loop_true_positive", "loop_low_value", "loop_false_positive"):
             out.write(f"- {label}: {precision_counts[label]}\n")
     else:
-        out.write("Precision: n/a — no loop findings judged yet\n\n")
+        out.write("Precision: n/a: no loop findings judged yet\n\n")
     excluded = precision_counts["loop_unjudgeable"]
     unlabeled = precision_counts["unlabeled"]
     if excluded:
@@ -790,6 +744,23 @@ def main() -> int:
         "\nNever computed from the matched/unmatched split: a loop finding nobody "
         "commented on is not evidence of a false positive.\n"
     )
+
+    out.write("\n## Panel usefulness\n\n")
+    manual_judged = judged - precision_counts["corroborated"]
+    useful = precision_counts["loop_true_positive"]
+    out.write("Useful rate among manually judged, uncorroborated loop findings: ")
+    if manual_judged:
+        out.write(f"{useful / manual_judged:.1%} ({useful}/{manual_judged})\n\n")
+    else:
+        out.write("n/a, no manual judgments\n\n")
+    manual_population = manual_judged + excluded + unlabeled
+    if manual_population:
+        out.write(
+            f"Manual judgment coverage: {manual_judged / manual_population:.1%} "
+            f"({manual_judged}/{manual_population})\n"
+        )
+    else:
+        out.write("Manual judgment coverage: n/a, no uncorroborated loop findings\n")
 
     sys.stdout.write(out.getvalue())
     return 0

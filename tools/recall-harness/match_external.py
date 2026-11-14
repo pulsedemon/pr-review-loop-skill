@@ -2,7 +2,7 @@
 """A2: Match external findings against loop findings using scripts/match_findings.py.
 
 For each corpus file in --corpus-dir:
-- Skip external findings without file/line (unanchored — the matcher requires
+- Skip external findings without file/line (unanchored: the matcher requires
   both; unanchored go directly to A4's unanchored buckets).
 - For each anchored external finding, apply scripts/match_findings.py's
   `is_match` in-process against every anchored loop finding, scoring
@@ -31,13 +31,11 @@ import sys
 from pathlib import Path
 from types import ModuleType
 
-# Make the sibling _shared module importable whether this file is run as a
-# script or imported by pytest. conftest.py handles the pytest case; this
-# handles script invocation.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _shared import (  # type: ignore[import-not-found]  # noqa: E402, F401  re-exported for callers/tests
-    canonical_summary,
+from _shared import (  # noqa: E402
     finding_id,
+    require_corpus_version,
+    require_nested_layout,
 )
 from collect_pr_corpus import (  # type: ignore[import-not-found]  # noqa: E402
     CORPUS_VERSION,
@@ -56,70 +54,14 @@ DEFAULT_MATCHED_DIR = _HARNESS_DIR / "matched"
 DEFAULT_LOOP_UNMATCHED_DIR = _HARNESS_DIR / "loop_unmatched"
 DEFAULT_MATCH_SCRIPT = _HARNESS_DIR.parents[1] / "scripts" / "match_findings.py"
 
-# Copilot anchors to its own diff hunk while the loop cites its read of the
-# file, so the same finding lands tens of lines apart: over the corpus's
-# same-file pairs the median delta is 36 and the max 613. The loop's ±5 rejects
-# a hand-verified pair at 13. Every value from 13 to 25 yields the same matches
-# and no false ones, so this sits mid-range rather than on a data point.
+# allow external reviewers to anchor the same issue to different lines.
+# this window is independent of the loop's finding-deduplication window.
 HARNESS_LINE_WINDOW = 15
 
 
-# Stamped on every emitted record so A4 can tell whether a JSONL it is reading
-# was scored the way it interprets. The count-based staleness check cannot: an
-# output from before the containment switch partitions the same corpus into the
-# same counts, so it passes that check while carrying jaccard scores that A4
-# would read against containment bins and the 0.45 decision cut.
-#
-# Carries the threshold and window, not just the scorer name, because the bins
-# depend on all three. Changing CONTAINMENT_THRESHOLD without renaming the
-# function would otherwise leave the stamp reading valid while the boundary A4
-# draws between overlap-gate and line-gate misses moved underneath it.
 def _scorer_stamp(matcher: ModuleType) -> str:
+    """stamp the scoring contract; record counts cannot detect stale scoring rules."""
     return f"token_containment@{matcher.CONTAINMENT_THRESHOLD:g}/win{HARNESS_LINE_WINDOW}"
-
-
-def _require_corpus_version(corpus: dict, corpus_path: Path) -> None:
-    """Refuse corpora older than CORPUS_VERSION. A schema mismatch (e.g. old
-    record without owner/repo) silently produces wrong filenames and corrupt
-    aggregates, so we fail loud and tell the operator to rerun A1."""
-    version = corpus.get("corpus_version")
-    if version != CORPUS_VERSION:
-        raise RuntimeError(
-            f"{corpus_path}: corpus_version={version!r}, expected "
-            f"{CORPUS_VERSION}. Re-run collect_pr_corpus.py to regenerate."
-        )
-
-
-def _require_nested_layout(corpus_dir: Path, corpora: list) -> None:
-    """Refuse a corpus dir with stray flat-layout files. Two cases:
-
-    - MIXED: nested files plus a stray `pr-*.json` at the top level. The
-      pre-PR-30 short-circuit (`if corpora: return`) skipped this, so a
-      flat-only PR sitting beside the nested tree was silently omitted from
-      the counts (the PR #13 `real_miss`).
-    - FLAT-ONLY: `pr-*.json` at the top level with no nested files. `glob`
-      yields [] and A2/report would otherwise exit 0 with no work, swallowing
-      the schema-mismatch signal the CORPUS_VERSION bump exists to surface.
-
-    A missing dir is a no-op (report.py calls this with corpora=[] before its
-    own dir check)."""
-    if not corpus_dir.is_dir():
-        return
-    stray_flat = list(corpus_dir.glob("pr-*.json"))
-    if stray_flat and corpora:
-        raise RuntimeError(
-            f"{corpus_dir}: mixed corpus layout detected "
-            f"({len(stray_flat)} stray flat pr-*.json file(s) at the top level "
-            f"alongside the nested <owner>/<repo>/pr-<N>.json tree). "
-            f"Clean the stray files and re-run collect_pr_corpus.py."
-        )
-    if stray_flat and not corpora:
-        raise RuntimeError(
-            f"{corpus_dir}: legacy flat corpus layout detected "
-            f"({len(stray_flat)} pr-*.json file(s) at the top level). "
-            f"Re-run collect_pr_corpus.py to regenerate under "
-            f"<owner>/<repo>/pr-<N>.json (CORPUS_VERSION={CORPUS_VERSION})."
-        )
 
 
 def _is_anchored(finding: dict) -> bool:
@@ -185,7 +127,7 @@ def _best_near_miss(
 
     `ext_for_matcher` is the same trimmed `{file, line, summary}` dict that
     `_run_matcher` validates at match_external.py:100-128 (all three keys
-    present, correct types). Do not pass a raw external — `ext["summary"]`
+    present, correct types). Do not pass a raw external: `ext["summary"]`
     and `ext["line"]` below are unchecked accesses, by design, because the
     caller is responsible for trimming. Passing a raw external will KeyError
     silently at runtime, not at test time.
@@ -195,7 +137,7 @@ def _best_near_miss(
 
     Scope is restricted to same-file findings (mirroring the matcher's first
     short-circuit at match_findings.py:135) because that's the cohort the
-    matcher would have considered. Line-window is *not* applied — the whole
+    matcher would have considered. Line-window is *not* applied: the whole
     point of the near-miss diagnostic is to see whether the matcher's
     summary-overlap rule is the gate that fired; restricting by line again
     would hide the signal. `line_delta` is recorded so the reader can
@@ -242,7 +184,7 @@ def process_corpus_file(
     matcher: ModuleType,
 ) -> None:
     corpus = json.loads(corpus_path.read_text())
-    _require_corpus_version(corpus, corpus_path)
+    require_corpus_version(corpus, corpus_path, CORPUS_VERSION)
     if corpus.get("skipped"):
         return
     if corpus.get("is_open"):
@@ -323,7 +265,7 @@ def process_corpus_file(
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="A2 — match external findings")
+    parser = argparse.ArgumentParser(description="A2: match external findings")
     parser.add_argument("--corpus-dir", type=Path, default=DEFAULT_CORPUS_DIR)
     parser.add_argument(
         "--unmatched-dir",
@@ -349,7 +291,7 @@ def main() -> int:
 
     matcher = _load_matcher(args.match_script)
     corpora = sorted(args.corpus_dir.glob("*/*/pr-*.json"))
-    _require_nested_layout(args.corpus_dir, corpora)
+    require_nested_layout(args.corpus_dir, corpora, CORPUS_VERSION)
     # Derived outputs are 100% a function of the corpus; rebuild from scratch so
     # neither stale flat leftovers nor stale nested files (PRs since removed from
     # the corpus) can persist. Runs only after the layout guard passes, so a

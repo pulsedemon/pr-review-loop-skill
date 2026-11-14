@@ -18,7 +18,7 @@ from comment_context import _comment_projection, _disposition_roots, _reviewed_c
 # Source of truth: reviewers/personas.yaml `panel:`. This duplicate is kept here
 # so state operations stay free of a runtime pyyaml dependency (preconditions
 # require only gh/git/jq). Drift is guarded by test_approver_list_matches_manifest
-# in scripts/tests/test_pr_loop_state.py — update both together.
+# in scripts/tests/test_pr_loop_state.py: update both together.
 APPROVER_LIST = [
     "correctness",
     "tests",
@@ -161,9 +161,9 @@ def build_initial_state(
         "max_new_loc": 1000,
         "approvers_required": "all",
         "approvers_required_list": APPROVER_LIST.copy(),
-        "suggestion_promotion_threshold": 2,
-        "adversary_promotion": True,
-        "adversary_solo_promotion": True,
+        "suggestion_promotion_threshold": 0,
+        "adversary_promotion": False,
+        "adversary_solo_promotion": False,
         "adversary_panel_visibility": DEFAULT_ADVERSARY_PANEL_VISIBILITY,
         "shallow_adversary_runs": 0,
     }
