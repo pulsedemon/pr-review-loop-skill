@@ -58,7 +58,7 @@ The fixture above uses `Part of #A`. The reviewer must handle all the signals li
 - A shared parent ticket: `ABC-123` (when the ticket links to both PRs)
 - A series branch name: e.g. PR #B is on `feature/foo-2of3` and PR #A is on `feature/foo-1of3`
 
-For each variant the reviewer must reach the same conclusion (no false single-use flag). If a sibling-PR signal is present but the sibling cannot be fetched (e.g. it's in a different repo), the reviewer must say so explicitly in any finding's `detail` rather than silently assuming the artifact is dead.
+For each variant the reviewer must reach the same conclusion (no false single-use flag). If a referenced sibling cannot be inspected, the reviewer must record the missing source in `evidence.notes`, even when no finding is emitted, and in any finding that depends on it. Unavailable context must not become a claim that no consumer exists.
 
 ## Validation status
 
