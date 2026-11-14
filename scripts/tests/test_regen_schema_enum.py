@@ -1,4 +1,4 @@
-"""Tests for scripts.regen_schema_enum — the reviewer.enum slice rewriter."""
+"""tests for the reviewer.enum slice rewriter."""
 
 from __future__ import annotations
 
@@ -62,9 +62,6 @@ def _run(args: list[str]) -> int:
     return regen_schema_enum.main(args)
 
 
-# --- happy paths ---
-
-
 def test_check_returns_0_when_schema_matches_manifest(tmp_path: Path) -> None:
     manifest = _write_manifest(tmp_path, ["alpha", "beta"])
     schema = _write_schema(tmp_path, ["alpha", "beta", "adversary"])
@@ -75,22 +72,24 @@ def test_check_returns_0_when_schema_matches_manifest(tmp_path: Path) -> None:
 def test_write_rewrites_drifted_schema(tmp_path: Path) -> None:
     manifest = _write_manifest(tmp_path, ["alpha", "beta", "gamma"])
     schema = _write_schema(tmp_path, ["alpha"])  # drifted: missing beta, gamma, adversary
+    schema.chmod(0o755)
     rc = _run(["--write", "--manifest", str(manifest), "--schema", str(schema)])
     assert rc == 0
     data = json.loads(schema.read_text())
     assert data["properties"]["reviewer"]["enum"] == ["alpha", "beta", "gamma", "adversary"]
+    assert schema.stat().st_mode & 0o7777 == 0o755
 
 
 def test_write_on_matching_schema_is_a_noop(tmp_path: Path) -> None:
     manifest = _write_manifest(tmp_path, ["alpha"])
     schema = _write_schema(tmp_path, ["alpha", "adversary"])
     before = schema.read_text()
+    before_stat = schema.stat()
     rc = _run(["--write", "--manifest", str(manifest), "--schema", str(schema)])
     assert rc == 0
     assert schema.read_text() == before
-
-
-# --- drift exit code ---
+    assert schema.stat().st_ino == before_stat.st_ino
+    assert schema.stat().st_mtime_ns == before_stat.st_mtime_ns
 
 
 def test_check_returns_5_with_diff_on_drift(
@@ -98,16 +97,18 @@ def test_check_returns_5_with_diff_on_drift(
 ) -> None:
     manifest = _write_manifest(tmp_path, ["alpha", "beta"])
     schema = _write_schema(tmp_path, ["alpha"])  # missing beta + adversary
+    before = schema.read_bytes()
     rc = _run(["--check", "--manifest", str(manifest), "--schema", str(schema)])
     assert rc == regen_schema_enum._DRIFT_EXIT == 5
-    err = capsys.readouterr().err
-    # Unified diff to stderr names the missing reviewers and points at the regen script.
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert schema.read_bytes() == before
+    err = captured.err
+    assert f"--- {schema}\n" in err
+    assert f"+++ {schema} (regenerated)\n" in err
     assert "beta" in err
     assert "adversary" in err
     assert "scripts/regen.sh" in err
-
-
-# --- manifest error exit code ---
 
 
 def test_returns_3_when_manifest_is_malformed(
@@ -120,9 +121,6 @@ def test_returns_3_when_manifest_is_malformed(
     assert rc == regen_schema_enum._MANIFEST_ERROR_EXIT == 3
     err = capsys.readouterr().err
     assert "manifest error" in err
-
-
-# --- structural SystemExit branches ---
 
 
 def test_returns_3_when_schema_is_missing(

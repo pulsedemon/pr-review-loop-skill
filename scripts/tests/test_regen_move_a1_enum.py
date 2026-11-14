@@ -96,7 +96,7 @@ def _seed(tmp_path: Path, values: list[str] | None = None) -> dict[str, Path]:
     skill = tmp_path / "SKILL.md"
     skill.write_text(
         "# Skill\n\n"
-        "- **Move A.1 (assertion-vacuity audit)** — `tests` only: for each "
+        "- **Move A.1 (assertion-vacuity audit)**, `tests` only: for each "
         "assertion, check whether it's syntactically determinable to be vacuous "
         "via one of five sub-mechanics (<!-- regen:move-a1-enum:start -->"
         f"{backticked}"
@@ -105,7 +105,7 @@ def _seed(tmp_path: Path, values: list[str] | None = None) -> dict[str, Path]:
     )
 
     tests_md = tmp_path / "reviewers" / "tests.md"
-    bullet_block = "".join(f"{i + 1}. **{v}** — definition for {v}.\n" for i, v in enumerate(vals))
+    bullet_block = "".join(f"{i + 1}. **{v}**, definition for {v}.\n" for i, v in enumerate(vals))
     tests_md.write_text(
         "# tests reviewer\n\n"
         "## Procedure move A.1\n\n"
@@ -120,7 +120,7 @@ def _seed(tmp_path: Path, values: list[str] | None = None) -> dict[str, Path]:
     adv_md = tmp_path / "reviewers" / "adversary.md"
     adv_md.write_text(
         "# adversary\n\n"
-        "- **Move A.1 — assertion-vacuity audit.** ... five sub-mechanics "
+        "- **Move A.1, assertion-vacuity audit.** ... five sub-mechanics "
         "(<!-- regen:move-a1-enum:start -->"
         f"{backticked}"
         "<!-- regen:move-a1-enum:end -->). ...\n"
@@ -172,7 +172,7 @@ def test_check_clean_tree_exits_zero(tmp_path: Path) -> None:
 # on a single-surface drift would only be caught by this stricter check.
 #
 # Each surface has a distinctive path fragment AND we check the diff
-# header (the only stable per-surface marker — prose surfaces freely
+# header (the only stable per-surface marker, prose surfaces freely
 # cross-reference each other in their bodies, so plain path tokens
 # match too eagerly). The diff header `+++ <path> (regenerated)` is
 # emitted exclusively for surfaces whose regen produced a non-empty
@@ -191,7 +191,7 @@ def _assert_only_surface_named(stderr: str, surface: str) -> None:
     own_token = _SURFACE_TOKENS[surface]
     assert own_token in stderr, f"expected {own_token} in stderr:\n{stderr}"
     # Anchor on the diff-header form ("+++ <path> (regenerated)") OR a
-    # bullet-scan / out-of-region sentinel line — these are the lines the
+    # bullet-scan / out-of-region sentinel line, these are the lines the
     # generator emits ABOUT a specific surface (cross-references inside
     # diff bodies don't follow these shapes).
     for other, token in _SURFACE_TOKENS.items():
@@ -254,6 +254,7 @@ def test_check_drifted_adv_md_exits_five(tmp_path: Path) -> None:
 
 def test_write_repairs_drift_across_all_surfaces(tmp_path: Path) -> None:
     paths = _seed(tmp_path)
+    paths["state_schema"].chmod(0o755)
     paths["state_schema"].write_text(
         paths["state_schema"].read_text().replace("cross_fixture", "xfoo", 1)
     )
@@ -272,6 +273,11 @@ def test_write_repairs_drift_across_all_surfaces(tmp_path: Path) -> None:
 
     write = _run(paths, "--write", "--out-of-region-root", str(tmp_path))
     assert write.returncode == 0, write.stderr
+    assert paths["state_schema"].stat().st_mode & 0o7777 == 0o755
+    state = json.loads(paths["state_schema"].read_text())
+    assert (
+        state["properties"]["history"]["items"]["properties"]["move_a1_pattern"]["enum"] == VALUES
+    )
 
     check = _run(paths, "--check", "--out-of-region-root", str(tmp_path))
     assert check.returncode == 0, check.stderr
@@ -376,7 +382,7 @@ def test_rename_leaves_bullet_label_stale_and_caught_by_check(tmp_path: Path) ->
       2. Rename cross_fixture -> cross_fixture_v2 in manifest.
       3. Run --write: schemas, SKILL.md, tests.md in-region sentence,
          and adversary.md all update; the bullet definition
-         "1. **cross_fixture** — ..." is intentionally not rewritten
+         "1. **cross_fixture**, ..." is intentionally not rewritten
          (region-scoped surgery, by design).
       4. Run --check: must exit 5 because **cross_fixture** is now a
          stale bullet label outside the named region.

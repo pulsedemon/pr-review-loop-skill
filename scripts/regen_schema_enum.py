@@ -5,7 +5,7 @@ JSON has no comment syntax, so cog markers can't live inside the schema
 itself. This script does the equivalent: a json-validated, regex-anchored
 slice rewrite of the `enum` array directly under `properties.reviewer`.
 The schema's hand-formatting (inline arrays/objects elsewhere) is
-intentional and preserved — only the reviewer.enum body is rewritten.
+preserved outside the reviewer.enum body.
 
 Modes:
   --check   (default) exit 0 if file matches generated content; exit 5
@@ -18,15 +18,14 @@ Exit codes mirror cog's: 0 ok, 3 manifest error, 5 drift detected.
 from __future__ import annotations
 
 import argparse
-import difflib
 import json
-import os
 import re
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import generator_io  # noqa: E402
 from personas_manifest import ManifestError, load_manifest  # noqa: E402
 
 _DRIFT_EXIT = 5
@@ -85,15 +84,6 @@ def _regenerated(text: str, names: list[str]) -> str:
     return text[: match.start(2)] + body + text[match.end(2) :]
 
 
-def _atomic_write(path: Path, content: str) -> None:
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(content)
-    # os.replace installs the temp file's default mode, which would strip the
-    # executable bit off any target that is run directly.
-    os.chmod(tmp, path.stat().st_mode & 0o7777)
-    os.replace(tmp, path)
-
-
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     mode = parser.add_mutually_exclusive_group()
@@ -130,13 +120,7 @@ def main(argv: list[str]) -> int:
     if args.check:
         if current == regenerated:
             return 0
-        diff = difflib.unified_diff(
-            current.splitlines(keepends=True),
-            regenerated.splitlines(keepends=True),
-            fromfile=str(args.schema),
-            tofile=f"{args.schema} (regenerated)",
-        )
-        sys.stderr.writelines(diff)
+        generator_io.emit_drift_diff(args.schema, current, regenerated)
         print(
             "\nregen_schema_enum: reviewer.enum is out of date. "
             "Run scripts/regen.sh to regenerate.",
@@ -145,7 +129,7 @@ def main(argv: list[str]) -> int:
         return _DRIFT_EXIT
 
     if current != regenerated:
-        _atomic_write(args.schema, regenerated)
+        generator_io.atomic_write(args.schema, regenerated)
     return 0
 
 

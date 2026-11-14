@@ -26,13 +26,13 @@ Spec: docs/generators.md
 from __future__ import annotations
 
 import argparse
-import difflib
 import json
 import os
 import re
 import sys
 from pathlib import Path
 
+import generator_io
 import yaml
 
 _DRIFT_EXIT = 5
@@ -43,10 +43,7 @@ _REGION = re.compile(
     re.DOTALL,
 )
 
-# In-region value list: a comma-separated list of >=2 backticked snake_case
-# tokens. After region tightening, this is unambiguous in every mirror —
-# each region body contains exactly one such list. Used by _regen_prose
-# uniformly across SKILL.md, reviewers/tests.md, reviewers/adversary.md.
+# each region contains one value list, so the surrounding prose stays untouched.
 _VALUE_LIST = re.compile(r"`[a-z_]+`(?:,\s*`[a-z_]+`)+")
 
 # Numbered Markdown bullet definition with a bold snake_case label, at
@@ -70,15 +67,6 @@ _OUT_ENUM_SLICE = re.compile(
     r"(\])",
     re.DOTALL,
 )
-
-
-def _atomic_write(path: Path, content: str) -> None:
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(content)
-    # os.replace installs the temp file's default mode, which would strip the
-    # executable bit off any target that is run directly.
-    os.chmod(tmp, path.stat().st_mode & 0o7777)
-    os.replace(tmp, path)
 
 
 def _render_value_list(values: list[str]) -> str:
@@ -297,7 +285,7 @@ def _scan_tests_md_bullet_drift(path: Path, values: list[str]) -> list[str]:
     sub-mechanic as a numbered Markdown bullet with a bold snake_case
     label::
 
-        1. **cross_fixture** — A DOM-style assertion ...
+        1. **cross_fixture**: a DOM-style assertion ...
 
     These bullets sit OUTSIDE the named regen:move-a1-enum region (which
     wraps only the trailing "to one of ..." sentence) so that any stale
@@ -324,17 +312,6 @@ def _scan_tests_md_bullet_drift(path: Path, values: list[str]) -> list[str]:
             lineno = text.count("\n", 0, m.start()) + 1
             hits.append(f"{path}:{lineno}: stale bullet label `**{ident}**` not in manifest")
     return hits
-
-
-def _diff(label: str, before: str, after: str) -> list[str]:
-    return list(
-        difflib.unified_diff(
-            before.splitlines(keepends=True),
-            after.splitlines(keepends=True),
-            fromfile=label,
-            tofile=f"{label} (regenerated)",
-        )
-    )
 
 
 def main(argv: list[str]) -> int:
@@ -395,10 +372,10 @@ def main(argv: list[str]) -> int:
         if before == after:
             continue
         if args.check:
-            sys.stderr.writelines(_diff(str(path), before, after))
+            generator_io.emit_drift_diff(path, before, after)
             drifted = True
         else:
-            _atomic_write(path, after)
+            generator_io.atomic_write(path, after)
 
     if args.check:
         # Bullet-label drift in reviewers/tests.md: any "1. **<ident>**"

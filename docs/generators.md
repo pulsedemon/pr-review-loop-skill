@@ -34,9 +34,9 @@ has no comment syntax at all.
 These rules apply equally to cog-managed regions and standalone scripts.
 
 1. **Two modes.** `--check` (validates, exits non-zero on drift) and `--write`
-   (rewrites in place). The orchestrator scripts —
+   (rewrites in place). The orchestrator scripts
    [`scripts/regen.sh`](../scripts/regen.sh) and
-   [`scripts/regen-check.sh`](../scripts/regen-check.sh) — run every
+   [`scripts/regen-check.sh`](../scripts/regen-check.sh) run every
    generator in the appropriate mode.
 2. **Exit codes.** `0` ok, `3` manifest error, `5` drift detected. Matches
    cog's semantics so the orchestrator can chain generators without
@@ -46,9 +46,10 @@ These rules apply equally to cog-managed regions and standalone scripts.
    string is asserted by
    [`tests/bats/test_manifest_drift_localization.bats`](../tests/bats/test_manifest_drift_localization.bats);
    keep it stable.
-4. **Atomic writes.** Use the `path.with_suffix(path.suffix + '.tmp')` +
-   `os.replace` pattern (see `_atomic_write` in `regen_schema_enum.py`) so a
-   crashed run never leaves a half-written file.
+4. **Atomic writes.** Call `generator_io.atomic_write` from
+   [`scripts/generator_io.py`](../scripts/generator_io.py) to preserve target
+   permissions and replace complete content. Cleanup is best effort; the
+   original write error propagates if cleanup also fails.
 5. **Canary test.** Add a bats test that pins the *presence* of the marker
    or region. Without this, a future refactor that strips the cog markers
    (or removes the standalone script's invocation from the orchestrator)
@@ -56,7 +57,7 @@ These rules apply equally to cog-managed regions and standalone scripts.
    [`tests/bats/test_persona_surfaces_generator_check.bats`](../tests/bats/test_persona_surfaces_generator_check.bats)
    for the existing example.
 
-## How to add a new surface — cog path
+## How to add a new surface with cog
 
 For Markdown, YAML, shell, Python, or any other format that supports
 HTML-style comments:
@@ -73,7 +74,7 @@ HTML-style comments:
    <!--[[[end]]]-->
    ```
 
-   Keep the inline Python tiny — one or two lines that delegate to a helper
+   Keep the inline Python tiny, one or two lines that delegate to a helper
    in `scripts/`. See [`scripts/_personas_for_cog.py`](../scripts/_personas_for_cog.py).
 2. Append the file path to [`scripts/cogfiles.txt`](../scripts/cogfiles.txt).
 3. Run `scripts/regen.sh` to populate the region.
@@ -84,7 +85,7 @@ HTML-style comments:
 The orchestrator scripts already handle cog-managed files via `cogfiles.txt`;
 nothing else needs wiring.
 
-## How to add a new surface — standalone-script path
+## How to add a new surface with a standalone script
 
 For JSON, TOML, or other comment-less formats:
 
@@ -95,27 +96,27 @@ For JSON, TOML, or other comment-less formats:
    - Surgical rewrite: parse with `json.loads` (or equivalent) to **validate
      that the target path exists** before touching anything, then splice the
      new content into the existing file text. **Do not** round-trip the
-     whole file through `json.dumps` — that destroys intentional inline
+     whole file through `json.dumps`; that destroys intentional inline
      formatting elsewhere in the file.
    - Render replacement content via the format's parser (`json.dumps`, etc.)
      not by hand-building strings, so escaping is always correct.
-   - Atomic write via `_atomic_write`-style helper.
+   - Shared output via `generator_io.atomic_write` and `generator_io.emit_drift_diff`.
    - Exit codes 0 / 3 / 5; drift diff to stderr; fix hint string.
 2. Wire into both orchestrator scripts:
    - [`scripts/regen.sh`](../scripts/regen.sh): append
      `python3 "$ROOT/scripts/your_script.py" --write`.
    - [`scripts/regen-check.sh`](../scripts/regen-check.sh): append
      `python3 "$ROOT/scripts/your_script.py" --check`.
-   Don't create a parallel orchestrator — there's one entrypoint each for
-   regen and check, and CI runs `regen-check.sh`.
+   Use the existing entrypoints for regen and check; CI runs `regen-check.sh`.
 3. Add a canary bats test (same as the cog path).
 
 ## Pointers
 
-- [`scripts/regen.sh`](../scripts/regen.sh) — user-facing regen entrypoint
-- [`scripts/regen-check.sh`](../scripts/regen-check.sh) — CI / pre-commit check entrypoint
-- [`scripts/regen_schema_enum.py`](../scripts/regen_schema_enum.py) — reference standalone-script implementation
-- [`scripts/_personas_for_cog.py`](../scripts/_personas_for_cog.py) — helper imported by inline cog snippets
-- [`docs/editing-personas.md`](editing-personas.md) — workflow for the specific personas-manifest case
+- [`scripts/regen.sh`](../scripts/regen.sh), user-facing regen entrypoint
+- [`scripts/regen-check.sh`](../scripts/regen-check.sh), CI / pre-commit check entrypoint
+- [`scripts/regen_schema_enum.py`](../scripts/regen_schema_enum.py), reference standalone-script implementation
+- [`scripts/generator_io.py`](../scripts/generator_io.py), shared atomic replacement and diff output
+- [`scripts/_personas_for_cog.py`](../scripts/_personas_for_cog.py), helper imported by inline cog snippets
+- [`docs/editing-personas.md`](editing-personas.md), workflow for the specific personas-manifest case
 
-The `personas-{regen,check}.sh` entrypoints are back-compat shims only — they `exec` the renamed `regen{,-check}.sh` and will be removed in the Tier 3 PR. New callers (CI, docs, generators) must reference `regen.sh` / `regen-check.sh` directly and must not rely on the old `personas-*` names, which will break at Tier 3 removal. The shims are `exec`-style one-liners, so `$0` inside `regen.sh` will read as `regen.sh` regardless of which name was invoked. Future generators that introspect `$0` must call `regen.sh` directly, not via the shim.
+Use `regen.sh` and `regen-check.sh` for new callers. The `personas-*` scripts remain compatibility entrypoints.

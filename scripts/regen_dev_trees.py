@@ -20,12 +20,11 @@ Spec: docs/generators.md
 from __future__ import annotations
 
 import argparse
-import difflib
-import os
 import re
 import sys
 from pathlib import Path
 
+import generator_io
 import yaml
 
 _DRIFT_EXIT = 5
@@ -53,16 +52,6 @@ _MOVE_A1_REGION = re.compile(
     r"(    # \[\[\[cog: dev_trees_py \]\]\]\n)(.*?)(    # \[\[\[end\]\]\])",
     re.DOTALL,
 )
-
-
-def _atomic_write(path: Path, content: str) -> None:
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(content)
-    # os.replace installs the temp file's default mode, which would strip the
-    # executable bit off install.sh and tests/run.sh and break ./install.sh
-    # after the first manifest edit.
-    os.chmod(tmp, path.stat().st_mode & 0o7777)
-    os.replace(tmp, path)
 
 
 # Names that are not always directories. A trailing slash restricts an rsync
@@ -110,17 +99,6 @@ def _sub_region(region: re.Pattern[str], text: str, body: str, label: str, marke
             "Have the file's cog markers been edited?"
         )
     return new
-
-
-def _diff(label: str, before: str, after: str) -> list[str]:
-    return list(
-        difflib.unified_diff(
-            before.splitlines(keepends=True),
-            after.splitlines(keepends=True),
-            fromfile=label,
-            tofile=f"{label} (regenerated)",
-        )
-    )
 
 
 def main(argv: list[str]) -> int:
@@ -178,10 +156,10 @@ def main(argv: list[str]) -> int:
         if before == after:
             continue
         if args.check:
-            sys.stderr.writelines(_diff(str(path), before, after))
+            generator_io.emit_drift_diff(path, before, after)
             drifted = True
         else:
-            _atomic_write(path, after)
+            generator_io.atomic_write(path, after)
 
     if args.check and drifted:
         print(

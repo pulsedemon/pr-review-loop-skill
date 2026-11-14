@@ -112,39 +112,59 @@ def test_duplicate_manifest_entries_exit_3(tmp_path: Path) -> None:
 
 
 def test_write_preserves_the_target_file_mode(tmp_path: Path) -> None:
-    # install.sh and tests/run.sh are executed directly, so a rewrite that
-    # drops their executable bit breaks ./install.sh after any manifest edit.
-    install = tmp_path / "install.sh"
-    install.write_text(
-        "# [[[cog: dev_trees_install ]]]\nCURSOR_INSTALL_SKIP_NAMES=(stale)\n# [[[end]]]\n"
-    )
-    install.chmod(0o755)
     manifest = tmp_path / "dev-trees.yaml"
     manifest.write_text("dev_trees:\n  - .git\n  - .venv\n")
-
-    proc = subprocess.run(
-        [
-            sys.executable,
-            str(GENERATOR),
-            "--write",
-            "--manifest",
-            str(manifest),
+    targets = [
+        (
             "--install",
-            str(install),
+            "install.sh",
+            "dev_trees_install",
+            "",
+            0o755,
+            "CURSOR_INSTALL_SKIP_NAMES=(.git .venv)\n",
+        ),
+        (
             "--runsh",
-            str(install),
+            "run.sh",
+            "dev_trees_grep",
+            "",
+            0o755,
+            "CAP_GREP_EXCLUDES=(\n  --exclude-dir=.git --exclude-dir=.venv\n)\n",
+        ),
+        (
             "--helper",
-            str(install),
+            "test_helper.bash",
+            "dev_trees_rsync",
+            "",
+            0o644,
+            "  local excludes=(\n    --exclude='.git'\n    --exclude='.venv/'\n  )\n",
+        ),
+        (
             "--move-a1",
-            str(install),
-        ],
-        capture_output=True,
-        text=True,
-    )
-    # Only the install region exists here, so the run aborts partway; the
-    # install surface is written first and is what this asserts on.
-    assert ".venv" in install.read_text(), proc.stderr
-    assert install.stat().st_mode & 0o777 == 0o755
+            "regen_move_a1_enum.py",
+            "dev_trees_py",
+            "    ",
+            0o644,
+            '    ".git",\n    ".venv",\n',
+        ),
+    ]
+    args = [sys.executable, str(GENERATOR), "--write", "--manifest", str(manifest)]
+    expected = []
+    for option, filename, marker, indent, mode, body in targets:
+        path = tmp_path / filename
+        start = f"{indent}# [[[cog: {marker} ]]]\n"
+        end = f"{indent}# [[[end]]]\n"
+        path.write_text(start + "stale\n" + end)
+        path.chmod(mode)
+        args.extend([option, str(path)])
+        expected.append((path, start + body + end, mode))
+
+    proc = subprocess.run(args, cwd=tmp_path, capture_output=True, text=True)
+
+    assert proc.returncode == 0, proc.stderr
+    for path, content, mode in expected:
+        assert path.read_text() == content
+        assert path.stat().st_mode & 0o7777 == mode
 
 
 def test_write_fails_when_a_cog_region_is_missing(tmp_path: Path) -> None:

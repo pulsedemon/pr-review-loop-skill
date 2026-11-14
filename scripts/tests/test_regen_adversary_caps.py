@@ -123,11 +123,14 @@ def test_check_drifted_doc_exits_five(tmp_path: Path) -> None:
 
 def test_write_repairs_drift(tmp_path: Path) -> None:
     paths = _seed(tmp_path, cap=2)
+    paths["helper"].chmod(0o755)
     paths["helper"].write_text(
         paths["helper"].read_text().replace("ADVERSARY_CAP=2", "ADVERSARY_CAP=99")
     )
     write = _run(paths, "--write")
     assert write.returncode == 0, write.stderr
+    assert paths["helper"].stat().st_mode & 0o7777 == 0o755
+    assert "ADVERSARY_CAP=2\n" in paths["helper"].read_text()
     check = _run(paths, "--check")
     assert check.returncode == 0, check.stderr
 
