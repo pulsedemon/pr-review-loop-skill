@@ -1,0 +1,50 @@
+area:ci:
+  - changed-files:
+      - any-glob-to-any-file:
+          - .github/workflows/**
+          - .github/labeler.yml
+          - .pre-commit-config.yaml
+          - .yamllint.yaml
+          - pyproject.toml
+          - uv.lock
+
+area:docs:
+  - changed-files:
+      - any-glob-to-any-file:
+          - README.md
+          - CONTRIBUTING.md
+          - AGENTS.md
+          - CLAUDE.md
+          - docs/**
+          - tools/recall-harness/**/*.md
+
+area:skill-contract:
+  - changed-files:
+      - any-glob-to-any-file:
+          - SKILL.md
+          - templates/**
+          - gates/**
+          - ci-integrations/**
+
+area:reviewers:
+  - changed-files:
+      - any-glob-to-any-file:
+          - reviewers/**
+
+area:scripts:
+  - changed-files:
+      - any-glob-to-any-file:
+          - scripts/**
+          - install.sh
+
+area:tests:
+  - changed-files:
+      - any-glob-to-any-file:
+          - tests/**
+          - scripts/tests/**
+          - tools/recall-harness/tests/**
+
+area:recall-harness:
+  - changed-files:
+      - any-glob-to-any-file:
+          - tools/recall-harness/**

@@ -1,0 +1,67 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=500]
+
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.10.0.1
+    hooks:
+      - id: shellcheck
+        args: [--severity=warning]
+        # CI shellcheck action only scans .sh/.bash/etc. — not .bats.
+        # Keep pre-commit's scope aligned with CI.
+        exclude: \.bats$
+
+  - repo: https://github.com/scop/pre-commit-shfmt
+    rev: v3.10.0-1
+    hooks:
+      - id: shfmt
+        args: [-i, '2', -ci, -d]
+        # Task 3 shfmt'd .sh files only; .bats files are out of scope.
+        exclude: \.bats$
+
+  - repo: https://github.com/DavidAnson/markdownlint-cli2
+    # Match the markdownlint-cli2-action@v23 (markdownlint-cli2 v0.22.1,
+    # markdownlint v0.40.0) used by .github/workflows/ci.yml so CI and
+    # pre-commit agree on the rule set — e.g. MD060 (table-column-style)
+    # only exists from markdownlint v0.40+. Mirrors the parity convention
+    # already noted on the ruff and yamllint blocks below.
+    rev: v0.22.1
+    hooks:
+      - id: markdownlint-cli2
+        exclude: ^tools/recall-harness/tests/fixtures/
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    # Match the ruff pinned in uv.lock so pre-commit and CI agree.
+    rev: v0.15.13
+    hooks:
+      - id: ruff
+        args: [--no-fix]
+      - id: ruff-format
+        args: [--check]
+
+  - repo: https://github.com/adrienverge/yamllint
+    # Match the yamllint pinned in uv.lock so pre-commit and CI agree.
+    rev: v1.38.0
+    hooks:
+      - id: yamllint
+        args: [-c, .yamllint.yaml]
+
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.4
+    hooks:
+      - id: actionlint
+
+  - repo: local
+    hooks:
+      - id: validate-metadata
+        name: validate skill metadata
+        entry: uv run python scripts/validate_metadata.py
+        language: system
+        pass_filenames: false
+        files: ^(SKILL\.md|templates/state\.schema\.json)$

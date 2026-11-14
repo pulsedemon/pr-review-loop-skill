@@ -1,0 +1,13 @@
+docs/superpowers/
+.DS_Store
+__pycache__/
+.claude/
+.venv/
+
+# Recall-harness generated artifacts (regeneratable from PR state)
+tools/recall-harness/corpus/
+tools/recall-harness/unmatched/
+tools/recall-harness/matched/
+tools/recall-harness/loop_unmatched/
+tools/recall-harness/REPORT.md
+.worktrees/

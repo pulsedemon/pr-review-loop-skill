@@ -1,0 +1,176 @@
+name: ci
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ludeeus/action-shellcheck@2.0.0
+        with:
+          scandir: '.'
+          severity: warning
+          additional_files: install.sh
+
+  markdown:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DavidAnson/markdownlint-cli2-action@v23
+        with:
+          globs: |
+            **/*.md
+            !tools/recall-harness/tests/fixtures/**
+
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+      - run: uv sync --group dev --frozen
+      - run: uv run python scripts/validate_metadata.py
+      - run: uv run yamllint .
+      - name: persona-derived surfaces are up to date
+        # Fast-feedback gate: if reviewers/personas.yaml drifts from SKILL.md
+        # or reviewers/output.schema.json, exits 5 with a unified diff naming
+        # scripts/regen.sh as the fix. Also covered by
+        # test_persona_surfaces_generator_check.bats, but running it in the
+        # cheap validate job lets contributors see drift fast.
+        run: uv run bash scripts/regen-check.sh
+
+  ruff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+      - run: uv sync --group dev --frozen
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+      - run: uv sync --group dev --frozen
+      - run: uv run python -m pytest -q
+
+  actionlint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: raven-actions/actionlint@v2
+        with:
+          version: 1.7.4 # match .pre-commit-config.yaml (no 'v' prefix per action input contract)
+
+  shfmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: install shfmt
+        run: |
+          set -euo pipefail
+          SHFMT_VERSION=v3.10.0
+          curl -fsSL -o /usr/local/bin/shfmt \
+            "https://github.com/mvdan/sh/releases/download/${SHFMT_VERSION}/shfmt_${SHFMT_VERSION}_linux_amd64"
+          chmod +x /usr/local/bin/shfmt
+      - run: shfmt -d -i 2 -ci scripts/ install.sh tests/run.sh
+
+  bats:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+      - run: uv sync --group dev --frozen
+      - name: install bats
+        # from upstream rather than apt: the Ubuntu mirror intermittently
+        # collapses to a few hundred bytes per second, which has stalled this
+        # step past 18 minutes for a 45 kB package. jq and parallel, the other
+        # two tests/run.sh needs, ship with the runner image; assert them so a
+        # future image change fails here by name instead of mid-suite.
+        run: |
+          set -euo pipefail
+          missing=()
+          for tool in jq parallel; do
+            command -v "$tool" >/dev/null 2>&1 || missing+=("$tool")
+          done
+          if ((${#missing[@]} > 0)); then
+            echo "runner image no longer preinstalls: ${missing[*]}" >&2
+            exit 1
+          fi
+          # 1.10.0 is what noble shipped. 1.11+ errors on an empty suite
+          # (`Found no tests`), which the cap-drift fixtures in
+          # test_cap_drift_guard_fires.bats rely on exiting 0.
+          BATS_VERSION=1.10.0
+          curl -fsSL --retry 3 --retry-all-errors --connect-timeout 15 --max-time 120 \
+            "https://github.com/bats-core/bats-core/archive/refs/tags/v${BATS_VERSION}.tar.gz" \
+            | tar -xz -C "$RUNNER_TEMP"
+          echo "${RUNNER_TEMP}/bats-core-${BATS_VERSION}/bin" >> "$GITHUB_PATH"
+      - run: uv run bash tests/run.sh
+
+  install-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: install into fake HOME
+        run: |
+          set -euo pipefail
+          export HOME="$RUNNER_TEMP/fakehome"
+          export XDG_CONFIG_HOME="$HOME/.config"
+          # Detection gates bare installs, so pre-create every host config dir.
+          mkdir -p "$HOME/.cursor" "$HOME/.claude" "$HOME/.codex" "$XDG_CONFIG_HOME/opencode"
+          ./install.sh
+          test -d "$HOME/.cursor/skills/pr-review-loop"
+          test ! -L "$HOME/.cursor/skills/pr-review-loop"
+          test "$(<"$HOME/.cursor/skills/pr-review-loop/.pr-review-loop-source")" \
+            = "$(cd "$GITHUB_WORKSPACE" && pwd -P)"
+          test -L "$HOME/.claude/skills/pr-review-loop"
+          test -L "$HOME/.codex/skills/pr-review-loop"
+          test -L "$HOME/.config/opencode/skills/pr-review-loop"
+          test "$(readlink -f "$HOME/.config/opencode/agent/prl-cheap.md")" \
+            = "$(cd "$GITHUB_WORKSPACE" && pwd -P)/hosts/opencode/agent/prl-cheap.md"
+          ./install.sh
+          ./install.sh --uninstall
+          test ! -e "$HOME/.cursor/skills/pr-review-loop"
+          test ! -L "$HOME/.claude/skills/pr-review-loop"
+          test ! -L "$HOME/.codex/skills/pr-review-loop"
+          test ! -e "$HOME/.config/opencode/skills/pr-review-loop"
+          test ! -e "$HOME/.config/opencode/agent/prl-cheap.md"
+      - name: bare install with nothing detected exits 0
+        run: |
+          set -euo pipefail
+          export HOME="$RUNNER_TEMP/fakehome-empty"
+          export XDG_CONFIG_HOME="$HOME/.config"
+          mkdir -p "$HOME"
+          out="$(./install.sh 2>&1)"
+          echo "$out" | grep -q "no supported hosts detected"
+          test -z "$(ls -A "$HOME")"
+      - name: uninstall preserves symlinks pointing elsewhere
+        run: |
+          set -euo pipefail
+          export HOME="$RUNNER_TEMP/fakehome2"
+          mkdir -p "$HOME/.cursor/skills" "$HOME/.claude/skills" "$RUNNER_TEMP/other"
+          # Foreign symlink: not pointing at this repo. Call --uninstall
+          # directly to prove uninstall leaves symlinks it didn't create alone.
+          ln -s "$RUNNER_TEMP/other" "$HOME/.cursor/skills/pr-review-loop"
+          ./install.sh --uninstall
+          test -L "$HOME/.cursor/skills/pr-review-loop"
+          test "$(readlink "$HOME/.cursor/skills/pr-review-loop")" = "$RUNNER_TEMP/other"

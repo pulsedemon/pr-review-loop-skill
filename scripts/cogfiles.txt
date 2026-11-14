@@ -1,0 +1,6 @@
+# Files cog manages. Add new files here as more surfaces become
+# generator-driven. JSON files are handled by scripts/regen_schema_enum.py,
+# not cog, because JSON has no comment syntax to host cog markers
+# (see docs/generators.md "Format -> tool" table).
+SKILL.md
+README.md

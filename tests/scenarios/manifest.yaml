@@ -1,0 +1,185 @@
+scenarios:
+  - number: 1
+    file: 01-approval-pressure.md
+    title: Approval pressure
+    tier: manual_validated
+    reason: Recorded PASS in the scenario file on 2026-05-20; no deterministic test covers
+      this mid-loop approval-pressure decision.
+  - number: 2
+    file: 02-ci-out-of-scope.md
+    title: CI failure looks out of scope
+    tier: manual_validated
+    reason: Recorded PASS in the scenario file on 2026-05-20; existing CI helper tests do
+      not cover the higher-level "CI failures stay in scope" rule.
+  - number: 3
+    file: 03-no-progress.md
+    title: No progress across iterations
+    tier: manual_validated
+    reason: Recorded PASS in the scenario file on 2026-05-20; nearby tests cover enums, not
+      the no-progress exit behavior.
+  - number: 4
+    file: 04-external-push.md
+    title: External push detected
+    tier: manual_validated
+    reason: Recorded PASS in the scenario file on 2026-05-20; helper-script tests do not
+      prove the loop halts instead of reconciling and rebasing.
+  - number: 5
+    file: 05-draft-pr.md
+    title: Draft PR
+    tier: design_only
+    reason: Still a design fixture with placeholder RED baselines and no recorded manual or
+      automated validation.
+  - number: 6
+    file: 06-scope-discipline.md
+    title: Reviewer scope discipline
+    tier: manual_validated
+    reason: Recorded PASS in the scenario file on 2026-05-20; persona judgment is not
+      deterministic enough for current CI coverage.
+  - number: 7
+    file: 07-pr-scope-under-threshold.md
+    title: PR-scope check, under threshold
+    tier: ci_trusted
+    reason: Deterministic Step 3.5 automation now proves the under-threshold no-prompt
+      path and persisted not_prompted decision.
+    proof_sources:
+      - scripts/tests/test_pr_scope_step.py
+  - number: 8
+    file: 08-pr-scope-over-threshold.md
+    title: PR-scope check, over threshold, splits recommended
+    tier: manual_validated
+    reason: Validated with a dated host-style scenario run; deterministic partition invariants
+      are additionally pinned in Python tests.
+  - number: 9
+    file: 09-pr-scope-resume.md
+    title: PR-scope check, resume after recorded decision
+    tier: ci_trusted
+    reason: Deterministic Step 3.5 automation now proves resume honors recorded decisions,
+      reuses partial count data, and re-emits the abort terminal status; the
+      Step 5 single-comment split routing is pinned separately as a drift guard,
+      not an end-to-end comment-posting test.
+    proof_sources:
+      - scripts/tests/test_pr_scope_step.py
+      - tests/bats/test_step5_summary_contract.bats
+  - number: 10
+    file: 10-pr-scope-disabled.md
+    title: PR-scope check disabled
+    tier: ci_trusted
+    reason: Deterministic Step 3.5 automation now proves pr_scope=false skips counting,
+      persistence, and prompting entirely.
+    proof_sources:
+      - scripts/tests/test_pr_scope_step.py
+  - number: 11
+    file: 11-count-new-loc-streams.md
+    title: count_new_loc.sh stream separation
+    tier: ci_trusted
+    reason: The script's machine-readable stream contract is covered directly by bats.
+    proof_sources:
+      - tests/bats/count_new_loc.bats
+  - number: 12
+    file: 12-yagni-sibling-pr.md
+    title: yagni reviewer sees sibling PR context
+    tier: design_only
+    reason: This reviewer-behavior scenario has no dated manual validation and no deterministic
+      automation of sibling-PR context handling.
+  - number: 13
+    file: 13-adversary-catches-panel-miss.md
+    title: Adversary catches panel miss
+    tier: design_only
+    reason: The scenario explicitly remains manual-only because adversary behavior is
+      non-deterministic, and the file does not record a dated validation run.
+  - number: 14
+    file: 14-test-intent-mismatch.md
+    title: Move A test-intent mismatch
+    tier: design_only
+    reason: This Move A persona-behavior check is documented as manual-only and has no
+      recorded validation evidence yet.
+  - number: 15
+    file: 15-second-instance-schema-permissive.md
+    title: Move B second-instance sweep on permissive schema
+    tier: design_only
+    reason: CI validates output schema shape, but not the persona behavior described by this
+      second-instance sweep scenario.
+  - number: 16
+    file: 16-cross-doc-drift.md
+    title: Move C cross-doc drift
+    tier: design_only
+    reason: Drift guards pin prompt/docs structure, but not the end-to-end persona behavior
+      described by this scenario.
+  - number: 17
+    file: 17-evidence-gated-solo-promotion.md
+    title: Evidence-gated solo-adversary promotion
+    tier: ci_trusted
+    reason: The deterministic solo-adversary promotion path is covered by bats.
+    proof_sources:
+      - tests/bats/test_promote_findings.bats
+  - number: 18
+    file: 18-evidence-verification-fails.md
+    title: Evidence verification failure path
+    tier: ci_trusted
+    reason: The deterministic evidence verification failure path is covered by bats.
+    proof_sources:
+      - tests/bats/test_promote_findings.bats
+  - number: 19
+    file: 19-panel-objection-suppresses-solo.md
+    title: Panel objection suppresses solo-adversary promotion
+    tier: design_only
+    reason: CI covers the solo gate logic, but not the upstream synthesizer-to-demoted handoff
+      this scenario is meant to validate end to end.
+  - number: 20
+    file: 20-human-comments-feed.md
+    title: Human-comments feed
+    tier: design_only
+    reason: Script filtering and ordering are tested, but the broader loop wiring in this
+      scenario is not yet automated or manually recorded end to end.
+  - number: 21
+    file: 21-metrics-cross-record-invariant.md
+    title: Metrics cross-record invariant
+    tier: ci_trusted
+    reason: The scenario's core invariant is already promoted into a dedicated bats test.
+    proof_sources:
+      - tests/bats/test_metrics_cross_record_invariant.bats
+  - number: 22
+    file: 22-skill-split-anchors.md
+    title: SKILL split docs anchors and drift guard
+    tier: ci_trusted
+    reason: A dedicated canary now pins all four split checks, including a liveness check
+      that the tests/run.sh matcher drift guard still rejects a planted violation.
+    proof_sources:
+      - tests/bats/test_skill_split_anchors.bats
+  - number: 23
+    file: 23-blind-spots-persona.md
+    title: Blind-spots persona
+    tier: design_only
+    reason: CI pins the reviewer name and schema shape, but not the end-to-end blind-spots
+      behavior described by this scenario.
+  - number: 24
+    file: 24-adversary-full-default.md
+    title: full adversary context and required review completion
+    tier: manual_validated
+    reason: a dated host run records invalid and shallow review exits without edits
+      or pr writes, plus actual adversary delivery and completion at the iteration limit.
+  - number: 25
+    file: 25-persona-recall-sharpening.md
+    title: Persona recall sharpening
+    tier: design_only
+    reason: This synthetic reviewer evaluation is intentionally manual and has no recorded
+      validation pass in the scenario file.
+  - number: 26
+    file: 26-parallel-reviewer-fanout.md
+    title: Parallel reviewer fan-out stays batched
+    tier: design_only
+    reason: see the scenario's missing evidence for the remaining host runs.
+  - number: 27
+    file: 27-comment-reply-disposition.md
+    title: Inline-comment disposition + reply + SUCCESS gate
+    tier: manual_validated
+    reason: a dated host run records prior-fix verification, fresh-run reply reuse,
+      updates after real local pushes, code-change revalidation, failed writes,
+      and interruption recovery. injected reviews isolate the comment lifecycle.
+  - number: 28
+    file: 28-reviewer-working-tree.md
+    title: Reviewers do not mutate the shared working tree
+    tier: design_only
+    reason: Bats pins the addendum text and its link from every reviewer, but reviewer
+      conduct in a live host run (no destructive git, mutation testing on a copy) is not
+      automatable from this repo and has no recorded pass.
