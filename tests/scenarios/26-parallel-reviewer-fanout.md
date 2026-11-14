@@ -55,6 +55,8 @@ launch reviewer or gate subagents.
 
 ## Manual runs
 
+- The [2026-11-14 live GitHub run](27-comment-reply-disposition.md#live-github-approval-path-2026-11-14) also launched the full panel in one batch, then a separate adversary; it did not exercise delta gates or `cost_saver`.
+
 - Date: 2026-11-14
 - Host: Codex through Witch, prompts frozen at `90e5593`
 - Target: [Scenario 25's paired fixtures](25-persona-recall-sharpening.md#observed-comparison-2026-11-14)

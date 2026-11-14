@@ -114,6 +114,9 @@ live GitHub/CI, another parent host, or all checks in this scenario. In
 particular, the invalid response here came from a required panel persona;
 the dated adversary-specific cases above remain historical evidence.
 
+For actual panel/adversary dispatch and GitHub completion, see the
+[live approval-path record](27-comment-reply-disposition.md#live-github-approval-path-2026-11-14).
+
 ## Validation status
 
 **Status:** `manual_validated`

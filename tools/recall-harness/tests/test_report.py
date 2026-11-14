@@ -586,14 +586,6 @@ def test_report_skips_near_miss_section_when_all_scores_null(tmp_path):
 
 
 def test_report_near_miss_section_floats_real_miss_above_25_row_cap(tmp_path):
-    """Labeled real_miss rows must appear in the rendered (capped) section even
-    when their score is below 25 higher-scoring unlabeled rows.
-
-    Pins the (is_real_miss desc, score desc) sort key at report.py:454. A
-    future change that drops the `-int(r.is_real_miss)` term from the sort key
-    would silently drop labeled real_miss off the visible 25: corrupting the
-    Phase 1 decision-rule input the section exists to surface.
-    """
     # 28 unlabeled high-score rows + 2 labeled real_miss low-score rows.
     # Without the is_real_miss sort priority, both real_miss rows would be
     # cut off by the 25-row cap (their scores are below all 28 unlabeled).
@@ -645,14 +637,6 @@ def test_report_near_miss_section_floats_real_miss_above_25_row_cap(tmp_path):
 
 
 def test_report_near_miss_section_renders_decision_rule_statistic_and_histogram(tmp_path):
-    """The Phase 1 decision-rule statistic line and the real_miss score
-    histogram are the diagnostic outputs the section exists to ship.
-
-    Pins report.py:418-451: a regression that drops the statistic line,
-    miscounts rm_ge_045, swaps bin edges, or skips the histogram block would
-    currently pass every other test but corrupt the Phase 1 decision-rule
-    verdict: the PR's stated purpose.
-    """
     # 5 real_miss rows: 3 with score >= 0.45, 2 below. Decision-rule = 60.0%.
     # Bin distribution: [0.00-0.10):0, [0.10-0.20):1 (0.10), [0.20-0.30):1 (0.20),
     # [0.30-0.40):0, [0.40-0.45):0, [0.45-0.50):2 (0.45, 0.49), [0.50-0.75):1 (0.55).
@@ -725,16 +709,6 @@ def test_report_near_miss_histogram_includes_line_gate_only_bin(tmp_path):
 
 
 def test_report_near_miss_renders_when_line_delta_field_absent(tmp_path):
-    """Back-compat: older harness JSONL has best_near_miss_score but no
-    best_near_miss_line_delta key. report.py reads via .get(...) so the row
-    must still render: with the `line_delta=` segment suppressed.
-
-    Pins report.py:315 (`u.get('best_near_miss_line_delta')  # may be None on
-    older JSONL`) and report.py:464 (the conditional `line_delta_str`). A
-    regression that switched .get to subscript access would silently break
-    older-JSONL handling and still pass every other test, since all other
-    fixtures pass an explicit integer line_delta.
-    """
     output = _render_with_unmatched_records(
         tmp_path,
         unmatched=[

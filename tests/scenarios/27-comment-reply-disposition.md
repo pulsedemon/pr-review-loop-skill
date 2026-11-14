@@ -143,6 +143,34 @@ publication.
 
 _validated with the Codex host on 2026-09-21: PASS._
 
+## Live GitHub approval path, 2026-11-14
+
+The Codex parent ran the normal loop on
+[PR #5](https://github.com/pulsedemon/pr-review-loop-skill/pull/5) at
+`678b59821511b16f3962bae0f9376adbeaae4631`, using that revision's skill with
+startup sync disabled. Fresh state retained the new `0/false/false` promotion
+settings and required the full panel. The panel ran as one batch on
+`gpt-6.1-sol`; a fresh `gpt-6-astra` adversary received all raw responses,
+including one docstring nit. Every response passed schema/identity validation,
+with no shallow flags or blockers. The adversary approved without findings.
+
+The real CI helper observed ten passing GitHub checks. Fresh REST/GraphQL
+fetches contained no external comments or review threads, and fresh local and
+remote heads both matched the reviewed revision. The actual append and
+completion helpers permitted success in iteration 1. The
+[summary comment](https://github.com/pulsedemon/pr-review-loop-skill/pull/5#issuecomment-6883576114)
+was posted before the terminal helper recorded `success` at
+`2026-11-14T20:15:06Z`.
+
+This establishes actual dispatch, live GitHub/CI, and the no-edit approval
+path. The subsequent docstring cleanup and this record change no helper or
+executable test behavior. The run does not establish inline reply handling,
+the edit path, delta-gate dispatch, dirty-tree reviewer conduct, or another
+parent host. Injected edit/failure decisions remain documented in
+[Scenario 24](24-adversary-full-default.md#changed-default-fixture-run-2026-11-14).
+Raw receipts, state, CI output, and discussion/head snapshots were retained
+locally under ignored `docs/superpowers/reviews/2026-11-14-review-quality/pr-loop/`.
+
 ## Validation status
 
 **Status:** `manual_validated`
