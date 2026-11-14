@@ -23,7 +23,7 @@ the uv-managed toolchain; both forms run the same suite.
 
 ## One-time setup
 
-Follow the [installation instructions](README.md#install) for the locked Python environment, then install git hooks:
+Create the [locked Python environment](README.md#python-environment-if-needed), even if your host already meets the runtime requirements, then install git hooks:
 
     uv run pre-commit install
 

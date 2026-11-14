@@ -13,7 +13,7 @@ export PR_REVIEW_LOOP_SKIP_SKILL_SYNC=1
 
 No release tag is published yet. The example pins the fetched main revision; record its SHA. Substitute a reviewed SHA or, once available, a published release tag to select that exact version. Set the environment variable in the shell that launches the host. Detached HEAD also makes the startup helper skip updates; the variable makes that choice explicit if the clone is later put on a branch.
 
-To update, check out the selected new tag or SHA, run `uv sync --group dev --frozen`, refresh the installation for your host, and restart the host. Cursor refresh and opencode restart details are below. To follow a branch again, switch to it and unset `PR_REVIEW_LOOP_SKIP_SKILL_SYNC`; startup sync then follows the contract below. Do not discard local changes to change versions.
+To update, check out the selected new tag or SHA, refresh the installation for your host, and restart the host. If you use the [locked Python environment](../README.md#python-environment-if-needed), run its setup again after changing revisions. Cursor refresh and opencode restart details are below. To follow a branch again, switch to it and unset `PR_REVIEW_LOOP_SKIP_SKILL_SYNC`; startup sync then follows the contract below. Do not discard local changes to change versions.
 
 ## Startup sync
 

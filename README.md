@@ -20,24 +20,19 @@ run reviewer personas (correctness, tests, security, performance, readability, y
 
 See [Preconditions](SKILL.md#preconditions) for the required tools, authentication, and checkout state.
 
-Use [uv](https://docs.astral.sh/uv/getting-started/installation/) for the locked Python environment below. [CONTRIBUTING.md](CONTRIBUTING.md) covers development hooks and checks.
+If your host's `python3` does not meet the Python requirement, use the [Python environment setup](#python-environment-if-needed). [CONTRIBUTING.md](CONTRIBUTING.md) covers development hooks and checks.
 
 ## Install
 
 ```bash
 git clone https://github.com/pulsedemon/pr-review-loop-skill.git
 cd pr-review-loop-skill
-git checkout --detach origin/main
-git rev-parse HEAD
-uv sync --group dev --frozen
-source .venv/bin/activate
-gh auth status
 ./install.sh --codex
 ```
 
-This private repository has no release tag yet. The checkout command pins the cloned revision; record the printed SHA to reproduce it. Choose the flag for your host below, then start that host from this activated environment in the target PR checkout. If GitHub authentication is missing, run `gh auth login`. The target checkout must meet the [preconditions](SKILL.md#preconditions).
+Choose the flag for your host below, then restart that host. This repository is private, so cloning requires GitHub access. Run `gh auth login` if you have not authenticated yet.
 
-Keep the cloned skill directory: installed links depend on it. Follow [version pinning and updates](docs/skill-update.md#pinning-a-version) to select a revision or change update behavior.
+Keep the cloned skill directory: installed links depend on it. The default checkout follows `main` through [startup sync](docs/skill-update.md#startup-sync). To keep a fixed revision instead, use [version pinning](docs/skill-update.md#pinning-a-version).
 
 A bare `./install.sh` installs only into **detected** hosts, meaning hosts whose config dir already exists: `~/.cursor`, `~/.claude`, `${CODEX_HOME:-~/.codex}`, and `${XDG_CONFIG_HOME:-~/.config}/opencode`. An explicit host flag installs that host regardless of detection; `--force` alone skips detection and (re)installs into all four.
 
@@ -67,16 +62,18 @@ To uninstall:
 ./install.sh --uninstall
 ```
 
-### Codex setup
+### Python environment (if needed)
 
-Install the skill into Codex with:
+Skip this if your host already has the Python environment required by the [preconditions](SKILL.md#preconditions). The installer places skill files; it does not install Python packages.
+
+Otherwise, install [uv](https://docs.astral.sh/uv/getting-started/installation/) and run these commands from the cloned skill directory:
 
 ```bash
-./install.sh --codex
+uv sync --group dev --frozen
+source .venv/bin/activate
 ```
 
-Restart Codex to pick up new skills. `AGENTS.md` remains useful as repo-local
-routing guidance, but manual project edits are not required for installation.
+This locked environment includes the runtime dependency and development tools. Start your host from this activated shell in the target PR checkout. In a new shell, activate the skill clone's environment again before starting the host.
 
 ### opencode setup
 
