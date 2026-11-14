@@ -1,0 +1,18 @@
+# Source of truth for the Move A.1 sub-mechanic enum.
+#
+# Five values; SKILL.md, state.schema.json, output.schema.json,
+# reviewers/tests.md, and reviewers/adversary.md must all carry these
+# verbatim. The generator writes all five surfaces from this list and
+# fails --check if any occurrence of any value sits outside a known
+# mirror region (future-mirror discovery, string-enum only).
+#
+# Order matters — preserved verbatim in the schema enums. SKILL.md and
+# the two reviewers/*.md files render the list in this order too.
+#
+# Spec: docs/generators.md
+move_a1_pattern:
+  - cross_fixture
+  - testid_unmounted
+  - conditional_unmounted
+  - missing_state_assertion
+  - describe_label_drift

@@ -1,0 +1,179 @@
+"""Tests for scripts.regen_schema_enum — the reviewer.enum slice rewriter."""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import pytest
+import regen_schema_enum  # type: ignore[import-not-found]  # sibling module made importable by conftest.py
+
+
+def _write_manifest(
+    tmp_path: Path, panel_names: list[str], adversary_name: str = "adversary"
+) -> Path:
+    lines = ["panel:"]
+    for i, name in enumerate(panel_names):
+        owns = "true" if i == 0 else "false"
+        lines.append(f"  - name: {name}")
+        lines.append(f"    file: {name}.md")
+        lines.append(f"    description: {name} persona")
+        lines.append(f"    owns_schema_constraint_blocker: {owns}")
+    lines.append("adversary:")
+    lines.append(f"  name: {adversary_name}")
+    lines.append(f"  file: {adversary_name}.md")
+    lines.append(f"  description: {adversary_name} persona")
+    lines.append("addendums: []")
+    p = tmp_path / "personas.yaml"
+    p.write_text("\n".join(lines) + "\n")
+    return p
+
+
+def _write_schema(tmp_path: Path, enum_items: list[str]) -> Path:
+    """Write a minimal schema with a reviewer.enum block matching the renderer's formatting.
+
+    The renderer (regen_schema_enum._render_enum_body) emits items at 8-space indent
+    and places the closing bracket after 6 spaces; replicate that exactly so a
+    matching manifest produces a byte-identical schema.
+    """
+    if enum_items:
+        items_lines = ",\n".join(f'        "{name}"' for name in enum_items)
+        enum_body = "\n" + items_lines + "\n      "
+    else:
+        enum_body = ""
+    schema_text = (
+        "{\n"
+        '  "$schema": "http://json-schema.org/draft-07/schema#",\n'
+        '  "type": "object",\n'
+        '  "properties": {\n'
+        '    "reviewer": {\n'
+        '      "type": "string",\n'
+        f'      "enum": [{enum_body}]\n'
+        "    }\n"
+        "  }\n"
+        "}\n"
+    )
+    p = tmp_path / "output.schema.json"
+    p.write_text(schema_text)
+    return p
+
+
+def _run(args: list[str]) -> int:
+    return regen_schema_enum.main(args)
+
+
+# --- happy paths ---
+
+
+def test_check_returns_0_when_schema_matches_manifest(tmp_path: Path) -> None:
+    manifest = _write_manifest(tmp_path, ["alpha", "beta"])
+    schema = _write_schema(tmp_path, ["alpha", "beta", "adversary"])
+    rc = _run(["--check", "--manifest", str(manifest), "--schema", str(schema)])
+    assert rc == 0
+
+
+def test_write_rewrites_drifted_schema(tmp_path: Path) -> None:
+    manifest = _write_manifest(tmp_path, ["alpha", "beta", "gamma"])
+    schema = _write_schema(tmp_path, ["alpha"])  # drifted: missing beta, gamma, adversary
+    rc = _run(["--write", "--manifest", str(manifest), "--schema", str(schema)])
+    assert rc == 0
+    data = json.loads(schema.read_text())
+    assert data["properties"]["reviewer"]["enum"] == ["alpha", "beta", "gamma", "adversary"]
+
+
+def test_write_on_matching_schema_is_a_noop(tmp_path: Path) -> None:
+    manifest = _write_manifest(tmp_path, ["alpha"])
+    schema = _write_schema(tmp_path, ["alpha", "adversary"])
+    before = schema.read_text()
+    rc = _run(["--write", "--manifest", str(manifest), "--schema", str(schema)])
+    assert rc == 0
+    assert schema.read_text() == before
+
+
+# --- drift exit code ---
+
+
+def test_check_returns_5_with_diff_on_drift(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    manifest = _write_manifest(tmp_path, ["alpha", "beta"])
+    schema = _write_schema(tmp_path, ["alpha"])  # missing beta + adversary
+    rc = _run(["--check", "--manifest", str(manifest), "--schema", str(schema)])
+    assert rc == regen_schema_enum._DRIFT_EXIT == 5
+    err = capsys.readouterr().err
+    # Unified diff to stderr names the missing reviewers and points at the regen script.
+    assert "beta" in err
+    assert "adversary" in err
+    assert "scripts/regen.sh" in err
+
+
+# --- manifest error exit code ---
+
+
+def test_returns_3_when_manifest_is_malformed(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    manifest = tmp_path / "personas.yaml"
+    manifest.write_text("panel: []\nadversary:\n  name: x\n  file: x.md\n  description: x\n")
+    schema = _write_schema(tmp_path, ["alpha"])
+    rc = _run(["--check", "--manifest", str(manifest), "--schema", str(schema)])
+    assert rc == regen_schema_enum._MANIFEST_ERROR_EXIT == 3
+    err = capsys.readouterr().err
+    assert "manifest error" in err
+
+
+# --- structural SystemExit branches ---
+
+
+def test_returns_3_when_schema_is_missing(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    manifest = _write_manifest(tmp_path, ["alpha"])
+    missing = tmp_path / "nonexistent.json"
+    rc = _run(["--check", "--manifest", str(manifest), "--schema", str(missing)])
+    assert rc == regen_schema_enum._MANIFEST_ERROR_EXIT == 3
+    err = capsys.readouterr().err
+    assert "failed to read" in err
+
+
+def test_returns_3_when_schema_is_unreadable(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    manifest = _write_manifest(tmp_path, ["alpha"])
+    schema = tmp_path / "output.schema.json"
+    schema.write_bytes(b"\xff\xfe\xfd")
+    rc = _run(["--check", "--manifest", str(manifest), "--schema", str(schema)])
+    assert rc == regen_schema_enum._MANIFEST_ERROR_EXIT == 3
+    err = capsys.readouterr().err
+    assert "failed to read" in err
+
+
+def test_systemexit_when_schema_is_not_valid_json(tmp_path: Path) -> None:
+    manifest = _write_manifest(tmp_path, ["alpha"])
+    schema = tmp_path / "output.schema.json"
+    schema.write_text("{ this is not valid json")
+    with pytest.raises(SystemExit) as exc_info:
+        _run(["--check", "--manifest", str(manifest), "--schema", str(schema)])
+    assert "not valid JSON" in str(exc_info.value)
+
+
+def test_systemexit_when_reviewer_enum_path_is_missing(tmp_path: Path) -> None:
+    manifest = _write_manifest(tmp_path, ["alpha"])
+    schema = tmp_path / "output.schema.json"
+    schema.write_text(json.dumps({"properties": {"other": {}}}, indent=2))
+    with pytest.raises(SystemExit) as exc_info:
+        _run(["--check", "--manifest", str(manifest), "--schema", str(schema)])
+    assert "properties.reviewer.enum" in str(exc_info.value)
+
+
+def test_systemexit_when_slice_regex_cannot_match_despite_valid_path(tmp_path: Path) -> None:
+    # Valid JSON, valid path, but inline single-line enum that the multi-line
+    # slice locator cannot match (no whitespace around the colons/braces).
+    manifest = _write_manifest(tmp_path, ["alpha"])
+    schema = tmp_path / "output.schema.json"
+    # Use a JSON shape where the regex's whitespace/order expectations are violated.
+    # The regex requires "type":"string","enum":[...] in that order; we put enum first.
+    schema.write_text('{"properties":{"reviewer":{"enum":["alpha"],"type":"string"}}}')
+    with pytest.raises(SystemExit) as exc_info:
+        _run(["--check", "--manifest", str(manifest), "--schema", str(schema)])
+    assert "slice locator regex did not match" in str(exc_info.value)

@@ -1,0 +1,22 @@
+# Description manifest for the loop status enum surfaced in README.md
+# "Loop statuses" table. Source of truth for the enum itself:
+# templates/state.schema.json status.enum (validated by
+# scripts/_exit_statuses_for_cog.py).
+#
+# Edit a description: change the value here and run
+# scripts/regen.sh.
+# Add or remove a status: edit templates/state.schema.json status.enum
+# first, then this file (the helper validates the key sets match).
+
+statuses:
+  running: "Loop is mid-iteration; not a terminal exit."
+  success: "required reviews complete on the unchanged head, zero blockers, CI green or no checks registered, and required comment handling complete."
+  max_iterations: "reached the configured iteration cap."
+  no_progress: "Same blockers came back within the last two iterations."
+  tests_regressed: "Local tests regressed after an edit."
+  ci_stuck: "Same CI check failing on two consecutive CI visits."
+  external_push: "Remote head moved unexpectedly between iterations."
+  scope_split_recommended: "PR exceeded the new-LOC threshold; user opted to abort so the work can be moved into smaller PRs."
+  dry_run_complete: "dry_run=true: reviewers ran and synthesized, nothing was committed or pushed."
+  setup_error: "Local tooling problem (missing CLI, malformed state, etc.); no PR comment posted."
+  review_incomplete: "a required review or comment operation did not complete. report the failed operation locally; do not post a final pr comment."

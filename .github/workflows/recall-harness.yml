@@ -1,0 +1,75 @@
+name: recall-harness
+on:
+  schedule:
+    - cron: '0 14 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: read
+
+concurrency:
+  group: recall-harness
+  cancel-in-progress: false
+
+jobs:
+  refresh-report:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: gh auth status
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh auth status
+
+      - name: collect corpus
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          OWNER="${REPOSITORY%%/*}"
+          REPO="${REPOSITORY##*/}"
+          python3 tools/recall-harness/collect_pr_corpus.py \
+            --owner "$OWNER" \
+            --repo "$REPO" \
+            --merged-since 2026-01-01
+
+      - name: check manifest drift
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          OWNER="${REPOSITORY%%/*}"
+          REPO="${REPOSITORY##*/}"
+          python3 tools/recall-harness/check_manifest_drift.py \
+            --owner "$OWNER" \
+            --repo "$REPO" \
+            --merged-since 2026-01-01 \
+            --manifest tools/recall-harness/corpus-manifest.csv
+
+      - name: match external findings
+        run: python3 tools/recall-harness/match_external.py
+
+      - name: generate report
+        run: python3 tools/recall-harness/report.py > tools/recall-harness/REPORT.md.new
+
+      - name: upload artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: recall-harness-${{ github.run_id }}
+          path: |
+            tools/recall-harness/REPORT.md.new
+            tools/recall-harness/corpus/
+            tools/recall-harness/matched/
+            tools/recall-harness/unmatched/
+            tools/recall-harness/loop_unmatched/
+          retention-days: 30
+          if-no-files-found: warn

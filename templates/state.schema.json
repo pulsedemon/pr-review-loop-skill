@@ -1,0 +1,428 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PR Review Loop State",
+  "type": "object",
+  "$defs": {
+    "phase_model": {
+      "type": "object",
+      "description": "Resolved subagent model routing for one fan-out phase. `tier` is the portable tier the host resolved per docs/model-overrides.md; `model` is the concrete host model it spawned with. Local/observability only.",
+      "additionalProperties": false,
+      "required": ["tier"],
+      "properties": {
+        "tier": {
+          "type": "string",
+          "enum": ["inherit", "cheap", "standard", "strong"]
+        },
+        "model": {
+          "type": "string",
+          "description": "Concrete host model the phase spawned with (e.g. 'sonnet', 'opus', 'gpt-5.4'). Omitted when tier resolved to 'inherit' and the host did not name the parent-session model."
+        }
+      }
+    }
+  },
+  "required": [
+    "pr_url",
+    "pr_number",
+    "owner",
+    "repo",
+    "base_branch",
+    "head_branch",
+    "iteration",
+    "max_iterations",
+    "status",
+    "history"
+  ],
+  "properties": {
+    "pr_url": { "type": "string", "format": "uri" },
+    "pr_number": { "type": "integer" },
+    "owner": { "type": "string" },
+    "repo": { "type": "string" },
+    "title": { "type": "string" },
+    "base_branch": { "type": "string" },
+    "head_branch": { "type": "string" },
+    "initial_head_sha": { "type": "string" },
+    "pr_author": { "type": "string" },
+    "loop_started_at": { "type": "string", "format": "date-time" },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Written by scripts/write_terminal_metric.sh at Step 5, before the metric append. scripts/state_init.sh reinitializes a same-PR state file only when this is present; a terminal `status` alone can be a pre-Step-5 scope-split record that must resume."
+    },
+    "iteration": { "type": "integer", "minimum": 0 },
+    "max_iterations": { "type": "integer", "minimum": 1 },
+    "dry_run": {
+      "type": "boolean",
+      "description": "Resolved dry_run mode for this loop. Persisted at init so a mid-iteration resume honors it rather than re-parsing the default. Absent means false: dry_run had no runtime effect before it was wired, so a state file without this field is a normal run."
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "running",
+        "success",
+        "max_iterations",
+        "no_progress",
+        "tests_regressed",
+        "ci_stuck",
+        "external_push",
+        "scope_split_recommended",
+        "dry_run_complete",
+        "review_incomplete",
+        "setup_error"
+      ]
+    },
+    "pr_scope": {
+      "type": "object",
+      "description": "Optional record of the PR-scope check from Step 3.5. Absent when pr_scope=false or when the loop predates this field.",
+      "properties": {
+        "threshold": { "type": "integer", "minimum": 1 },
+        "new_loc_total": { "type": "integer", "minimum": 0 },
+        "per_file": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["path", "added", "deleted"],
+            "properties": {
+              "path": { "type": "string" },
+              "added": { "type": "integer", "minimum": 0 },
+              "deleted": { "type": "integer", "minimum": 0 }
+            }
+          }
+        },
+        "excluded_paths": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Paths that count_new_loc.sh excluded from the new-LOC total (lock files, generated code, snapshots, vendor, build output, binary diffs). Surfaced to the gate agent as context."
+        },
+        "verdict": {
+          "type": "string",
+          "enum": ["under_threshold", "atomic", "request_split"]
+        },
+        "summary": { "type": "string" },
+        "splits": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "rationale", "files", "estimated_new_loc"],
+            "properties": {
+              "name": { "type": "string" },
+              "rationale": { "type": "string" },
+              "files": {
+                "type": "array",
+                "items": {
+                  "oneOf": [
+                    { "type": "string" },
+                    {
+                      "type": "object",
+                      "required": ["path", "hunks"],
+                      "properties": {
+                        "path": { "type": "string" },
+                        "hunks": {
+                          "type": "array",
+                          "items": { "type": "string" }
+                        }
+                      }
+                    }
+                  ]
+                }
+              },
+              "estimated_new_loc": { "type": "integer", "minimum": 0 },
+              "depends_on": {
+                "type": "array",
+                "items": { "type": "string" }
+              }
+            }
+          }
+        },
+        "remaining_in_original": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "user_decision": {
+          "type": "string",
+          "enum": ["not_prompted", "declined_agent", "continue", "abort"]
+        }
+      }
+    },
+    "shallow_adversary_runs": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 2,
+      "description": "Loop-scoped count of forced-adversary runs on the blockers>0 path (see SKILL.md §4d.0). Capped (see maximum on this field). Optional for backward compat with state files predating this field; treat absence as 0."
+    },
+    "shallow_approval_adversary_runs": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 2,
+      "description": "legacy field, retained for reading historical state. new runs do not write it."
+    },
+    "comment_ledger": {
+      "type": "array",
+      "description": "top-level, loop-scoped latest successful inline disposition per thread root. append-history atomically upserts fresh reply receipts with the original reviewed history snapshot. only inline review comments enter here; reply_pr_comments.sh owns cross-run idempotency. absence means [] for backward compatibility. see docs/comment-handling.md.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "source", "disposition", "replied_at"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "source": { "type": "string", "const": "review_comment" },
+          "disposition": { "type": "string", "enum": ["addressed", "deferred"] },
+          "reason": { "type": "string", "minLength": 1 },
+          "replied_at": { "type": "string", "format": "date-time" }
+        },
+        "if": { "properties": { "disposition": { "const": "deferred" } } },
+        "then": { "required": ["reason"] }
+      }
+    },
+    "history": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "iteration",
+          "head_sha_before",
+          "head_sha_after",
+          "findings",
+          "ci_status",
+          "panel_selection"
+        ],
+        "not": {
+          "required": ["adversary", "adversary_error"]
+        },
+        "if": { "properties": { "ci_status": { "const": "failure" } } },
+        "then": {
+          "required": ["ci_failed_checks"],
+          "properties": { "ci_failed_checks": { "minItems": 1 } }
+        },
+        "properties": {
+          "iteration": { "type": "integer" },
+          "started_at": { "type": "string", "format": "date-time" },
+          "ended_at": { "type": "string", "format": "date-time" },
+          "head_sha_before": { "type": "string", "minLength": 1 },
+          "head_sha_after": { "type": "string", "minLength": 1, "description": "Head SHA after this iteration's commit, equal to head_sha_before on the no-commit paths. Required: §4h passes history[-1].head_sha_after to safe_push.sh as the expected remote head, and resume compares current_head against it (docs/resume.md)." },
+          "findings": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["reviewer", "severity", "scope", "summary"],
+              "properties": {
+                "reviewer": { "type": "string" },
+                "source_reviewers": {
+                  "type": "array",
+                  "items": { "type": "string" },
+                  "description": "Every persona that raised this finding: §4c unions the list when two surface the same issue, and the §4d.0.5 adversary merge adds \"adversary\" to a matched panel finding. Persist it whenever synthesis produced one. Optional only for backward compatibility with states written before it existed — scripts/collect_open_findings.py reads it as the finding's owner set, and with the singular `reviewer` alone a finding two personas raised looks like one persona's, so either of them going quiet retires it from the Step 5 open sets."
+                },
+                "severity": {
+                  "type": "string",
+                  "enum": ["blocker", "suggestion", "nit"]
+                },
+                "scope": {
+                  "type": "string",
+                  "enum": ["in_scope", "out_of_scope"]
+                },
+                "file": { "type": "string" },
+                "line": { "type": "integer" },
+                "summary": { "type": "string" },
+                "detail": { "type": "string" },
+                "suggested_fix": { "type": "string" },
+                "move_b_pattern": { "type": "string", "minLength": 1 },
+                "move_a1_pattern": { "type": "string", "enum": ["cross_fixture", "testid_unmounted", "conditional_unmounted", "missing_state_assertion", "describe_label_drift"] },
+                "finding_evidence": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["file", "line"],
+                  "anyOf": [
+                    { "required": ["symbol"] },
+                    { "required": ["snippet"] }
+                  ],
+                  "properties": {
+                    "file":    { "type": "string", "minLength": 1 },
+                    "line":    { "type": "integer", "minimum": 1 },
+                    "symbol":  { "type": "string", "minLength": 1 },
+                    "snippet": { "type": "string", "minLength": 1 }
+                  }
+                }
+              }
+            }
+          },
+          "addressed": {
+            "type": "array",
+            "items": {
+              "oneOf": [
+                { "type": "string" },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["file", "line", "summary", "promoted_from", "promoted_by", "source_reviewers"],
+                  "properties": {
+                    "file": { "type": "string" },
+                    "line": { "type": "integer", "minimum": 1 },
+                    "summary": { "type": "string" },
+                    "promoted_from": { "type": "string", "enum": ["suggestion"] },
+                    "promoted_by": { "type": "string", "enum": ["multi-persona", "adversary"] },
+                    "promotion_reason": {
+                      "type": "string",
+                      "enum": ["multi_source", "adversary_endorsed", "evidence_gated_solo_adversary", "evidence_verification_failed"],
+                      "description": "Optional on read for backward compat with PR #5 state files. promote_findings.py always populates on writes. See SKILL.md §4d.0.5."
+                    },
+                    "source_reviewers": {
+                      "type": "array",
+                      "items": { "type": "string" },
+                      "description": "Personas whose findings matched and triggered the promotion. For adversary-endorsed promotion this is the adversary plus any panel personas whose suggestion was endorsed."
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "deferred": {
+            "type": "array",
+            "items": {
+              "oneOf": [
+                { "type": "string" },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["file", "line", "summary", "promoted_from", "promoted_by", "source_reviewers"],
+                  "properties": {
+                    "file": { "type": "string" },
+                    "line": { "type": "integer", "minimum": 1 },
+                    "summary": { "type": "string" },
+                    "promoted_from": { "type": "string", "enum": ["suggestion"] },
+                    "promoted_by": { "type": "string", "enum": ["multi-persona", "adversary"] },
+                    "promotion_reason": {
+                      "type": "string",
+                      "enum": ["multi_source", "adversary_endorsed", "evidence_gated_solo_adversary", "evidence_verification_failed"],
+                      "description": "Optional on read for backward compat with PR #5 state files. promote_findings.py always populates on writes. See SKILL.md §4d.0.5."
+                    },
+                    "source_reviewers": {
+                      "type": "array",
+                      "items": { "type": "string" }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "tests_regressed": { "type": "boolean" },
+          "ci_status": {
+            "type": "string",
+            "enum": ["success", "failure", "timeout", "skipped", "pending"]
+          },
+          "ci_failed_checks": {
+            "type": "array",
+            "description": "Failed check names from this iteration's ci_wait.sh visit. Required and non-empty when ci_status is \"failure\": §4d.1's CI_STUCK rule compares this iteration's names against the most recent earlier failure entry, so a failure entry that records none lets a permanently-red check keep looping. Optional on every other status.",
+            "items": { "type": "string", "minLength": 1 }
+          },
+          "reviewer_errors": {
+            "type": "array",
+            "description": "reviewer subagents whose response was missing, timed out, malformed, or failed schema or dispatched-identity validation this iteration.",
+            "items": {
+              "type": "object",
+              "required": ["reviewer", "error"],
+              "properties": {
+                "reviewer": { "type": "string" },
+                "error": { "type": "string" }
+              }
+            }
+          },
+          "reviewers_completed": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": { "type": "string", "minLength": 1 },
+            "description": "personas whose response passed schema and dispatched-identity validation for this iteration. absent legacy receipts cannot establish completion."
+          },
+          "shallow_review": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Names of reviewers that returned approve with no/empty evidence this iteration (SKILL.md §4c). Omit when empty."
+          },
+          "demoted": {
+            "type": "array",
+            "description": "Findings synthesis dropped or demoted this iteration. Read by scripts/promote_findings.py to detect panelist objection in the §4d.0.5 solo-adversary gate. Backward compat: absence is treated as []. See SKILL.md §4c and §4d.0.5.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["file", "line", "summary", "reviewer", "reason"],
+              "properties": {
+                "file":     { "type": "string", "minLength": 1 },
+                "line":     { "type": "integer", "minimum": 1 },
+                "summary":  { "type": "string", "minLength": 1 },
+                "reviewer": { "type": "string", "minLength": 1 },
+                "reason":   {
+                  "type": "string",
+                  "enum": ["not_a_problem", "synthesis_demoted"],
+                  "description": "`not_a_problem`: finding was dropped entirely. `synthesis_demoted`: blocker was downgraded to suggestion OR to nit. The §4d.0.5 evidence-gated solo-adversary gate treats either as an objection within ±5 lines."
+                },
+                "note":     { "type": "string" }
+              }
+            }
+          },
+          "adversary": {
+            "type": "object",
+            "description": "Adversary persona's output for this iteration, when it ran. Mirrors a reviewer record. Omit when the adversary did not run.",
+            "additionalProperties": false,
+            "required": ["verdict", "findings"],
+            "properties": {
+              "reviewer": { "type": "string", "const": "adversary" },
+              "verdict": { "type": "string", "enum": ["approve", "request_changes", "comment"] },
+              "findings": { "type": "array" },
+              "evidence": { "type": "object" },
+              "shallow_blocker": {
+                "type": "boolean",
+                "description": "legacy field, retained for reading historical state. new runs do not write it."
+              }
+            }
+          },
+          "adversary_error": {
+            "type": "string",
+            "description": "Set when the adversary errored or returned schema-invalid output. Mutually exclusive with `adversary`."
+          },
+          "adversary_shallow_giveup": {
+            "type": "boolean",
+            "description": "legacy field, retained for reading historical state. new runs do not write it."
+          },
+          "human_comments": {
+            "type": "object",
+            "description": "original complete external-comment snapshot reviewed in this iteration. on replying paths it is atomically recorded with fresh inline dispositions. review_threads retains normalized resolved-thread roots and replies even though review_comments omits resolved inline content. marker comments are filtered. incomplete record-only paths omit this field. see docs/comment-handling.md.",
+            "properties": {
+              "fetched_at":      { "type": "string", "format": "date-time" },
+              "fetch_error":     { "type": ["string", "null"] },
+              "issue_comments":  { "type": "array" },
+              "review_comments": { "type": "array" },
+              "reviews":         { "type": "array" },
+              "review_threads":  { "type": "array" }
+            }
+          },
+          "panel_selection": {
+            "type": "object",
+            "description": "Initial §4a.1 panel selection for this iteration, written from scripts/select_panel.py output before any later forced full-panel rerun. `mode` describes that initial selection only; if additional personas ran later via the pre-approval full sweep, `forced_full_sweep` records that path. See docs/delta-gate.md.",
+            "additionalProperties": false,
+            "required": ["mode", "ran", "skipped", "gate_relevant", "gate_fail_open", "open_blocker_carryover"],
+            "properties": {
+              "mode": { "type": "string", "enum": ["full", "delta_gated"] },
+              "ran": { "type": "array", "items": { "type": "string" } },
+              "skipped": { "type": "array", "items": { "type": "string" } },
+              "gate_relevant": { "type": "array", "items": { "type": "string" } },
+              "gate_fail_open": { "type": "array", "items": { "type": "string" } },
+              "open_blocker_carryover": { "type": "array", "items": { "type": "string" } }
+            }
+          },
+          "forced_full_sweep": {
+            "type": "boolean",
+            "description": "true when this iteration ran a forced full-panel sweep before §4d.0 because the delta-gated panel reached blockers==0 with personas skipped. See docs/delta-gate.md."
+          },
+          "model_routing": {
+            "type": "object",
+            "description": "Resolved subagent model routing for the fan-out phases that ran this iteration. Recorded by the host after it resolves each phase's tier per docs/model-overrides.md and spawns it; only phases that actually ran appear. Local/observability only — never posted to the PR. Optional; absence (of the object or of any phase key) means 'not recorded' and must never block the loop. See docs/model-overrides.md#observability-and-recording.",
+            "additionalProperties": false,
+            "properties": {
+              "delta_gate": { "$ref": "#/$defs/phase_model" },
+              "reviewer": { "$ref": "#/$defs/phase_model" },
+              "adversary": { "$ref": "#/$defs/phase_model" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

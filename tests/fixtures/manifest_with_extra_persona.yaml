@@ -1,0 +1,67 @@
+# Fixture: real panel + a fake `phantom` persona.
+#
+# Used by tests/bats/test_manifest_drift_localization.bats to verify
+# that each dependent sync test names a specific surface when the
+# manifest gains an entry that other surfaces don't yet know about.
+#
+# Do NOT add reviewers/phantom.md, do NOT add phantom to the schema
+# enum, and do NOT mention phantom in SKILL.md — drift is the point.
+
+panel:
+  - name: correctness
+    file: correctness.md
+    description: "fixture stub"
+    move_c: false
+  - name: tests
+    file: tests.md
+    description: "fixture stub"
+    move_c: false
+  - name: security
+    file: security.md
+    description: "fixture stub"
+    move_c: false
+  - name: performance
+    file: performance.md
+    description: "fixture stub"
+    move_c: false
+  - name: readability
+    file: readability.md
+    description: "fixture stub"
+    move_c: true
+  - name: yagni
+    file: yagni.md
+    description: "fixture stub"
+    move_c: false
+  - name: requirements
+    file: requirements.md
+    description: "fixture stub"
+    move_c: true
+  - name: comments
+    file: comments.md
+    description: "fixture stub"
+    move_c: false
+  - name: error_handling
+    file: error_handling.md
+    description: "fixture stub"
+    move_c: false
+  - name: type_design
+    file: type_design.md
+    description: "fixture stub"
+    move_c: false
+    owns_schema_constraint_blocker: true
+  - name: blind_spots
+    file: blind_spots.md
+    description: "fixture stub"
+    move_c: true
+  - name: phantom
+    file: phantom.md
+    description: "fixture stub"
+    move_c: true
+
+adversary:
+  name: adversary
+  file: adversary.md
+  description: "fixture stub"
+
+addendums:
+  - _human_comments_addendum.md

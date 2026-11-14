@@ -1,0 +1,30 @@
+# Source of truth for the dev-only trees every consumer skips.
+#
+# Four surfaces mirror this list, each with its own matching syntax:
+#   - install.sh: CURSOR_INSTALL_SKIP_NAMES (bash array, find -name)
+#   - tests/run.sh: the cap-drift grep's --exclude-dir flags
+#   - tests/bats/test_helper.bash: copy_skill_tree's rsync --exclude flags
+#   - scripts/regen_move_a1_enum.py: the leading _GREP_EXCLUDES entries
+# The generator scripts/regen_dev_trees.py writes all four.
+#
+# Content-specific exclusions are deliberately NOT here. Each consumer keeps
+# its own, because they mean different things: docs/superpowers is
+# not-installable to install.sh, not-cap-scannable to tests/run.sh, and
+# not-enum-scannable to regen_move_a1_enum.py, and the three lists that
+# express that do not otherwise agree.
+#
+# Order matters: it is preserved verbatim in every generated surface.
+#
+# Spec: docs/generators.md
+dev_trees:
+  - .git
+  - .venv
+  - .pytest_cache
+  - .ruff_cache
+  - .worktrees
+  # no dot: .claude/worktrees is a real path, not a defensive guess.
+  - worktrees
+  - __pycache__
+  - .DS_Store
+  - .claude
+  - .superpowers

@@ -1,0 +1,15 @@
+# Source of truth for the §4d.0 adversary cap.
+#
+# Today: a single value drives both schema maxima
+# (.properties.shallow_adversary_runs.maximum and
+#  .properties.shallow_approval_adversary_runs.maximum) and the
+# scripts/_adversary_caps.sh ADVERSARY_CAP constant.
+#
+# Forward-extensible: if the two schema fields ever need to diverge,
+# split this into `forced_cap` and `approval_cap` with a manifest
+# version bump. That split also requires a small generator update
+# (scripts/regen_adversary_caps.py currently reads a single `cap` key
+# and propagates it to both schema fields).
+#
+# Spec: docs/generators.md
+cap: 2

@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/pulsedemon/pr-review-loop/schemas/reviewer-output/0.1.0.json",
+  "title": "PR Review Loop reviewer output",
+  "description": "Strict JSON contract for one reviewer subagent's output, validated by scripts/validate_reviewer_output.py at the start of §4c synthesize. Schema version is encoded in $id; bump when changing the contract.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["reviewer", "verdict", "findings"],
+  "properties": {
+    "reviewer": {
+      "type": "string",
+      "enum": [
+        "correctness",
+        "tests",
+        "security",
+        "performance",
+        "readability",
+        "yagni",
+        "requirements",
+        "comments",
+        "error_handling",
+        "type_design",
+        "blind_spots",
+        "adversary"
+      ],
+      "description": "Persona name, matching the filename in reviewers/ without the .md extension. This enum is generated from reviewers/personas.yaml; regenerate via scripts/regen.sh."
+    },
+    "verdict": {
+      "type": "string",
+      "enum": ["approve", "request_changes", "comment"]
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["severity", "scope", "summary"],
+        "properties": {
+          "severity": {
+            "type": "string",
+            "enum": ["blocker", "suggestion", "nit"]
+          },
+          "scope": {
+            "type": "string",
+            "enum": ["in_scope", "out_of_scope"]
+          },
+          "file": { "type": "string", "minLength": 1 },
+          "line": { "type": "integer", "minimum": 1 },
+          "summary": { "type": "string", "minLength": 1 },
+          "detail": { "type": "string", "minLength": 1 },
+          "suggested_fix": { "type": "string" },
+          "finding_evidence": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["file", "line"],
+            "anyOf": [
+              { "required": ["symbol"] },
+              { "required": ["snippet"] }
+            ],
+            "properties": {
+              "file":    { "type": "string", "minLength": 1 },
+              "line":    { "type": "integer", "minimum": 1 },
+              "symbol":  { "type": "string", "minLength": 1 },
+              "snippet": { "type": "string", "minLength": 1 }
+            },
+            "description": "Per-finding evidence pointer read by scripts/promote_findings.py for evidence-gated solo-adversary promotion. Distinct from the top-level reviewer `evidence` object, which feeds shallow-review detection only."
+          },
+          "move_b_pattern": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Set by Move B (second-instance sweep) findings to name the syntactically findable pattern in one phrase. Presence signals Move B ran for this finding and is recorded on the iteration history entry for post-hoc audit. See SKILL.md §4b."
+          },
+          "move_a1_pattern": {
+            "type": "string",
+            "enum": [
+              "cross_fixture",
+              "testid_unmounted",
+              "conditional_unmounted",
+              "missing_state_assertion",
+              "describe_label_drift"
+            ],
+            "description": "Set by Move A.1 (assertion-vacuity audit) findings to name the specific sub-mechanic the assertion exhibits. One of five named patterns per reviewers/tests.md. Distinct from move_b_pattern; an assertion-vacuity finding from Move A.1 sets move_a1_pattern, not move_b_pattern. See reviewers/tests.md and SKILL.md §4b."
+          }
+        },
+        "if": {
+          "properties": { "scope": { "const": "in_scope" } },
+          "required": ["scope"]
+        },
+        "then": {
+          "required": ["severity", "scope", "summary", "file", "line", "detail"]
+        }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "files_read": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "symbols_traced": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "notes": { "type": "string" }
+      },
+      "description": "Optional record of what the reviewer read/traced before judging. Personas SHOULD populate this; the schema does not require it (verdict=request_changes and verdict=comment are valid with no evidence). Downstream enforcement: scripts/flag_shallow_reviews.py records a shallow_review flag for any reviewer that returned verdict=approve with missing or empty evidence.files_read (the flag affects synthesis routing in §4c, not schema validity). See SKILL.md §4b."
+    }
+  }
+}

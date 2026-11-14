@@ -1,0 +1,31 @@
+[project]
+name = "pr-review-loop"
+version = "0.0.0"
+description = "Skill repository; pyproject exists only to declare dev tooling."
+requires-python = ">=3.12"
+
+[dependency-groups]
+dev = [
+    "pyyaml",
+    "jsonschema",
+    "cogapp",
+    "ruff",
+    "yamllint",
+    "pre-commit",
+    "pytest",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+extend-include = ["scripts/*.py"]
+
+[tool.ruff.lint]
+select = [
+  "E",   # pycodestyle errors
+  "F",   # pyflakes
+  "W",   # pycodestyle warnings
+  "I",   # isort
+  "UP",  # pyupgrade
+  "B",   # flake8-bugbear
+]
