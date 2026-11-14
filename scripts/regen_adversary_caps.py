@@ -18,13 +18,12 @@ Spec: docs/generators.md
 from __future__ import annotations
 
 import argparse
-import difflib
 import json
-import os
 import re
 import sys
 from pathlib import Path
 
+import generator_io
 import yaml
 
 _DRIFT_EXIT = 5
@@ -39,15 +38,6 @@ _DOC_REGION = re.compile(
     re.DOTALL,
 )
 _SCHEMA_FIELDS = ("shallow_adversary_runs", "shallow_approval_adversary_runs")
-
-
-def _atomic_write(path: Path, content: str) -> None:
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(content)
-    # os.replace installs the temp file's default mode, which would strip the
-    # executable bit off any target that is run directly.
-    os.chmod(tmp, path.stat().st_mode & 0o7777)
-    os.replace(tmp, path)
 
 
 def _regen_schema(text: str, cap: int) -> str:
@@ -115,17 +105,6 @@ def _regen_doc(text: str, cap: int) -> str:
     return new
 
 
-def _diff(label: str, before: str, after: str) -> list[str]:
-    return list(
-        difflib.unified_diff(
-            before.splitlines(keepends=True),
-            after.splitlines(keepends=True),
-            fromfile=label,
-            tofile=f"{label} (regenerated)",
-        )
-    )
-
-
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     mode = parser.add_mutually_exclusive_group()
@@ -159,10 +138,10 @@ def main(argv: list[str]) -> int:
         if before == after:
             continue
         if args.check:
-            sys.stderr.writelines(_diff(str(path), before, after))
+            generator_io.emit_drift_diff(path, before, after)
             drifted = True
         else:
-            _atomic_write(path, after)
+            generator_io.atomic_write(path, after)
 
     if args.check and drifted:
         print(

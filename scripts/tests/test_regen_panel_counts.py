@@ -1,11 +1,4 @@
-"""Tests for scripts.regen_panel_counts — the corpus panel-count phrase rewriter.
-
-The generator implements Option A from the design: every regen-managed
-region in the corpus has a 4-line shape — start marker, ``<!-- template:
-... -->`` line, rendered prose line, end marker. The author edits the
-template; the generator renders. See the module docstring of
-``regen_panel_counts`` for the full contract.
-"""
+"""tests for generated panel-count phrases."""
 
 from __future__ import annotations
 
@@ -65,9 +58,6 @@ def _total_plus_1_region(template: str, rendered: str) -> str:
     )
 
 
-# --- happy paths ---
-
-
 def test_check_returns_0_on_clean_tree(tmp_path: Path) -> None:
     manifest = _write_manifest(tmp_path, ["a", "b", "c", "d", "e"])  # n = 5
     root = _make_corpus(tmp_path)
@@ -124,8 +114,10 @@ def test_write_repairs_drift_across_all_surfaces(tmp_path: Path) -> None:
             "the other 0 personas",
         )
     )
+    skill.chmod(0o755)
     rc = _run(["--write", "--manifest", str(manifest), "--corpus-root", str(root)])
     assert rc == 0
+    assert skill.stat().st_mode & 0o7777 == 0o755
     assert "panel of 4 reviewer personas" in skill.read_text()
     assert "5 personas total (panel + adversary)" in scen.read_text()
     assert "the other 4 personas" in rev.read_text()
@@ -157,8 +149,8 @@ def test_subset_phrases_outside_regions_are_not_touched(tmp_path: Path) -> None:
     """A wrapped total phrase coexists with an unwrapped subset phrase.
 
     The generator must rewrite only the wrapped phrase; the surrounding
-    text — including a numbered subset phrase like "1 persona objected"
-    that legitimately names a subset — must be left byte-identical.
+    text, including a numbered subset phrase like "1 persona objected"
+    that legitimately names a subset, must be left byte-identical.
     """
     manifest = _write_manifest(tmp_path, ["a", "b", "c"])  # n = 3
     root = _make_corpus(tmp_path)
@@ -235,12 +227,7 @@ def test_returns_3_when_manifest_missing(
 
 
 def test_zero_panel_renders_zero_personas_plural(tmp_path: Path) -> None:
-    """Spec edge case: n == 0 should render the plural form ("0 personas").
-
-    We bypass the manifest invariant (panel must be non-empty) by calling
-    the rendering helper directly — the codepath is documented for the
-    case where a future relaxation allows empty panels.
-    """
+    """the renderer supports zero even though manifests require a nonempty panel."""
     out = regen_panel_counts._render_template("the panel of {n} {personas|persona}", 0)
     assert out == "the panel of 0 personas"
 
@@ -259,9 +246,6 @@ def test_write_atomically_creates_no_tmp_files(tmp_path: Path) -> None:
     assert rc == 0
     leftover = list(root.rglob("*.tmp"))
     assert leftover == []
-
-
-# --- coverage closure (replaces the third @test block of the deleted bats test) ---
 
 
 def test_validate_coverage_passes_on_empty_corpus(tmp_path: Path) -> None:

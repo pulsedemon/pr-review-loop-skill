@@ -24,13 +24,13 @@ the panel of 11 personas
 
 Two region kinds:
 
-- ``regen:panel-count-total`` — body uses ``n = len(panel)``.
-- ``regen:panel-count-total-plus-1`` — body uses ``n + 1`` (panel + adversary).
+- ``regen:panel-count-total``: body uses ``n = len(panel)``.
+- ``regen:panel-count-total-plus-1``: body uses ``n + 1`` (panel + adversary).
 
 ## Placeholders
 
-- ``{n}`` — substituted with the integer count (no formatting).
-- ``{personas|persona}`` — selects ``personas`` for ``n != 1``, ``persona``
+- ``{n}``: substituted with the integer count (no formatting).
+- ``{personas|persona}``: selects ``personas`` for ``n != 1``, ``persona``
   for ``n == 1``. ``n == 0`` renders ``0 personas`` (zero-plural).
 
 Templates may contain Markdown formatting around the placeholders (e.g.
@@ -45,7 +45,7 @@ Two alternatives were considered:
   ``{n}`` placeholders directly and readers see literal ``{n}`` in
   rendered prose. Bad UX.
 * **C (stateless re-render):** the generator reads the rendered body and
-  re-derives the template by replacing ``\\d+`` with ``{n}``. Fragile —
+  re-derives the template by replacing ``\\d+`` with ``{n}``. Ambiguous:
   ``the other 5 personas`` and ``5 minutes`` look the same to a regex.
 
 Option A keeps the template inline (visible to maintainers but invisible
@@ -75,14 +75,12 @@ phrase under ``--validate-coverage``).
 
 ``SKILL.md``, ``tests/scenarios/*.md``, ``reviewers/*.md``. Other files
 (``docs/``, ``tools/recall-harness/``, ``docs/superpowers/``) are skipped
-by construction — the generator never recurses; it globs exact paths.
+because the generator globs exact paths without recursion.
 """
 
 from __future__ import annotations
 
 import argparse
-import difflib
-import os
 import re
 import sys
 from dataclasses import dataclass
@@ -90,6 +88,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import generator_io  # noqa: E402
 from personas_manifest import ManifestError, load_manifest  # noqa: E402
 
 _DRIFT_EXIT = 5
@@ -230,34 +229,6 @@ def _regenerate_text(text: str, panel_n: int, path: Path) -> tuple[str, list[_Re
     return out, regions
 
 
-def _atomic_write(path: Path, content: str) -> None:
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    try:
-        tmp.write_text(content)
-        # os.replace installs the temp file's default mode, which would strip
-        # the executable bit off any target that is run directly.
-        os.chmod(tmp, path.stat().st_mode & 0o7777)
-        os.replace(tmp, path)
-    except Exception:
-        # Best-effort cleanup so a half-written .tmp doesn't strand on disk.
-        if tmp.exists():
-            try:
-                tmp.unlink()
-            except OSError:
-                pass
-        raise
-
-
-def _emit_drift_diff(path: Path, current: str, regenerated: str) -> None:
-    diff = difflib.unified_diff(
-        current.splitlines(keepends=True),
-        regenerated.splitlines(keepends=True),
-        fromfile=str(path),
-        tofile=f"{path} (regenerated)",
-    )
-    sys.stderr.writelines(diff)
-
-
 def _run_check_or_write(*, write: bool, manifest_path: Path, corpus_root: Path) -> int:
     try:
         manifest = load_manifest(manifest_path)
@@ -281,9 +252,9 @@ def _run_check_or_write(*, write: bool, manifest_path: Path, corpus_root: Path) 
         if current == regenerated:
             continue
         if write:
-            _atomic_write(path, regenerated)
+            generator_io.atomic_write(path, regenerated)
         else:
-            _emit_drift_diff(path, current, regenerated)
+            generator_io.emit_drift_diff(path, current, regenerated)
             drifted.append(path)
 
     if not write and drifted:
@@ -317,25 +288,10 @@ def _run_validate_markers(*, corpus_root: Path) -> int:
     return 0
 
 
-# Broad pattern matching any numbered persona-count phrase. The leading
-# `\b` is a regex word boundary so that test classification tokens like
-# "B2 persona" (digit-letter sequence, no word boundary) don't trip the
-# closure, while phrases led by punctuation like "(11 reviewer personas)"
-# still do. The inner `\s+` allows the phrase to wrap across a line
-# break — the scan operates on the file's full text (with region lines
-# blanked) so a phrase split across two lines is still caught.
+# match punctuation-led and wrapped counts without matching tokens such as B2.
 _COVERAGE_BROAD_RE = re.compile(r"\b\d+\s+(?:reviewer\s+)?personas?\b")
 
-# Allowlist patterns for unwrapped numbered persona-count phrases. Only
-# subset-shaped phrases (counts that do NOT equal len(panel) or len(panel)+1)
-# are allowlisted; total-shaped phrases ("panel of N personas", "the other
-# N personas", "N personas total", etc.) are deliberately NOT allowlisted
-# so authors are forced to wrap them in regen regions, where --check
-# verifies the number against the manifest. Hand-allowlisting a total
-# shape would re-open the gap the deleted bats first/second @test blocks
-# previously closed by checking len(panel) numerically. `\s+` in place of
-# literal space lets allowlist matches survive the same line-wrap pathology
-# the broad pattern accommodates.
+# total-shaped phrases must stay generated even when their counts currently match.
 _COVERAGE_ALLOW_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(
         r"\d+\s+personas?\s+(?:approved|objected|requested\s+changes|raised|flagged|agreed)"
@@ -363,10 +319,7 @@ def _run_validate_coverage(*, corpus_root: Path) -> int:
         for r in regions:
             for j in range(r.start_line, r.end_line + 1):
                 region_lines.add(j)
-        # Blank out region lines so wrapped/rendered prose inside regions
-        # is exempt from the closure scan, then scan the whole file as one
-        # string — `\s+` in the patterns lets a phrase split across a line
-        # break still be detected and checked against the allowlist.
+        # exclude generated regions while retaining line breaks for wrapped phrases.
         scan_lines = ["" if idx in region_lines else line for idx, line in enumerate(lines)]
         scan_text = "\n".join(scan_lines)
         allowed_spans = [

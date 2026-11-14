@@ -1,49 +1,50 @@
-"""Every generator's _atomic_write must preserve the target's file mode.
-
-os.replace installs the temp file's default mode, so a regen would silently
-drop an executable target to 644. install.sh, tests/run.sh, and
-scripts/_adversary_caps.sh are all 755 on disk, and ./install.sh is the
-documented entry point.
-
-One parametrized test rather than a copy per generator, so a generator added
-later is covered by adding a name to the list.
-"""
+"""generated-file replacement preserves permissions and reports write failures."""
 
 from __future__ import annotations
 
-import importlib
-import sys
 from pathlib import Path
 
+import generator_io
 import pytest
 
-REPO_ROOT = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
-GENERATORS = [
-    "regen_adversary_caps",
-    "regen_dev_trees",
-    "regen_move_a1_enum",
-    "regen_panel_counts",
-    "regen_schema_enum",
-]
-
-
-def test_every_generator_module_is_listed() -> None:
-    # A new regen_*.py that skips this list would ship the bug again.
-    on_disk = {p.stem for p in (REPO_ROOT / "scripts").glob("regen_*.py")}
-    assert on_disk == set(GENERATORS), f"unlisted generators: {on_disk ^ set(GENERATORS)}"
-
-
-@pytest.mark.parametrize("module_name", GENERATORS)
 @pytest.mark.parametrize("mode", [0o644, 0o755])
-def test_atomic_write_preserves_mode(tmp_path: Path, module_name: str, mode: int) -> None:
-    module = importlib.import_module(module_name)
+def test_atomic_write_preserves_mode(tmp_path: Path, mode: int) -> None:
     target = tmp_path / "target.sh"
     target.write_text("before\n")
     target.chmod(mode)
 
-    module._atomic_write(target, "after\n")
+    generator_io.atomic_write(target, "after\n")
 
     assert target.read_text() == "after\n"
-    assert target.stat().st_mode & 0o777 == mode
+    assert target.stat().st_mode & 0o7777 == mode
+
+
+@pytest.mark.parametrize("cleanup_failure", [None, "exists", "unlink"])
+def test_failed_replacement_preserves_target_and_original_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, cleanup_failure: str | None
+) -> None:
+    target = tmp_path / "target.sh"
+    target.write_text("before\n")
+    target.chmod(0o755)
+    temporary = tmp_path / "target.sh.tmp"
+    replacement_error = OSError("replacement failed")
+
+    def fail_replace(source: Path, destination: Path) -> None:
+        raise replacement_error
+
+    def fail_cleanup(path: Path) -> None:
+        raise OSError("cleanup failed")
+
+    with monkeypatch.context() as failure_patch:
+        failure_patch.setattr(generator_io.os, "replace", fail_replace)
+        if cleanup_failure is not None:
+            failure_patch.setattr(Path, cleanup_failure, fail_cleanup)
+
+        with pytest.raises(OSError) as raised:
+            generator_io.atomic_write(target, "after\n")
+
+    assert raised.value is replacement_error
+    assert target.read_text() == "before\n"
+    assert target.stat().st_mode & 0o7777 == 0o755
+    assert temporary.exists() is (cleanup_failure is not None)
