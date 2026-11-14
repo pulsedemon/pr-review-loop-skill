@@ -14,12 +14,12 @@ def atomic_write(path: Path, content: str) -> None:
         os.chmod(tmp, path.stat().st_mode & 0o7777)
         os.replace(tmp, path)
     except Exception:
-        if tmp.exists():
-            try:
+        try:
+            if tmp.exists():
                 tmp.unlink()
-            except OSError:
-                # keep cleanup errors from hiding the write failure.
-                pass
+        except OSError:
+            # keep cleanup errors from hiding the write failure.
+            pass
         raise
 
 
