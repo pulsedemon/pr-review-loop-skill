@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import NamedTuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _shared import finding_id  # noqa: E402
+from _shared import finding_id, require_corpus_version, require_nested_layout  # noqa: E402
 from collect_pr_corpus import (  # type: ignore[import-not-found]  # noqa: E402
     CORPUS_VERSION,
     matched_filename,
@@ -51,50 +51,6 @@ class NearMissRow(NamedTuple):
     ext_summary: str
     loop_summary: str
     is_real_miss: bool
-
-
-def _require_corpus_version(corpus: dict, corpus_path: Path) -> None:
-    """Refuse corpora older than CORPUS_VERSION. Mirrors match_external's
-    guard so report.py also fails loud on a stale corpus rather than
-    silently rolling up records into ('', '') repo buckets."""
-    version = corpus.get("corpus_version")
-    if version != CORPUS_VERSION:
-        raise RuntimeError(
-            f"{corpus_path}: corpus_version={version!r}, expected "
-            f"{CORPUS_VERSION}. Re-run collect_pr_corpus.py to regenerate."
-        )
-
-
-def _require_nested_layout(corpus_dir: Path, corpora: list) -> None:
-    """Refuse a corpus dir with stray flat-layout files. Two cases:
-
-    - MIXED: nested files plus a stray `pr-*.json` at the top level. The
-      pre-PR-30 short-circuit (`if corpora: return`) skipped this, so a
-      flat-only PR sitting beside the nested tree was silently omitted from
-      the counts (the PR #13 `real_miss`).
-    - FLAT-ONLY: `pr-*.json` at the top level with no nested files. `glob`
-      yields [] and A2/report would otherwise exit 0 with no work, swallowing
-      the schema-mismatch signal the CORPUS_VERSION bump exists to surface.
-
-    A missing dir is a no-op (report.py calls this with corpora=[] before its
-    own dir check)."""
-    if not corpus_dir.is_dir():
-        return
-    stray_flat = list(corpus_dir.glob("pr-*.json"))
-    if stray_flat and corpora:
-        raise RuntimeError(
-            f"{corpus_dir}: mixed corpus layout detected "
-            f"({len(stray_flat)} stray flat pr-*.json file(s) at the top level "
-            f"alongside the nested <owner>/<repo>/pr-<N>.json tree). "
-            f"Clean the stray files and re-run collect_pr_corpus.py."
-        )
-    if stray_flat and not corpora:
-        raise RuntimeError(
-            f"{corpus_dir}: legacy flat corpus layout detected "
-            f"({len(stray_flat)} pr-*.json file(s) at the top level). "
-            f"Re-run collect_pr_corpus.py to regenerate under "
-            f"<owner>/<repo>/pr-<N>.json (CORPUS_VERSION={CORPUS_VERSION})."
-        )
 
 
 def _load_jsonl(path: Path) -> list[dict]:
@@ -330,7 +286,7 @@ def main() -> int:
     args = parser.parse_args()
 
     corpora = sorted(args.corpus_dir.glob("*/*/pr-*.json")) if args.corpus_dir.is_dir() else []
-    _require_nested_layout(args.corpus_dir, corpora)
+    require_nested_layout(args.corpus_dir, corpora, CORPUS_VERSION)
     labels = _load_labels(args.labels)
 
     out = io.StringIO()
@@ -373,7 +329,7 @@ def main() -> int:
 
     for corpus_path in corpora:
         corpus = json.loads(corpus_path.read_text())
-        _require_corpus_version(corpus, corpus_path)
+        require_corpus_version(corpus, corpus_path, CORPUS_VERSION)
         if corpus.get("skipped"):
             continue
         pr = corpus["pr"]
