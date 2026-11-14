@@ -247,6 +247,28 @@ load test_helper
   [[ ! -e "${fakehome}/.config/opencode/agent/prl-strong.md" ]]
 }
 
+@test "bare Codex install fails when only the shared skill link is stale" {
+  local fakehome="${BATS_TEST_TMPDIR}/home"
+  local other="${BATS_TEST_TMPDIR}/older-checkout"
+  local target="${fakehome}/.agents/skills/pr-review-loop"
+  mkdir -p "${fakehome}/.codex" "${fakehome}/.agents/skills" "$other"
+  ln -s "$other" "$target"
+
+  HOME="${fakehome}" XDG_CONFIG_HOME="${fakehome}/.config" CODEX_HOME="${fakehome}/.codex" run "${REPO_ROOT}/install.sh"
+
+  [[ "$status" -eq 1 ]]
+  [[ "$output" == *"skipped (symlink points elsewhere): $target -> $other (Codex shared skills)"* ]]
+  [[ "$output" == *"rerun with --force to replace this symlink"* ]]
+  [[ "$output" != *"Done."* ]]
+  [[ "$(readlink "$target")" == "$other" ]]
+  [[ "$(readlink "${fakehome}/.codex/skills/pr-review-loop")" == "${REPO_ROOT}" ]]
+
+  HOME="${fakehome}" XDG_CONFIG_HOME="${fakehome}/.config" CODEX_HOME="${fakehome}/.codex" run "${REPO_ROOT}/install.sh" --codex --force
+
+  [[ "$status" -eq 0 ]]
+  [[ "$(readlink "$target")" == "${REPO_ROOT}" ]]
+}
+
 @test "codex install links both discovery paths and is idempotent" {
   local fakehome="${BATS_TEST_TMPDIR}/home"
 
