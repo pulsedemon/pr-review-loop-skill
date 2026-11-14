@@ -8,12 +8,12 @@
 # Workflow when adding, removing, or reordering a persona:
 #   1. Edit this file (panel: list and/or adversary:). Each entry needs
 #      name, file (must equal `<name>.md`), and a one-line description.
-#   2. Run scripts/regen.sh — regenerates the SKILL.md
+#   2. run scripts/regen.sh to regenerate the SKILL.md
 #      "Reviewer personas" bullet list and the reviewers/output.schema.json
 #      `reviewer` enum.
 #   3. Run bash tests/run.sh. Any remaining failures will name surfaces the
 #      generator does not manage (the reviewers/<name>.md file itself,
-#      per-persona move bodies, prose tuned per domain) — those still
+#      per-persona move bodies, prose tuned per domain). those still
 #      need a manual fix.
 #
 # Ordering of `panel` is the canonical order used by tests and by the
@@ -58,11 +58,9 @@ panel:
   - name: yagni
     file: yagni.md
     description: >-
-      YAGNI: speculative or dead artifacts introduced by the PR: dead
-      parameters/options, single-use abstractions, pointless wrappers
-      (scope-strict, mirrors `readability`'s dead-code carve-out). Reads
-      sibling PRs referenced from the PR title, body, or linked tickets
-      before calling anything single-use.
+      YAGNI: unused behavior, redundant responsibilities, or violated
+      requirements in abstractions introduced by the PR. Traces surrounding
+      callers and referenced sibling PRs. Single use alone is not a finding.
     move_a: false
     move_a1: false
     move_b: false
