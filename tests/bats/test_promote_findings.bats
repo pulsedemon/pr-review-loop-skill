@@ -4,7 +4,36 @@ load test_helper
 
 promote() {
   local stdin="$1"
-  echo "$stdin" | python3 "${SCRIPTS}/promote_findings.py"
+  printf '%s\n' "$stdin" | python3 "${SCRIPTS}/promote_findings.py"
+}
+
+@test "fresh state keeps agreement endorsement and anchored solo suggestions nonblocking" {
+  make_tmp_repo
+  stub_cmd gh 'printf "%s\n" '\''{"number":42,"title":"Test","url":"https://github.com/o/r/pull/42","headRefName":"feat/x","baseRefName":"main","headRefOid":"abc"}'\'''
+  run bash "${SCRIPTS}/state_init.sh" o r 42
+  [[ "$status" -eq 0 ]]
+  printf '%s\n' 'value = 1' > sample.py
+  local input
+  input=$(jq '{
+    suggestion_promotion_threshold, adversary_promotion, adversary_solo_promotion,
+    demoted: [],
+    findings: [
+      {reviewer:"correctness",severity:"suggestion",scope:"in_scope",file:"sample.py",line:1,
+       summary:"agreement",detail:"optional clarity",source_reviewers:["correctness","tests"]},
+      {reviewer:"correctness",severity:"suggestion",scope:"in_scope",file:"sample.py",line:1,
+       summary:"endorsement",detail:"optional clarity",source_reviewers:["correctness","adversary"]},
+      {reviewer:"adversary",severity:"suggestion",scope:"in_scope",file:"sample.py",line:1,
+       summary:"solo",detail:"optional clarity",source_reviewers:["adversary"],
+       finding_evidence:{file:"sample.py",line:1,symbol:"value"}}
+    ]
+  }' .git/pr-loop/state.json)
+  run promote "$input"
+  [[ "$status" -eq 0 ]]
+  jq -e '
+    .blockers == [] and .addressed == [] and .deferred == [] and
+    [.suggestions[].summary] == ["agreement", "endorsement", "solo"] and
+    .suggestions[2].finding_evidence.symbol == "value"
+  ' <<<"$output"
 }
 
 @test "multi_source threshold met: suggestion promoted to blocker" {
@@ -136,6 +165,30 @@ promote() {
   [[ "$status" -eq 0 ]]
   [[ "$output" == *'"deferred"'* ]]
   [[ "$output" == *'prefer guard clause'* ]]
+}
+
+@test "deferred root-file location survives summary collection" {
+  local input='{
+    "findings": [{
+      "reviewer":"readability","severity":"suggestion","scope":"out_of_scope",
+      "file":"a.py","line":7,"summary":"optional readability","detail":"preference"
+    }],
+    "suggestion_promotion_threshold":0,"adversary_promotion":false,
+    "adversary_solo_promotion":false,"demoted":[]
+  }'
+  run promote "$input"
+  [[ "$status" -eq 0 ]]
+  local rendered
+  rendered=$(jq -r '.deferred[0]' <<<"$output")
+  run python3 - "$REPO_ROOT" "$rendered" <<'PY'
+import sys
+sys.path.insert(0, sys.argv[1] + "/tools/recall-harness")
+from collect_pr_corpus import SUMMARY_MARKER, parse_summary_bullets
+anchored, unanchored = parse_summary_bullets(SUMMARY_MARKER + "\n- " + sys.argv[2])
+assert anchored == [{"file": "a.py", "line": 7, "summary": "optional readability"}]
+assert unanchored == []
+PY
+  [[ "$status" -eq 0 ]]
 }
 
 @test "in_scope blocker passes through to blockers[]" {
@@ -843,14 +896,6 @@ for c in cases:
   [[ "$output" == *'line must be integer'* ]]
 }
 
-# adversary-blocker-over-nit (issue #111). the escalation lives in
-# _merge_adversary, not a promotion path, so these run in merge mode only:
-# the single-list nit tests above never reach it.
-# mutation log 2026-08-21: reverted the blocker_over_nit branch -> test 1
-# failed (nit survived, blockers empty); replaced the escalate guard with
-# True -> test 2 failed (knob off still escalated); dropped the out_of_scope
-# skip -> test 4 failed (blocker followed the nit into deferred and vanished).
-
 @test "merge mode: adversary blocker matched to a panel nit escalates to blockers[]" {
   local input='{
     "panel_findings": [{
@@ -875,26 +920,38 @@ for c in cases:
   [[ "$(jq -r '.addressed | length' <<<"$output")" -eq 0 ]]
 }
 
-@test "merge mode: adversary_promotion=false leaves the matched nit a nit" {
-  local input='{
+@test "merge mode: disabling promotion preserves a matched blocker and its diagnostics" {
+  local severity input
+  for severity in nit suggestion; do
+    input=$(jq -n --arg severity "$severity" '{
     "panel_findings": [{
-      "reviewer":"tests","severity":"nit","scope":"in_scope",
-      "file":"a.py","line":10,"summary":"unchecked json loads return value","detail":"d",
-      "source_reviewers":["tests"]
+      "reviewer":"tests","severity":$severity,"scope":"in_scope",
+      "file":"a.py","line":10,"summary":"unchecked json loads return value",
+      "detail":"optional clarity","suggested_fix":"rename the variable"
     }],
     "adversary_findings": [{
       "reviewer":"adversary","severity":"blocker","scope":"in_scope",
-      "file":"a.py","line":10,"summary":"unchecked json loads return value","detail":"d"
+      "file":"a.py","line":10,"summary":"unchecked json loads return value",
+      "detail":"reachable null access","suggested_fix":"check the returned value",
+      "finding_evidence":{"file":"a.py","line":10,"symbol":"parse"}
     }],
-    "suggestion_promotion_threshold": 2,
+    "suggestion_promotion_threshold": 0,
     "adversary_promotion": false,
-    "adversary_solo_promotion": true,
+    "adversary_solo_promotion": false,
     "demoted": []
-  }'
-  run promote "$input"
-  [[ "$status" -eq 0 ]]
-  [[ "$(jq -r '.nits | length' <<<"$output")" -eq 1 ]]
-  [[ "$(jq -r '.blockers | length' <<<"$output")" -eq 0 ]]
+    }')
+    run promote "$input"
+    [[ "$status" -eq 0 ]]
+    jq -e '
+      .nits == [] and .suggestions == [] and .addressed == [] and
+      (.blockers | length) == 1 and
+      .blockers[0].reviewer == "adversary" and
+      .blockers[0].detail == "reachable null access" and
+      .blockers[0].suggested_fix == "check the returned value" and
+      .blockers[0].finding_evidence == {file:"a.py",line:10,symbol:"parse"} and
+      (.blockers[0].source_reviewers | sort) == ["adversary", "tests"]
+    ' <<<"$output"
+  done
 }
 
 @test "merge mode: adversary suggestion matched to a panel nit leaves the nit alone" {

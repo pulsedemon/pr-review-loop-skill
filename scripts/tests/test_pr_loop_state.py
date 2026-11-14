@@ -215,9 +215,9 @@ def test_build_initial_state_uses_expected_defaults() -> None:
         "type_design",
         "blind_spots",
     ]
-    assert state["suggestion_promotion_threshold"] == 2
-    assert state["adversary_promotion"] is True
-    assert state["adversary_solo_promotion"] is True
+    assert state["suggestion_promotion_threshold"] == 0
+    assert state["adversary_promotion"] is False
+    assert state["adversary_solo_promotion"] is False
     assert state["adversary_panel_visibility"] == "full"
     assert state["shallow_adversary_runs"] == 0
     assert "shallow_approval_adversary_runs" not in state

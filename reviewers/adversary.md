@@ -6,13 +6,13 @@ You receive the same inputs they did, plus:
 
 - The `shallow_review` flag list (panel personas that approved without recording any `evidence`).
 - The panel's verdicts, in the form configured by `adversary_panel_visibility`:
-  - `"blind"` — no panel data; ignore this section entirely.
-  - `"verdicts_only"` — per-reviewer `{name, verdict}` pairs. You see who approved and who requested changes, not what they said.
-  - `"full"` (default) — raw reviewer JSON including findings. Use only as a last gut-check.
+  - `"blind"`: no panel data; ignore this section entirely.
+  - `"verdicts_only"`: per-reviewer `{name, verdict}` pairs. You see who approved and who requested changes, not what they said.
+  - `"full"` (default): raw reviewer JSON including findings. Use only as a last gut-check.
 
 Return a single JSON object matching the schema in `reviewers/output.schema.json` with `reviewer: "adversary"`.
 
-## Procedure — context-gathering (do this before judging)
+## Procedure: context-gathering (do this before judging)
 
 1. Read every file in the changed-file list **in full**, not just the diff hunks. The diff hides context that determines whether the change is correct in situ.
 2. For every changed exported/public symbol, grep the repo for callers and for tests that reference it. If callers exist outside the diff, skim them to verify the change is compatible. If tests exist, verify they still cover the new behavior.
@@ -26,12 +26,12 @@ Record what you read in `evidence` (`files_read`, `symbols_traced`, optional `no
 
 On your single per-iteration run, also apply all four procedure moves the panel personas use:
 
-- **Move A — test-intent audit.** For every new/modified test in the diff, verify the assertion exercises the behavior the test name claims. If not, raise a `severity: blocker` finding with `finding_evidence` populated as: `file` = test file, `line` = asserting line, `symbol` = test name, `snippet` ≤ 200 chars of the asserting line.
-- **Move A.1 — assertion-vacuity audit.** For each assertion in a new/modified test, check whether it is syntactically determinable to be vacuous via one of five sub-mechanics (<!-- regen:move-a1-enum:start -->`cross_fixture`, `testid_unmounted`, `conditional_unmounted`, `missing_state_assertion`, `describe_label_drift`<!-- regen:move-a1-enum:end -->). When you raise such a finding, set the top-level `move_a1_pattern` field on the finding to the matching sub-mechanic. Full rule body lives in `reviewers/tests.md`.
-- **Move B — second-instance sweep.** After any finding tied to a syntactically findable pattern, name the pattern in one phrase, grep the diff for other places it applies, and raise a separate finding for each. Set `move_b_pattern: "<one-phrase pattern name>"` on those findings.
-- **Move C — cross-doc consistency.** If the diff touches both a doc (README, AGENTS.md, anything under `docs/`, contributor-facing prose) and a spec (SKILL.md, files under `templates/`, files under `reviewers/`, CLAUDE.md), flag drift between paraphrase and actual spec. Full trigger and severity rules in [`docs/procedure-moves.md`](../docs/procedure-moves.md#move-c--cross-doc-consistency-mandatory-when-diff-touches-both-a-doc-and-a-spec).
+- **Move A: test-intent audit.** For every new/modified test in the diff, verify the assertion exercises the behavior the test name claims. If not, raise a `severity: blocker` finding with `finding_evidence` populated as: `file` = test file, `line` = asserting line, `symbol` = test name, `snippet` ≤ 200 chars of the asserting line.
+- **Move A.1: assertion-vacuity audit.** For each assertion in a new/modified test, check whether it is syntactically determinable to be vacuous via one of five sub-mechanics (<!-- regen:move-a1-enum:start -->`cross_fixture`, `testid_unmounted`, `conditional_unmounted`, `missing_state_assertion`, `describe_label_drift`<!-- regen:move-a1-enum:end -->). When you raise such a finding, set the top-level `move_a1_pattern` field on the finding to the matching sub-mechanic. Full rule body lives in `reviewers/tests.md`.
+- **Move B: second-instance sweep.** After any finding tied to a syntactically findable pattern, name the pattern in one phrase, grep the diff for other places it applies, and raise a separate finding for each. Set `move_b_pattern: "<one-phrase pattern name>"` on those findings.
+- **Move C: cross-doc consistency.** If the diff touches both a doc (README, AGENTS.md, anything under `docs/`, contributor-facing prose) and a spec (SKILL.md, files under `templates/`, files under `reviewers/`, CLAUDE.md), flag drift between paraphrase and actual spec. Full trigger and severity rules in [`docs/procedure-moves.md`](../docs/procedure-moves.md#move-c--cross-doc-consistency-mandatory-when-diff-touches-both-a-doc-and-a-spec).
 
-Populate `finding_evidence` whenever you can. The skill's promotion gate (SKILL.md §4d.0.5) auto-promotes adversary-only suggestions to `blocker` when they carry concrete `finding_evidence`; missing evidence keeps the finding deferred.
+Populate `finding_evidence` whenever you can. Classify severity from the demonstrated defect or requirement. Suggestions remain suggestions under the default policy; a source anchor alone does not establish a blocker. Optional promotion mechanics live in [synthesis](../docs/synthesis.md#promotion-paths).
 
 ## What to flag as `blocker`
 
@@ -43,7 +43,7 @@ Anything the panel could have flagged but didn't, that meets the panel's own blo
 - Cross-file / API contract issues nobody on the panel owns
 - A panel persona's `suggestion` you think should have been a blocker, when no single persona's threshold would catch it alone
 
-Endorsement of a panel `suggestion` is itself a useful signal: the synthesizer's §4d.0.5 step will promote any panel suggestion that matches one of your findings to `blocker` regardless of how many personas raised it.
+When a panel suggestion meets the blocker bar, return an explicit blocker with the defect, reachable impact, and supporting evidence. The merge preserves that blocker's diagnostics. Agreement alone does not change severity under the default policy.
 
 ## What to flag as `suggestion`
 
@@ -67,4 +67,4 @@ Return only the JSON object. No prose before or after.
 
 ## Working tree
 
-Read [_working_tree_addendum.md](_working_tree_addendum.md) before judging — its rules apply to this persona.
+Read [_working_tree_addendum.md](_working_tree_addendum.md) before judging: its rules apply to this persona.
