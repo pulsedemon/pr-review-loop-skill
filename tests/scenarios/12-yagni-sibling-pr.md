@@ -1,4 +1,4 @@
-# Scenario 12 — yagni reviewer fetches sibling-PR diffs
+# Scenario 12: YAGNI reviewer fetches sibling-PR diffs
 
 **Pressure type:** sibling-PR context discipline / no false single-use flags
 
@@ -7,18 +7,18 @@
 The PR under review (call it PR #B) has a body that references a sibling PR #A in the same repo:
 
 ```
-Part of #A — adds the producer side. The consumer lives in #A.
+Part of #A. Adds the producer side. The consumer lives in #A.
 ```
 
 PR #B's diff (changes only):
 
-- `src/lib/eventBus.ts` — adds a new exported function `publishWidgetCreated(widget: Widget)` that calls an existing `bus.publish(...)` underlying API. The function is exported and is **not called by any code in PR #B itself**.
+- `src/lib/eventBus.ts` adds `publishWidgetCreated(widget: Widget)`, which constructs the `widget.created` event name and maps the widget to its event payload before calling `bus.publish(...)`. It owns this event conversion and is **not called by any code in PR #B itself**.
 
 PR #A's diff (the sibling, already open):
 
-- `src/features/widgetCreator.tsx` — `import { publishWidgetCreated } from "../lib/eventBus"` and a call site inside the component.
+- `src/features/widgetCreator.tsx` imports `publishWidgetCreated` from `../lib/eventBus` and calls it inside the component.
 
-Without sibling-PR context, the yagni reviewer's "single-use wrapper" rule would fire on `publishWidgetCreated` — it forwards arguments to `bus.publish` and has zero callers within PR #B alone.
+Without inspecting the sibling, a reviewer could mistake the absence of a local caller for unused behavior. The wrapper's event conversion and its verified sibling consumer justify retaining it. A sibling caller alone would not justify a wrapper that only forwards an already formed event.
 
 ## Baseline behavior (no skill)
 
@@ -32,7 +32,7 @@ The yagni reviewer, before producing any findings:
 
 1. Scans the PR body and detects `Part of #A`.
 2. Runs `gh pr diff A` (and `gh pr view A --json title,body,files`) to fetch the sibling's diff.
-3. Identifies `import { publishWidgetCreated }` in PR #A — a real consumer.
+3. Identifies `import { publishWidgetCreated }` and its call in PR #A as a real consumer.
 4. Treats `publishWidgetCreated` as in-scope context, **not** as a dead wrapper.
 
 Final reviewer output for PR #B contains zero `blocker` or `suggestion` findings about `publishWidgetCreated`. The reviewer returns `verdict: "approve"` (or returns other unrelated findings, but not this one).
@@ -50,10 +50,10 @@ Final reviewer output for PR #B contains zero `blocker` or `suggestion` findings
 
 ## Additional sibling-PR forms to exercise
 
-The fixture above uses `Part of #A`. The reviewer must handle all the signals listed in `reviewers/yagni.md` § "Context gathering — sibling PRs". A complete discipline run should re-execute this scenario substituting the body line with each of:
+The fixture above uses `Part of #A`. The reviewer must handle all the signals listed in `reviewers/yagni.md` under "Context gathering: sibling PRs". A complete discipline run should re-execute this scenario substituting the body line with each of:
 
 - `Depends on #A`
-- `Companion to #A — the consumer lives there`
+- `Companion to #A. The consumer lives there.`
 - A bare URL: `https://github.com/<owner>/<repo>/pull/A`
 - A shared parent ticket: `ABC-123` (when the ticket links to both PRs)
 - A series branch name: e.g. PR #B is on `feature/foo-2of3` and PR #A is on `feature/foo-1of3`

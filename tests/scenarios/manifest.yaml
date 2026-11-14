@@ -182,3 +182,10 @@ scenarios:
     tier: design_only
     reason: The dated clean-checkout observation and addendum checks do not establish
       preservation of dirty edits, mutation testing on a copy, or head re-verification.
+  - number: 29
+    file: 29-yagni-responsibility.md
+    title: YAGNI findings require evidence of unused or redundant responsibility
+    tier: manual_validated
+    reason: a dated six-case comparison records actual baseline and revised reviewer
+      responses, caller and sibling inspection, and retained unread-parameter and
+      redundant-wrapper blockers on frozen fixtures.

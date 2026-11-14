@@ -324,7 +324,7 @@ for p in list(P.panel()) + [P.adversary()]:
 - `security.md`: injection, auth, secrets, unsafe deserialization
 - `performance.md`: complexity regressions, N+1, unbounded loops
 - `readability.md`: naming, cohesion, obvious dead code (scope-strict)
-- `yagni.md`: YAGNI: speculative or dead artifacts introduced by the PR: dead parameters/options, single-use abstractions, pointless wrappers (scope-strict, mirrors `readability`'s dead-code carve-out). Reads sibling PRs referenced from the PR title, body, or linked tickets before calling anything single-use.
+- `yagni.md`: YAGNI: unused behavior, redundant responsibilities, or violated requirements in abstractions introduced by the PR. Traces surrounding callers and referenced sibling PRs. Single use alone is not a finding.
 - `requirements.md`: reads linked ticket, checks each stated requirement
 - `comments.md`: comment accuracy and rot on PR-changed comments only (load-bearing doc-comment drift). Default severity `suggestion`; promotes to `blocker` only when a documented invariant/contract is violated. Quotes the offending comment text and the contradicting code.
 - `error_handling.md`: silent failures introduced by the PR (bare catches that continue, fallback-to-mock on production paths, discarded errors, overly broad catches hiding unrelated errors). Default `blocker` for hard signals; `suggestion` for weak log context / missing repo-specific error IDs. Lists which error types each catch could hide.
