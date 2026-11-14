@@ -29,7 +29,7 @@ load test_helper
 
 @test "uninstall preserves foreign dot symlinks when run from the source" {
   local fakehome="${BATS_TEST_TMPDIR}/home" host
-  for host in .cursor .claude .codex .config/opencode; do
+  for host in .cursor .claude .codex .agents .config/opencode; do
     mkdir -p "$fakehome/$host/skills"
     ln -s . "$fakehome/$host/skills/pr-review-loop"
   done
@@ -38,7 +38,7 @@ load test_helper
   HOME="$fakehome" XDG_CONFIG_HOME="$fakehome/.config" CODEX_HOME="$fakehome/.codex" run bash ./install.sh --uninstall
 
   [[ "$status" -eq 0 ]]
-  for host in .cursor .claude .codex .config/opencode; do
+  for host in .cursor .claude .codex .agents .config/opencode; do
     [[ -L "$fakehome/$host/skills/pr-review-loop" ]]
     [[ "$(readlink "$fakehome/$host/skills/pr-review-loop")" == . ]]
   done
@@ -247,7 +247,7 @@ load test_helper
   [[ ! -e "${fakehome}/.config/opencode/agent/prl-strong.md" ]]
 }
 
-@test "codex install creates symlink under default codex home" {
+@test "codex install links both discovery paths and is idempotent" {
   local fakehome="${BATS_TEST_TMPDIR}/home"
 
   HOME="${fakehome}" XDG_CONFIG_HOME="${fakehome}/.config" CODEX_HOME="${fakehome}/.codex" run "${REPO_ROOT}/install.sh" --codex
@@ -256,6 +256,14 @@ load test_helper
   [[ -L "${fakehome}/.codex/skills/pr-review-loop" ]]
   [[ "$(readlink "${fakehome}/.codex/skills/pr-review-loop")" == "${REPO_ROOT}" ]]
   [[ "$output" == *"linked: ${fakehome}/.codex/skills/pr-review-loop -> ${REPO_ROOT} (Codex)"* ]]
+  [[ "$(readlink "${fakehome}/.agents/skills/pr-review-loop")" == "${REPO_ROOT}" ]]
+  cmp "${REPO_ROOT}/SKILL.md" "${fakehome}/.agents/skills/pr-review-loop/SKILL.md"
+
+  HOME="${fakehome}" XDG_CONFIG_HOME="${fakehome}/.config" CODEX_HOME="${fakehome}/.codex" run "${REPO_ROOT}/install.sh" --codex
+
+  [[ "$status" -eq 0 ]]
+  [[ "$output" == *"already linked: ${fakehome}/.agents/skills/pr-review-loop (Codex shared skills)"* ]]
+  [[ "$(readlink "${fakehome}/.agents/skills/pr-review-loop")" == "${REPO_ROOT}" ]]
 }
 
 @test "codex install honors CODEX_HOME" {
@@ -268,18 +276,22 @@ load test_helper
   [[ -L "${fakecodex}/skills/pr-review-loop" ]]
   [[ "$(readlink "${fakecodex}/skills/pr-review-loop")" == "${REPO_ROOT}" ]]
   [[ ! -e "${fakehome}/.codex/skills/pr-review-loop" ]]
+  [[ "$(readlink "${fakehome}/.agents/skills/pr-review-loop")" == "${REPO_ROOT}" ]]
 }
 
-@test "codex uninstall removes repo symlink" {
+@test "codex uninstall removes both owned discovery links" {
   local fakehome="${BATS_TEST_TMPDIR}/home"
-  mkdir -p "${fakehome}/.codex/skills"
+  mkdir -p "${fakehome}/.codex/skills" "${fakehome}/.agents/skills"
   ln -s "${REPO_ROOT}" "${fakehome}/.codex/skills/pr-review-loop"
+  ln -s "${REPO_ROOT}" "${fakehome}/.agents/skills/pr-review-loop"
 
   HOME="${fakehome}" XDG_CONFIG_HOME="${fakehome}/.config" CODEX_HOME="${fakehome}/.codex" run "${REPO_ROOT}/install.sh" --uninstall
 
   [[ "$status" -eq 0 ]]
   [[ ! -e "${fakehome}/.codex/skills/pr-review-loop" ]]
   [[ "$output" == *"removed symlink: ${fakehome}/.codex/skills/pr-review-loop (Codex)"* ]]
+  [[ ! -L "${fakehome}/.agents/skills/pr-review-loop" ]]
+  [[ "$output" == *"removed symlink: ${fakehome}/.agents/skills/pr-review-loop (Codex shared skills)"* ]]
 }
 
 @test "cursor install skips gitignored dev state" {
@@ -550,23 +562,27 @@ load test_helper
 @test "install refuses foreign symlinks at link_one targets; --force re-establishes" {
   local fakehome="${BATS_TEST_TMPDIR}/home"
   local other="${BATS_TEST_TMPDIR}/other"
-  mkdir -p "${fakehome}/.claude/skills" "${fakehome}/.config/opencode/skills" "$other"
+  mkdir -p "${fakehome}/.claude/skills" "${fakehome}/.config/opencode/skills" "${fakehome}/.agents/skills" "$other"
   ln -s "$other" "${fakehome}/.claude/skills/pr-review-loop"
   ln -s "$other" "${fakehome}/.config/opencode/skills/pr-review-loop"
+  ln -s "$other" "${fakehome}/.agents/skills/pr-review-loop"
 
-  HOME="${fakehome}" XDG_CONFIG_HOME="${fakehome}/.config" CODEX_HOME="${fakehome}/.codex" run "${REPO_ROOT}/install.sh" --claude --opencode
+  HOME="${fakehome}" XDG_CONFIG_HOME="${fakehome}/.config" CODEX_HOME="${fakehome}/.codex" run "${REPO_ROOT}/install.sh" --claude --codex --opencode
 
   [[ "$status" -eq 1 ]]
   [[ "$(readlink "${fakehome}/.claude/skills/pr-review-loop")" == "$other" ]]
   [[ "$(readlink "${fakehome}/.config/opencode/skills/pr-review-loop")" == "$other" ]]
+  [[ "$(readlink "${fakehome}/.agents/skills/pr-review-loop")" == "$other" ]]
+  [[ "$output" == *"rerun with --force to replace this symlink"* ]]
   # the refusal must not stop the rest of the opencode host
   [[ -L "${fakehome}/.config/opencode/agent/prl-cheap.md" ]]
 
-  HOME="${fakehome}" XDG_CONFIG_HOME="${fakehome}/.config" CODEX_HOME="${fakehome}/.codex" run "${REPO_ROOT}/install.sh" --claude --opencode --force
+  HOME="${fakehome}" XDG_CONFIG_HOME="${fakehome}/.config" CODEX_HOME="${fakehome}/.codex" run "${REPO_ROOT}/install.sh" --claude --codex --opencode --force
 
   [[ "$status" -eq 0 ]]
   [[ "$(readlink "${fakehome}/.claude/skills/pr-review-loop")" == "${REPO_ROOT}" ]]
   [[ "$(readlink "${fakehome}/.config/opencode/skills/pr-review-loop")" == "${REPO_ROOT}" ]]
+  [[ "$(readlink "${fakehome}/.agents/skills/pr-review-loop")" == "${REPO_ROOT}" ]]
 }
 
 @test "opencode agent install refuses a foreign symlink and keeps the rest" {
@@ -671,6 +687,7 @@ load test_helper
   [[ "$status" -eq 0 ]]
   [[ -L "$fakecodex/skills/pr-review-loop" ]]
   [[ ! -e "${fakehome}/.codex/skills/pr-review-loop" ]]
+  [[ "$(readlink "${fakehome}/.agents/skills/pr-review-loop")" == "${REPO_ROOT}" ]]
 }
 
 @test "a failing link_one uninstall rm surfaces in the exit code" {

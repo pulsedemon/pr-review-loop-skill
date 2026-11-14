@@ -42,7 +42,7 @@ This installs the skill at:
 | ------ | ---------- | ------ |
 | Cursor | `~/.cursor/skills/pr-review-loop/` | Hardlinked copy of skill files (`.git` and dev caches excluded; Cursor does not discover symlinked skill dirs) |
 | Claude Code | `~/.claude/skills/pr-review-loop/` | Symlink |
-| Codex | `$CODEX_HOME/skills/pr-review-loop/` (defaults to `~/.codex/skills/pr-review-loop/`) | Symlink |
+| Codex | `~/.agents/skills/pr-review-loop/` and `$CODEX_HOME/skills/pr-review-loop/` (defaults to `~/.codex/skills/pr-review-loop/`) | Symlinks |
 | opencode | `${XDG_CONFIG_HOME:-~/.config}/opencode/skills/pr-review-loop/` plus three `prl-*` tier agents in `${XDG_CONFIG_HOME:-~/.config}/opencode/agent/` | Symlinks |
 
 When your checkout and `~/.cursor` are on the same filesystem, the Cursor install hardlinks skill files so edits to **existing** files stay in sync. New or removed **top-level** paths and legacy trees that included `.git` are picked up when you rerun `./install.sh` (or `./install.sh --cursor`), which refreshes the install when the layout drifts. If hardlinking is not possible (different volumes), the script falls back to a plain copy and prints a note: rerun install after large skill changes, or uninstall and reinstall to force a full resync. A `.pr-review-loop-source` marker records which checkout was installed.
@@ -55,6 +55,8 @@ To install into only one host:
 ./install.sh --codex
 ./install.sh --opencode
 ```
+
+For Claude Code, Codex, or opencode, rerun the host command with `--force` after moving the checkout to replace stale symlinks. Without it, conflicting links are reported and the install exits non-zero.
 
 To uninstall:
 

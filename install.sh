@@ -48,6 +48,7 @@ CURSOR_MARKER="${CURSOR_TARGET}/.pr-review-loop-source"
 CLAUDE_TARGET="${HOME}/.claude/skills/${SKILL_NAME}"
 CODEX_HOME="${CODEX_HOME:-${HOME}/.codex}"
 CODEX_TARGET="${CODEX_HOME}/skills/${SKILL_NAME}"
+CODEX_SHARED_TARGET="${HOME}/.agents/skills/${SKILL_NAME}"
 # One expression feeds both detection and install paths so they cannot diverge.
 OPENCODE_CONFIG_DIR="${XDG_CONFIG_HOME:-${HOME}/.config}/opencode"
 OPENCODE_TARGET="${OPENCODE_CONFIG_DIR}/skills/${SKILL_NAME}"
@@ -369,7 +370,7 @@ cursor_install_tree() {
       entry_mode=hardlink
     elif rm -rf "${CURSOR_TARGET:?}/$base" && cp -a "$entry" "$CURSOR_TARGET/$base"; then
       entry_mode=copy
-      echo "note: copied $base (hardlink unavailable — different filesystem?)" >&2
+      echo "note: copied $base (hardlink unavailable, different filesystem?)" >&2
     else
       echo "ERROR: failed to install $base into $CURSOR_TARGET (Cursor)" >&2
       return 1
@@ -531,6 +532,7 @@ link_one() {
       fi
     elif ! ((FORCE)); then
       echo "skipped (symlink points elsewhere): $target -> $current ($label)" >&2
+      echo "rerun with --force to replace this symlink" >&2
       return 1
     fi
     # Reaching here means --force: re-establish the link even when foreign or
@@ -660,6 +662,7 @@ fi
 
 if ((WANT_CODEX)); then
   link_one "$CODEX_TARGET" "Codex" || install_rc=1
+  link_one "$CODEX_SHARED_TARGET" "Codex shared skills" || install_rc=1
 fi
 
 if ((WANT_OPENCODE)); then
