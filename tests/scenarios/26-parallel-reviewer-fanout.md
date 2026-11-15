@@ -124,10 +124,10 @@ only the failure case's delivered `tests` verdict was deliberately corrupted.
 
 | Stage | Observed result |
 | --- | --- |
-| Initial review | All 11 personas launched as one batch. Actual findings identified incorrect shipping at the documented 5000-cent boundary. |
+| Initial review | The full panel launched as one batch. Actual findings identified incorrect shipping at the documented 5000-cent boundary. |
 | Repair and push | The parent reproduced the CLI defect, verified the repair before adding its regression, checked that regression against the seed, and passed the local validation helper. One repair commit moved local and remote heads from `e80393822d54c4cf9556fc8cbd2a5a1a1b8438f5` to `39ca88aa263bde74dd45cbe33c1d5f37f45e6ed0`. |
 | Delta gates | Eight actual gates launched as one batch and returned validated `relevant: false`. Blocker carryover selected `correctness`, `tests`, and `requirements`; there were no fail-open selections. |
-| Forced sweep | The three-persona pass found no blockers. All 11 personas then ran again in iteration 2, with `forced_full_sweep: true` and complete validated receipts. |
+| Forced sweep | The three-persona pass found no blockers. The full panel then ran again in iteration 2, with `forced_full_sweep: true` and complete validated receipts. |
 | Approval | A fresh adversary received all raw sweep responses and approved. The completion helper checked fresh comments and matching heads; state and terminal metrics recorded `SUCCESS` in iteration 2. One summary was captured locally. |
 | Required-review failure | A separate fresh fixture ran the actual full panel. The parent changed only the delivered `tests` verdict from `request_changes` to invalid `approved`, retaining the raw response. Validation failed; history retained two other genuine findings and the error, then recorded `REVIEW_INCOMPLETE`. Tracked bytes, head `6946386653592afad4149d8403a7bbbc5d322ba9`, and all remote refs stayed unchanged. No GitHub adapter call followed the injection. |
 
