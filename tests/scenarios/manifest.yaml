@@ -189,3 +189,10 @@ scenarios:
     reason: a dated six-case comparison records actual baseline and revised reviewer
       responses, caller and sibling inspection, and retained unread-parameter and
       redundant-wrapper blockers on frozen fixtures.
+  - number: 30
+    file: 30-tests-coverage-calibration.md
+    title: Tests coverage findings name the behavior at risk
+    tier: manual_validated
+    reason: a dated seven-case comparison records actual baseline and revised tests reviewer
+      responses, removing unsupported blockers on an unreached trivial function while
+      retaining blockers for untested contracts, weak assertions, and reached or published code.

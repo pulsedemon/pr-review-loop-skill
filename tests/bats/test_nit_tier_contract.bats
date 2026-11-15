@@ -43,8 +43,9 @@
 #     checks match the introductory prose, so the tier could regress to an
 #     empty rule with its own contract test passing.
 #   - drop the other-blockers carve-out, the mutation carve-out, or the
-#     nonexistent-branch rule from tests.md -> the safeguard test fails. those two sentences are what keep the tier
-#     off findings labeled loop_true_positive and off factually wrong ones.
+#     nonexistent-branch rule from tests.md -> the safeguard test fails.
+#     those three sentences are what keep the tier off findings labeled
+#     loop_true_positive and off factually wrong ones.
 #   - the tier's central promotion property (multi-source nit stays a nit) is
 #     pinned in test_promote_findings.bats, not here.
 
@@ -78,13 +79,13 @@ _assert_nit_section() {
 
   [[ -n "$body" ]] || {
     echo "reviewers/${file} has no '## What to flag as \`nit\`' section"
-    echo "  — the persona no longer tells the model when to pick nit, so the"
+    echo "  the persona no longer tells the model when to pick nit, so the"
     echo "    tier goes back to being emitted by nobody"
     return 1
   }
   grep -q 'differs from `out_of_scope`' <<<"$body" || {
     echo "reviewers/${file} nit section never contrasts nit with out_of_scope"
-    echo "  — both are 'not a blocker'; without the distinction the model has"
+    echo "  both are 'not a blocker'; without the distinction the model has"
     echo "    no rule for choosing between them"
     return 1
   }
@@ -104,7 +105,7 @@ _assert_nit_section() {
     body=$(_persona_section "$file" 'What to flag as `nit`')
     grep -qwE 'exceptions?|owns' <<<"$body" || {
       echo "reviewers/${file} nit section has no ownership wording"
-      echo "  — without a stated carve-out the same finding matches a"
+      echo "  without a stated carve-out the same finding matches a"
       echo "    blocker/suggestion rule and the nit rule at once"
       return 1
     }
@@ -117,22 +118,22 @@ _assert_nit_section() {
   body=$(_persona_section comments.md 'What to flag as `nit`')
   grep -q 'must remain true' <<<"$body" || {
     echo "reviewers/comments.md nit section lost its exclusion sentence"
-    echo "  — without 'the claim itself must remain true' the stale-reference"
+    echo "  without 'the claim itself must remain true' the stale-reference"
     echo "    nit reaches misstated-behavior findings the tier must not touch"
     return 1
   }
 }
 
 @test "tests.md nit tier enumerates its concrete cases" {
-  # the four evidence-backed shapes. anchored on a distinct noun per bullet so
+  # the five evidence-backed shapes. anchored on a distinct phrase per bullet so
   # deleting one fails here rather than leaving an unappliable rule behind.
   local body
   body=$(_persona_section tests.md 'What to flag as `nit`')
   local pattern
-  for pattern in 'log or status message' 'Cosmetic output formatting' 'fails loudly' 'Field-completeness'; do
+  for pattern in 'log or status message' 'Cosmetic output formatting' 'fails loudly' 'Field-completeness' 'nothing reaches'; do
     grep -qi -- "$pattern" <<<"$body" || {
       echo "reviewers/tests.md nit section lost its '${pattern}' case"
-      echo "  — the tier is closed to the enumerated list, so a dropped case"
+      echo "  the tier is closed to the enumerated list, so a dropped case"
       echo "    silently narrows it to nothing the model can apply"
       return 1
     }
@@ -168,19 +169,19 @@ _assert_nit_section() {
   # the sentence wraps, so match a fragment that lives on one line
   grep -q 'still passes when the behavior it names' <<<"$body" || {
     echo "reviewers/tests.md nit section lost the mutation carve-out"
-    echo "  — without it the tier demotes tests that pass for the wrong reason"
+    echo "  without it the tier demotes tests that pass for the wrong reason"
     return 1
   }
   grep -q 'They do not override the other blockers' <<<"$body" || {
     echo "reviewers/tests.md nit section lost the other-blockers carve-out"
-    echo "  — a cosmetic gap inside a bug fix matches both a nit bullet and"
+    echo "  a cosmetic gap inside a bug fix matches both a nit bullet and"
     echo "    the regression-test blocker, so the persona assigns two"
     echo "    severities to one finding"
     return 1
   }
   grep -q 'belongs in no severity' <<<"$body" || {
     echo "reviewers/tests.md nit section lost the nonexistent-branch rule"
-    echo "  — a test request on a branch that does not exist is wrong on the"
+    echo "  a test request on a branch that does not exist is wrong on the"
     echo "    facts, not trivial; without this it lands as a nit"
     return 1
   }
@@ -192,7 +193,7 @@ _assert_nit_section() {
   [[ "$matches" -eq 2 ]] || {
     echo "expected exactly 2 'Render verbatim, substituting' lines in"
     echo "docs/step5-summary.md, found ${matches}"
-    echo "  — the count guard exists so deleting a contract line cannot pass"
+    echo "  the count guard exists so deleting a contract line cannot pass"
     echo "    vacuously"
     return 1
   }
@@ -201,7 +202,7 @@ _assert_nit_section() {
     grep -q 'nit' <<<"$line" || {
       echo "a step5 substitution line does not mention nits:"
       echo "  ${line}"
-      echo "  — the templates carry the placeholder; this doc carries the"
+      echo "  the templates carry the placeholder; this doc carries the"
       echo "    instruction to fill it"
       return 1
     }
@@ -213,7 +214,7 @@ _assert_nit_section() {
   for tpl in summary_ready.md summary_needs_attention.md; do
     grep -qi '^\*\*Nits' "${REPO_ROOT}/templates/${tpl}" || {
       echo "templates/${tpl} has no nits block"
-      echo "  — an emitted nit is partitioned and counted in n_nits, then"
+      echo "  an emitted nit is partitioned and counted in n_nits, then"
       echo "    silently dropped from the posted summary"
       return 1
     }
