@@ -109,7 +109,7 @@ Installer and update fixtures pass on macOS 27.0.1 for all four host layouts. Th
 | --- | --- | --- |
 | Cursor | Passed | Not verified |
 | Claude Code | Passed | Not verified |
-| Codex | Passed | [Live approval path](tests/scenarios/27-comment-reply-disposition.md#live-github-approval-path-2026-11-14) at `678b598`; [injected fixture branches](tests/scenarios/24-adversary-full-default.md#changed-default-fixture-run-2026-11-14) at `90e5593` |
+| Codex | Passed | [Live GitHub approval path](tests/scenarios/27-comment-reply-disposition.md#live-github-approval-path-2026-11-14); [multi-iteration run with a local Git remote](tests/scenarios/26-parallel-reviewer-fanout.md#live-multi-iteration-codex-run-2026-11-15) |
 | opencode | Passed | Not verified |
 
 CI runs the helper checks on Ubuntu. Native Windows use is unverified. The [scenario manifest](tests/scenarios/manifest.yaml) distinguishes deterministic checks, historical manual observations, and behavior that remains a design fixture.

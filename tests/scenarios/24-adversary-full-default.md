@@ -117,6 +117,13 @@ the dated adversary-specific cases above remain historical evidence.
 For actual panel/adversary dispatch and GitHub completion, see the
 [live approval-path record](27-comment-reply-disposition.md#live-github-approval-path-2026-11-14).
 
+## Actual multi-iteration dispatch
+
+The [2026-11-15 Codex run](26-parallel-reviewer-fanout.md#live-multi-iteration-codex-run-2026-11-15)
+records actual panel and adversary dispatch, a pushed repair, and an injected
+required-panel validation failure. It does not rerun this scenario's
+adversary-specific invalid/shallow cases or last-iteration approval check.
+
 ## Validation status
 
 **Status:** `manual_validated`

@@ -171,6 +171,13 @@ parent host. Injected edit/failure decisions remain documented in
 Raw receipts, state, CI output, and discussion/head snapshots were retained
 locally under ignored `docs/superpowers/reviews/2026-11-14-review-quality/pr-loop/`.
 
+## Local multi-iteration completion
+
+The [2026-11-15 Codex run](26-parallel-reviewer-fanout.md#live-multi-iteration-codex-run-2026-11-15)
+records completion after a real fix and local push, with captured summary
+transport and empty discussions. It adds no inline-reply or live GitHub evidence
+and does not establish any additional complete check in this scenario.
+
 ## Validation status
 
 **Status:** `manual_validated`
