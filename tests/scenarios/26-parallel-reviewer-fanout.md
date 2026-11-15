@@ -97,8 +97,72 @@ launch reviewer or gate subagents.
   - Every helper resolved through `$SKILL_ROOT` on a repo that is not the
     skill, the first run that exercised that path.
 
+## Live multi-iteration Codex run, 2026-11-15
+
+A fresh Codex parent ran the skill pinned at
+`cdc395d6dae7fc15a5f2465a25f2ad0e44f9a21a`. Witch launched the parent and every
+reviewer through a dedicated build of
+[Witch commit `29839d7`](https://github.com/pulsedemon/witch/pull/692), which
+repairs nested familiar registration. The earlier attempt stopped before any
+reviewer returned; its unchanged fixtures and `REVIEW_INCOMPLETE` records were
+retained separately. No skill helper or persona changed between attempts.
+
+The parent used `gpt-6.1-sol`, `subagent_model_profile=inherit`, the default
+11-persona panel and promotion settings, `delta_gate=true`, and
+`max_iterations=4`. It ran with native workspace-write permissions; reviewers,
+gates and the adversary were read-only. Native approvals remained in force.
+Read-only restrictions prevented mutation probes, and the parent's sandbox
+refused process inspection. Some gates loaded ambient native skill instructions;
+no installed loop helper or persona replaced the pin. Those limits are recorded
+in the evidence.
+
+Git used real commits and independent local bare remotes, with file transport
+only. A traced adapter supplied GitHub metadata and empty discussions, reported
+no CI checks, and captured the final summary locally. These are injected
+services, not live GitHub or CI evidence. Reviewer and gate decisions were real;
+only the failure case's delivered `tests` verdict was deliberately corrupted.
+
+| Stage | Observed result |
+| --- | --- |
+| Initial review | The full panel launched as one batch. Actual findings identified incorrect shipping at the documented 5000-cent boundary. |
+| Repair and push | The parent reproduced the CLI defect, verified the repair before adding its regression, checked that regression against the seed, and passed the local validation helper. One repair commit moved local and remote heads from `e80393822d54c4cf9556fc8cbd2a5a1a1b8438f5` to `39ca88aa263bde74dd45cbe33c1d5f37f45e6ed0`. |
+| Delta gates | Eight actual gates launched as one batch and returned validated `relevant: false`. Blocker carryover selected `correctness`, `tests`, and `requirements`; there were no fail-open selections. |
+| Forced sweep | The three-persona pass found no blockers. The full panel then ran again in iteration 2, with `forced_full_sweep: true` and complete validated receipts. |
+| Approval | A fresh adversary received all raw sweep responses and approved. The completion helper checked fresh comments and matching heads; state and terminal metrics recorded `SUCCESS` in iteration 2. One summary was captured locally. |
+| Required-review failure | A separate fresh fixture ran the actual full panel. The parent changed only the delivered `tests` verdict from `request_changes` to invalid `approved`, retaining the raw response. Validation failed; history retained two other genuine findings and the error, then recorded `REVIEW_INCOMPLETE`. Tracked bytes, head `6946386653592afad4149d8403a7bbbc5d322ba9`, and all remote refs stayed unchanged. No GitHub adapter call followed the injection. |
+
+| Scenario 26 check | Result |
+| --- | --- |
+| 1. Reviewer batching | Passed for the initial panels, selected panel, and forced sweep. |
+| 2. Delta-gate batching | Passed with eight actual gate launches. |
+| 3. Sequential fallback | Not run; this host supports parallel launches. |
+| 4. Persona selection | Passed; dispatch lists match selection and the full-sweep override. |
+| 5. `cost_saver` routing | Not run; every phase used `inherit`. |
+
+For Scenario 24, check 5's persisted outcomes and metrics were observed. Check
+1's default full-object delivery was observed with empty findings; its
+nonempty-findings condition was not exercised. Checks 2 through 4's invalid or
+shallow adversary and last-iteration cases were not run. No additional complete
+check among Scenario 27's checks 1 through 11 was established; this was its
+empty-discussion completion path only.
+
+Terminal metrics recorded 1,135 seconds for success and 315 seconds for
+the failure case; they overlapped and exclude parent setup and reporting. All
+45 child sessions completed. Their native counters total 7,578,514 tokens,
+including 6,077,824 cached input tokens; these are child-session counters, not
+billed cost or whole-task usage. Billed cost was unavailable. Per-dispatch
+counters, native traces, source hashes, prompts, raw and delivered responses,
+helper input/output, state, Git snapshots and root audits are retained locally
+under ignored `docs/superpowers/reviews/2026-11-15-live-codex-loop/`.
+
+This run establishes the multi-iteration path with a local Git remote and bounded invalid
+required-review routing. It does not establish reviewer timeout cancellation,
+`cost_saver`, sequential-host fallback, live GitHub/CI, inline replies, or a
+Claude parent. The full sweep's findings were empty, so the adversary dispatch
+establishes full-object delivery without testing retention of nonempty findings.
+
 ## Validation status
 
 **Status:** `design_only`
-**Evidence:** See the partial Codex observation from 2026-11-14 and the historical Claude observations above.
-**Missing evidence:** Dated host runs covering delta-gate batching (check 2), conditional fallback (check 3), `cost_saver` model routing (check 5), and independent adherence to the reviewer-budget recipe.
+**Evidence:** The dated multi-iteration Codex run above establishes checks 1, 2, and 4 at its pinned revision; earlier partial observations remain recorded above.
+**Missing evidence:** Dated host runs covering conditional fallback (check 3), `cost_saver` model routing (check 5), independent adherence to the reviewer-budget recipe, and reviewer-budget expiration and cancellation.
