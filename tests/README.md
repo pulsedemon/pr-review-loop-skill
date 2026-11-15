@@ -110,5 +110,6 @@ To run a manual scenario by hand:
 | 27 | `tests/scenarios/27-comment-reply-disposition.md` | Inline-comment disposition + reply + SUCCESS gate | `manual_validated` |
 | 28 | `tests/scenarios/28-reviewer-working-tree.md` | Reviewers do not mutate the shared working tree | `design_only` |
 | 29 | `tests/scenarios/29-yagni-responsibility.md` | YAGNI findings require evidence of unused or redundant responsibility | `manual_validated` |
+| 30 | `tests/scenarios/30-tests-coverage-calibration.md` | Tests coverage findings name the behavior at risk | `manual_validated` |
 
 Regenerate this table from `tests/scenarios/manifest.yaml` when adding a scenario; the manifest is the source of truth for both the row set and the tier.

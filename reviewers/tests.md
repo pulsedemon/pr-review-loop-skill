@@ -42,11 +42,11 @@ If the test body is too complex to audit, or indirection goes more than one leve
 
 For every new or modified test in the diff, after Move A: ask whether each assertion is *syntactically determinable* to be vacuous (true regardless of implementation) using only the test file plus one level of fixture indirection. Five sub-mechanics:
 
-1. **cross_fixture** — A DOM-style assertion (`queryByText`, `getByRole`, `findByLabelText`, etc.) queries a string literal that, when grepped within the test file, appears as a property on a *different* fixture than the one passed to the unit-under-test. The literal can never appear in the rendered output regardless of implementation.
-2. **testid_unmounted** — `queryByTestId` / `getByTestId` (or framework equivalent) targets a testId that does not appear anywhere in the test file as a literal *and* does not appear in any fixture passed to the unit-under-test. The testId is unreachable from this test's render.
-3. **conditional_unmounted** — The test sets up state that hides the queried element (e.g., readonly mode, disabled flag, empty list, null property) and then asserts on text/elements that only render in the *opposite* state. The assertion would have to fail to ever fire; passing means the element isn't there because state hid it, not because the implementation is correct.
-4. **missing_state_assertion** — The test's name describes a state transition (`enable`, `disable`, `submit`, `complete`, `cancel`, `terminate`) and the test body triggers the transition, but no assertion targets the post-transition state. The test passes whether or not the transition fired. (Verbs are deliberately a closed set; `clear` and `error` were dropped during plan review because `error` fires on every `should error when X` test and `clear` is too generic to reliably name a state transition. A future labeling round may justify adding `reset` / `confirm` / `expire` with their own evidence base.)
-5. **describe_label_drift** — The enclosing `describe`/`context`/`it` label promises behavior the test body does not exercise (e.g., `describe('when admin')` but no admin fixture is constructed).
+1. **cross_fixture**: A DOM-style assertion (`queryByText`, `getByRole`, `findByLabelText`, etc.) queries a string literal that, when grepped within the test file, appears as a property on a *different* fixture than the one passed to the unit-under-test. The literal can never appear in the rendered output regardless of implementation.
+2. **testid_unmounted**: `queryByTestId` / `getByTestId` (or framework equivalent) targets a testId that does not appear anywhere in the test file as a literal *and* does not appear in any fixture passed to the unit-under-test. The testId is unreachable from this test's render.
+3. **conditional_unmounted**: The test sets up state that hides the queried element (e.g., readonly mode, disabled flag, empty list, null property) and then asserts on text/elements that only render in the *opposite* state. The assertion would have to fail to ever fire; passing means the element isn't there because state hid it, not because the implementation is correct.
+4. **missing_state_assertion**: The test's name describes a state transition (`enable`, `disable`, `submit`, `complete`, `cancel`, `terminate`) and the test body triggers the transition, but no assertion targets the post-transition state. The test passes whether or not the transition fired. (Verbs are deliberately a closed set; `clear` and `error` were dropped during plan review because `error` fires on every `should error when X` test and `clear` is too generic to reliably name a state transition. A future labeling round may justify adding `reset` / `confirm` / `expire` with their own evidence base.)
+5. **describe_label_drift**: The enclosing `describe`/`context`/`it` label promises behavior the test body does not exercise (e.g., `describe('when admin')` but no admin fixture is constructed).
 
 If any sub-mechanic holds for an assertion, raise `severity: blocker, scope: in_scope`. Also set the top-level `file`, `line`, and `detail` properties: the schema's `if/then` block (the `scope: in_scope` branch in `reviewers/output.schema.json`) requires all three for `scope: in_scope` findings, independent of `finding_evidence`. Populate `finding_evidence`:
 
@@ -56,7 +56,7 @@ If any sub-mechanic holds for an assertion, raise `severity: blocker, scope: in_
 - `snippet`: the asserting line, truncated to 200 characters (for `missing_state_assertion` use the transition-triggering line; for `describe_label_drift` use the `describe`/`context`/`it` header line)
 
 <!-- regen:move-a1-enum:start -->
-Additionally, set the top-level finding property `move_a1_pattern` to one of `cross_fixture`, `testid_unmounted`, `conditional_unmounted`, `missing_state_assertion`, `describe_label_drift`. (This is a sibling of `move_b_pattern` on the finding object, NOT a `finding_evidence` sub-field — see `reviewers/output.schema.json`.)
+Additionally, set the top-level finding property `move_a1_pattern` to one of `cross_fixture`, `testid_unmounted`, `conditional_unmounted`, `missing_state_assertion`, `describe_label_drift`. (This is a sibling of `move_b_pattern` on the finding object, NOT a `finding_evidence` sub-field; see `reviewers/output.schema.json`.)
 <!-- regen:move-a1-enum:end -->
 
 Move A.1 feeds the evidence-gated solo-adversary promotion path in SKILL.md §4d.0.5 the same way Move A does; the `symbol` + `snippet` + `move_a1_pattern` triple anchors the verification.
@@ -107,12 +107,24 @@ nit and nothing else, so a coverage gap never carries two severities:
   where the wished-for test would only pin the wording
 - Field-completeness of an existing shape test that already asserts the
   load-bearing fields
+- A trivial addition nothing reaches, such as a function whose test could only
+  restate its one-line body. Nothing reaches it when it has no caller,
+  registration, framework hook or entry point, it is not part of an interface
+  the repo publishes for others to import (install or import docs, a publish
+  workflow, an export list, a package manifest that ships the module), and no
+  requirement or PR description specifies its behavior. A name that is public
+  only by Python-style naming convention is not published. A README sentence
+  that only says what a file contains is neither an entry point nor a
+  specification; a documented command that runs or imports the file is an
+  entry point. A repository-wide search finding no reference is evidence that
+  nothing reaches it. If the PR or docs name a consumer you could not inspect,
+  such as another repository or a sibling PR, treat the code as reached
 
 Keep the current severities where a mutation shows an existing test or drift
 guard is ineffective: a test that still passes when the behavior it names is
 reverted, a guard that cannot catch the drift it pins, and every Move A / A.1
 finding stay where they are. That is about a test that does not work, not about
-a branch nobody tested. The four cases above are untested-but-trivial and stay
+a branch nobody tested. The cases above are untested-but-trivial and stay
 nits.
 
 Do not use `nit` for a requested test on a branch that does not exist. Confirm
@@ -145,7 +157,7 @@ Run every probe on a copy, never in the checkout. See [_working_tree_addendum.md
 - Determine the project's test tooling from the repo (`package.json`, `pyproject.toml`, `go.mod`, etc.) before assessing.
 - "Tests pass" is not sufficient: verify the tests actually assert on the new behavior.
 - If tests adequately cover the changes, return `verdict: approve` with `findings: []`.
-- For each missing test, state which specific change it should cover.
+- For each missing-test blocker, state which specific change it should cover and the behavior a regression there would break.
 
 ## Output
 
