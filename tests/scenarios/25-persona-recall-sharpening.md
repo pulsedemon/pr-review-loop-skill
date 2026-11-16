@@ -63,8 +63,14 @@ Each arm gets one independent panel pass and one fresh adversary with that
 arm's full raw responses. Alternate arm order by case. Validate responses with
 `validate_reviewer_output.py`, dedupe with the canonical matcher, and apply
 `promote_findings.py` with the frozen settings. Preserve raw findings and final
-partitions. A missing response, changed route, or failed launch makes the pair
-incomplete; do not resample it or count it as approval.
+partitions.
+
+Replace a response that fails schema validation once: launch a fresh session of
+the same reviewer with the same prompt and settings, inside the same reviewer
+budget. Decide it from the validator's result alone. Keep the invalid response,
+and count the replacement's time and usage in that arm. A second invalid
+response, a missing response, a changed route, or a failed launch makes the
+pair incomplete; do not resample it or count it as approval.
 
 Hide arm and reviewer identities before judging findings against the frozen
 code. Group repeated reports of the same defect and record its affected
@@ -75,7 +81,8 @@ only as a suggestion does not count as a retained blocker.
 Start with cases 01-04. Only after complete pilot pairs retain both defects as
 blockers without additional false blockers in the smaller arm, run cases 05-06
 as frozen holdouts. The bound is six pairs, at most 96 reviewer invocations
-including adversaries. Do not tune prompts or expand the sample mid-run.
+including adversaries; replacement sessions are additional and reported. Do not
+tune prompts or expand the sample mid-run.
 Recommend the smaller override only when all six pairs complete, all seeded
 blockers survive in both arms, and it reduces measured usage or time without
 additional false blockers or low-value findings. Keep the default panel intact.
