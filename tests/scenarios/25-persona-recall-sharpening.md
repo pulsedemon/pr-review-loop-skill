@@ -177,14 +177,189 @@ another case, or this checkout. Two read the host's own Codex `gh-pr-review` ski
 reviewers inherit the host's global Codex instructions and installed skills.
 
 The result does not support a smaller-panel recommendation, since no pair
-completed. Under the procedure one invalid response in any reviewer invocation
-ends a run. The skill's own loop can ask a reviewer to resend malformed output;
+completed. Under the procedure at that time, one invalid reviewer response
+ended a run. The skill's own loop can ask a reviewer to resend malformed output;
 this run's one-shot launches had no such step. Raw responses, traces, prompts,
 helper scripts, and the reviewed run plan were retained locally under ignored
 `docs/superpowers/reviews/2026-11-16-panel-comparison/`.
 
+## Observed rerun, 2026-11-16
+
+All six pairs completed at frozen revision
+`e71cbdd4a900f2fd59c8a886c2d30c7f52cb12de`, which amended the invalid-response
+rule after the earlier attempt. The smaller override met the procedure's
+decision rule: every seed remained a blocker in both arms, with lower token
+usage and reviewer-phase time, no false blockers, and fewer low-value issues.
+This supports `approvers_required=correctness,tests,security` for these bounded
+fixtures. It does not establish equal recall: the full panel found five
+additional useful issues across the cases. The default panel is unchanged.
+
+The Codex parent used Witch-routed `gpt-6.1-sol`, high effort, for every panel
+and adversary, with promotion settings `0/false/false`, a read-only sandbox,
+approval policy `never`, and MCP servers, apps, and plugins off. Arm order
+alternated by case. The full arm used the default eleven personas; the smaller
+arm used the three named personas. Each received a fresh adversary with its
+own panel's full responses. All 96 original responses validated. No replacement,
+failed launch, timeout, route change, or promotion occurred. The replacement
+rule was exercised in a helper replay, not by these reviewer sessions.
+
+Before dispatch, Python 3.14.6 command checks failed at the intended seeds in
+cases 01, 03, and 05 and passed in cases 02, 04, and 06. All exported cases
+passed Ruff 0.15.13 and 0.16.0. Eleven simultaneous native preflight sessions
+completed and were denied writes; a separate timeout probe stopped without
+leaving a child process. The eleven preflight sessions used 401,688 tokens and
+the timeout probe 55,018, all excluded from the comparison. Pilot judgments
+were frozen before the holdouts ran.
+
+### Findings
+
+Counts are unique issues per case and arm after blinded judgment, not raw
+findings. There were no false or unjudgeable issues in either arm.
+
+| Case | Full: useful / low-value / false | Smaller: useful / low-value / false | Seed retained as blocker |
+| --- | --- | --- | --- |
+| 01, schema enforcement | 3 / 0 / 0 | 2 / 0 / 0 | Both arms |
+| 02, corrected schema | 6 / 0 / 0 | 2 / 0 / 0 | No schema-seed finding |
+| 03, unavailable checker | 1 / 1 / 0 | 1 / 0 / 0 | Both arms |
+| 04, corrected checker | 0 / 1 / 0 | 0 / 1 / 0 | No checker-seed finding |
+| 05, omitted buckets | 1 / 1 / 0 | 1 / 1 / 0 | Both arms |
+| 06, corrected buckets | 0 / 1 / 0 | 0 / 1 / 0 | No bucket-seed finding |
+
+Duplicate reports also placed the schema seed in suggestions in both arms and
+the missing-checker seed in deferred findings in the full arm; each still had
+a retained blocker. Unsupported blockers were separate from false findings:
+the full arm had three record-structure coverage issues in case 02, and both
+arms had command-entry-point coverage issues in cases 05 and 06. Greeting-test
+suggestions in cases 03 and 04 were factual but low-value.
+
+The full-arm `type_design` response cited the declared schema fields and
+missing enforcement. `blind_spots` described success without running the
+checker. `readability` identified the bucket mismatch as Move C contract drift;
+`comments` returned no finding on that case.
+
+The locations below are relative to each case under
+`tests/fixtures/reviewer-quality/`, at the frozen revision. They cover every
+adjudicated issue, combining repeated locations for the same behavior.
+
+| Cases | Issue | Locations | Arms |
+| --- | --- | --- | --- |
+| 01 | Missing entry fields in schema | templates/state.schema.json:11,12,13,19,20 | Both |
+| 01, 02 | Missing non-string cause check | checks.py:34 | Both in 01; full in 02 |
+| 01, 02 | Uncaught parser recursion | app.py:16,18 | Full in 01; both in 02 |
+| 02 | Invalid UTF-8 accepted | app.py:15 | Full |
+| 02 | Missing required-array checks | checks.py:23,35 | Both |
+| 02 | Missing root-object check | checks.py:35 | Full |
+| 02 | Missing array-type check | checks.py:35 | Full |
+| 03 | Missing checker returns success | scripts/validate.sh:6 | Both |
+| 03, 04 | Missing greeting test | app.py:1 | Full in 03; both in 04 |
+| 05 | Unanchored buckets omitted | docs/label.md:4; report.py:7 | Both |
+| 05, 06 | Missing command-entry-point check | report.py:11,12 | Both |
+
+The full arm alone found the recursion error in case 01 and invalid encoding,
+non-string cause coverage, root-object coverage, and array-type coverage in
+case 02. No useful issue appeared only in the smaller arm. The nominal schema
+controls therefore still contained unseeded defects. Invalid UTF-8 was accepted
+on Python 3.12.6 and 3.14.6; excessive nesting exited 1 on Python 3.12.6 instead
+of the fixture's required 2. The latter already exited 2 on Python 3.14.6.
+The fixtures advertise Python 3.12+, separately from the skill's Python 3.14
+minimum. Both fixture copies now reject invalid UTF-8 and catch recursion
+errors, with command regressions and the verified schema-coverage gaps added
+after the freeze. Their intentional schema defect remains intact.
+
+### Usage and timing
+
+Times below are seconds from native session timestamps. Panel elapsed spans
+the earliest panel start to the latest panel completion; reviewer-phase time
+adds the adversary duration. Total elapsed runs from dispatch to adversary
+completion and includes parent gaps. It excludes time between groups. Summed
+session time adds concurrent sessions and is not wall time. The earlier
+2026-11-14 record instead used report-file timestamps.
+
+| Case | Arm | Tokens | Panel | Adversary | Reviewer phases | Summed sessions | Total elapsed |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 01 | Full | 1,901,287 | 113.5 | 93.1 | 206.6 | 804.5 | 521.2 |
+| 01 | Smaller | 697,994 | 94.1 | 77.7 | 171.8 | 303.1 | 200.5 |
+| 02 | Full | 2,038,111 | 116.3 | 111.4 | 227.7 | 842.1 | 239.7 |
+| 02 | Smaller | 832,399 | 117.2 | 76.7 | 193.9 | 375.0 | 207.6 |
+| 03 | Full | 1,398,904 | 70.1 | 89.5 | 159.6 | 591.1 | 173.6 |
+| 03 | Smaller | 548,457 | 81.7 | 37.2 | 118.9 | 222.9 | 128.3 |
+| 04 | Full | 1,639,129 | 86.3 | 76.4 | 162.7 | 653.0 | 180.5 |
+| 04 | Smaller | 528,171 | 80.3 | 50.8 | 131.1 | 255.7 | 141.8 |
+| 05 | Full | 1,381,142 | 73.2 | 35.2 | 108.4 | 540.9 | 121.8 |
+| 05 | Smaller | 511,992 | 54.3 | 60.8 | 115.1 | 192.1 | 133.1 |
+| 06 | Full | 1,405,727 | 54.5 | 46.9 | 101.4 | 479.1 | 112.0 |
+| 06 | Smaller | 497,786 | 42.8 | 49.0 | 91.9 | 168.9 | 112.1 |
+
+| Six-pair total | Full | Smaller |
+| --- | --- | --- |
+| Sessions | 72 | 24 |
+| Total tokens | 9,764,300 | 3,616,799 |
+| Input, of which cached | 9,626,945; 8,249,216 cached | 3,562,314; 3,081,216 cached |
+| Cache-write input | 0 | 0 |
+| Output, of which reasoning | 137,355; 35,253 reasoning | 54,485; 14,384 reasoning |
+| Reviewer-phase seconds | 966.4 | 822.7 |
+| Summed-session seconds | 3,910.6 | 1,517.8 |
+| Total elapsed seconds, summed by group | 1,348.7 | 923.5 |
+
+The smaller arm used 63.0% fewer total tokens and 14.9% less reviewer-phase
+time. Cached input and reasoning output are subsets, not additions to total
+tokens. Monetary cost is unavailable. With no invalid responses, inclusive and
+invalid-excluded usage are identical, and replacement gaps are zero. The
+larger arm has more sessions eligible for replacement, whose costs would count
+against that arm.
+
+### Judgment and limits
+
+Fresh Codex `gpt-6.1-sol` and Claude `claude-opus-5-5` judges independently
+classified each batch with arm and reviewer identifiers removed. All judge
+outputs and access audits passed; none was replaced. They agreed on label,
+seed, and blocker-support sets for 36 of 37 pilot rows and all eleven holdout
+rows. The parent retained the first judge's keys and values after checking
+all rows against the frozen code and reproducing command failures. The one
+label disagreement was invalid UTF-8: reproduction supported useful and
+blocking, rather than low-value and unsupported. The first judge split
+record-structure coverage into three issues; the second grouped it as one.
+
+The pilot gate and final recommendation also pass under either judge's own
+keys and labels and when unsupported blockers count as false blockers. The
+second judge counts five full-arm low-value issues instead of four; the
+smaller arm remains at three. Two pilot rows needed persona-name redaction;
+none retained full-panel category tags. Holdout rows needed neither.
+
+The usage tables cover reviewer and adversary sessions only; planning,
+preflight, judging, and parent usage are excluded.
+
+This is one pass per cell on synthetic inputs, with one reviewer model and
+effort, not a general recall or speed estimate. The judging Codex model was
+also the reviewing model. The dispatching parent adjudicated knowing the arm
+schedule, and knew pilot results when judging holdouts. Before the rerun it
+had seen an approval note from the earlier failed attempt. It did not read
+this run's arm map or raw findings until each batch's judgments were frozen.
+Planning began under Claude Code; execution resumed under Codex before any
+rerun reviewer was launched.
+
+Native traces showed no spawned reviewer sessions, approved escalations, or
+reads of another case, the other arm's responses, or this checkout. Some
+reviewers read the host's own Codex `gh-pr-review` instructions. Read-only
+restrictions prevented temporary-file probes and some heredocs; reviewers
+could run inline command probes. Their default Python was 3.11.4, while the
+parent verified the host/helper path on 3.14.6 and the fixture's recursion
+behavior on its advertised 3.12.6. Those are distinct sources of evidence.
+
+The first group's collector initially read wrapper progress text as part of
+the response. It was corrected to use the native final answer, agreeing with
+the native completion message, and reprocessed the same sessions. This caused
+the large case-01 full-arm parent gap; it changed no reviewer input and
+resampled nothing. Summary fixes retained completed zero-finding pairs and
+selected only validated judge outputs. Generated bytecode after pilot
+blinding was removed before holdout dispatch; all frozen source hashes
+matched. These helper corrections and their checks are retained with the
+run, alongside raw responses, traces, prompts, frozen inputs, judgments,
+and the reviewed plan, under ignored
+`docs/superpowers/reviews/2026-11-16-panel-comparison-rerun/`.
+
 ## Validation status
 
 **Status:** `design_only`
-**Evidence:** The 2026-11-14 comparison covers three complete pairs and records the incomplete fourth pair. The 2026-11-16 attempt records verified inputs and one incomplete pair.
-**Missing evidence:** Complete clean controls and holdouts, plus the unused-validator and loud-failure checks, before claiming this whole scenario passed.
+**Evidence:** The dated observations above retain both incomplete attempts and the completed six-pair rerun, with blinded judgments, native usage, and limits.
+**Missing evidence:** Checks 6 and 7 remain unrun. The nominal controls exposed additional defects and unsupported blockers, so Check 5 has not produced uniformly clean approvals.
