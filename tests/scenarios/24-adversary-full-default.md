@@ -117,6 +117,58 @@ the dated adversary-specific cases above remain historical evidence.
 For actual panel/adversary dispatch and GitHub completion, see the
 [live approval-path record](27-comment-reply-disposition.md#live-github-approval-path-2026-11-14).
 
+## Changed-default fixture run in Claude Code, 2026-11-16
+
+A fresh Claude Code 2.1.322 parent ran the four cases against a read-only
+`git archive` export of `656ced745baa07eaa1434a1f091a3c1dcd8f49ef`. Witch launched
+it headless on `claude-opus-5-5` at high effort, in the `auto` permission mode
+with no prompt handler. Its subagent, web and MCP tools were disabled, so it
+wrote every reviewer, adversary and gate receipt itself. The export omitted
+`tests/scenarios`, which records the earlier outcomes, and stayed byte-identical
+to the pin. Fixtures used real commits and owned local bare remotes; Git allowed
+only file transport. A `gh` adapter served read calls and refused the one write
+it was probed with.
+
+| Case | Observed host behavior |
+| --- | --- |
+| Fresh defaults | `state_init.sh` stored `0/false/false`; two matching panel suggestions, an endorsed suggestion, and a solo anchored adversary suggestion stayed nonblocking; the host made no edit, and tracked bytes, head and remote did not change |
+| Explicit adversary blocker matched to a nit | Promotion kept the blocker's own detail and fix with `tests` and `adversary` provenance and no promotion record; the host reproduced the seeded boundary defect, changed one line, passed local validation, committed, and pushed locally through `safe_push.sh` |
+| Invalid required panel response | Validation rejected the `security` response; history kept the error and the other reviewers' receipts, and no finding came from the invalid output; the host recorded `REVIEW_INCOMPLETE` with no adversary, edit, push or summary write, and tracked bytes, head and remote did not change |
+| Iteration-2 delta selection | Eight validated gate receipts, two rejected ones that failed open, and blocker carryover selected `correctness`, `tests`, `readability`, `comments` and `error_handling`; zero blockers forced the full default panel at the same head, still in iteration 2 |
+
+The pricing repair moved from `0c73f0e6f7fe4807d3bc122f330475acb128bb22` to
+`f0b3a2e0474ddbb6a5ec90cdd1dbe8cc360fbbae`. The delta fixture's own iteration-1
+repair moved from `e94fae2d6d02e5d92f6cd221f89c7e3ec519c363` to
+`6f7fcf0aaa8d09eb7d6a1946b5bbd5354a07d872`. Its sweep kept one suggestion open,
+deferred one out-of-scope finding, and replaced the partial review receipts. The
+first and fourth cases passed the actual completion helper at unchanged heads.
+No case posted a summary or recorded terminal success.
+
+The host's `python3` was 3.11.4, below the 3.12 minimum in `SKILL.md`, and no
+helper refused it ([issue #15](https://github.com/pulsedemon/pr-review-loop-skill/issues/15)).
+The launching session replayed the 132 logged Python helper steps it could
+rerun deterministically from the pin under Python 3.14.6. Every exit code and
+output matched, and each `append-history` result matched its retained state.
+Shell helpers and the PR-scope step ran only under 3.11.4.
+
+The trace shows no subagent launch, no permission denial, and no read of the
+installed skill, the source checkout, or earlier evidence. The host's ambient
+configuration loaded one unrelated skill, `commit-message`.
+
+The session lasted 845 seconds; the host timed its own work at 813. Its native
+`claude-opus-5-5` counters total 13,523,094 tokens, including 13,190,568 cached
+input tokens. Claude Code estimated USD 6.25 at API rates; billed cost was
+unavailable. The
+native trace, launch settings, commands, receipts, state, Git snapshots, and
+replay results are retained locally under ignored
+`docs/superpowers/reviews/2026-11-16-claude-host-check/`.
+
+These cases establish a Claude Code parent's decisions and real helper and Git
+behavior on this pin, in a headless session. They do not establish actual
+reviewer or gate dispatch, parallel batching, the reviewer budget, model
+routing, review quality, live GitHub or CI, inline replies, summary posting,
+permission prompts in an interactive session, or all checks in this scenario.
+
 ## Actual multi-iteration dispatch
 
 The [2026-11-15 Codex run](26-parallel-reviewer-fanout.md#live-multi-iteration-codex-run-2026-11-15)
