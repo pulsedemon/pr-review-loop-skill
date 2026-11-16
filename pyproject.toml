@@ -2,7 +2,7 @@
 name = "pr-review-loop"
 version = "0.0.0"
 description = "Skill repository; pyproject exists only to declare dev tooling."
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 
 [dependency-groups]
 dev = [
@@ -16,6 +16,8 @@ dev = [
 ]
 
 [tool.ruff]
+# held below requires-python: at py314 the formatter writes `except A, B:`,
+# which older interpreters cannot parse and the skill does not refuse
 target-version = "py312"
 line-length = 100
 extend-include = ["scripts/*.py"]
@@ -29,3 +31,7 @@ select = [
   "UP",  # pyupgrade
   "B",   # flake8-bugbear
 ]
+
+[tool.pytest.ini_options]
+# retained evidence there holds copies of these tests, which break collection
+addopts = "--ignore=docs/superpowers"

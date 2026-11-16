@@ -67,7 +67,7 @@ The skill fails fast if any of these is missing:
 
 - `gh` CLI installed and authenticated (`gh auth status`). Minimum version `2.50.0`, required for `gh pr checks --json name,link,bucket`. Enforced by `scripts/fetch_pr.sh` (exit 7 → `SETUP_ERROR`).
 - `git` and `jq` installed
-- Python 3.12+ available as `python3`, with `jsonschema` installed (`python3 -c 'import jsonschema'`)
+- Python 3.14+ available as `python3`, with `jsonschema` installed (`python3 -c 'import jsonschema'`). The version is not enforced; an older `python3` runs untested.
 - Current working directory is inside a git repo whose `origin` matches the PR's `owner/repo`
 - Working tree is clean (no uncommitted, staged, or untracked changes; gitignored files are allowed)
 - Write access to the PR's head branch in the same repository as `origin`. Automated pushes to contributor forks are not supported.
