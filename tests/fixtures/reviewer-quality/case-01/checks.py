@@ -10,7 +10,7 @@ def run(raw):
     return subprocess.run(
         [sys.executable, "-B", "-X", "int_max_str_digits=4300", str(app)],
         input=raw,
-        text=True,
+        text=isinstance(raw, str),
         capture_output=True,
         check=False,
     )
@@ -30,8 +30,29 @@ large_exponent = '{"addressed":[],"deferred":[],"metadata":1e400}'
 preserved = run(large_exponent)
 assert preserved.returncode == 0
 assert preserved.stdout == large_exponent
+for raw in (b'{"addressed":[],"deferred":[],"metadata":"\xff"}', "[" * 10000):
+    rejected = run(raw)
+    assert rejected.returncode == 2
+    assert rejected.stderr
+    assert not rejected.stdout
+for record in (
+    [],
+    {"deferred": []},
+    {"addressed": []},
+    {"addressed": {}, "deferred": []},
+    {"addressed": [], "deferred": {}},
+):
+    rejected = run(json.dumps(record))
+    assert rejected.returncode == 2, record
+    assert rejected.stderr
 for field in ("addressed", "deferred"):
-    for item in ({}, {"pr": "p"}, {"cause": "c"}, {"pr": 3, "cause": "c"}):
+    for item in (
+        {},
+        {"pr": "p"},
+        {"cause": "c"},
+        {"pr": 3, "cause": "c"},
+        {"pr": "p", "cause": 3},
+    ):
         record = {"addressed": [], "deferred": []}
         record[field] = [item]
         rejected = run(json.dumps(record))
