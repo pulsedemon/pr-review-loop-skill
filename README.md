@@ -115,8 +115,10 @@ Installer and update fixtures pass on macOS 27.0.1 for all four host layouts. Th
 CI runs the helper checks on Ubuntu. Native Windows use is unverified. The [scenario manifest](tests/scenarios/manifest.yaml) distinguishes deterministic checks, historical manual observations, and behavior that remains a design fixture.
 
 [Scenario 25](tests/scenarios/25-persona-recall-sharpening.md#observed-comparison-2026-11-14)
-records actual Codex reviewer dispatch on bounded synthetic inputs. Its
-incomplete comparison does not justify changing the default panel.
+records actual Codex reviewer dispatch on bounded synthetic inputs. A
+[second attempt](tests/scenarios/25-persona-recall-sharpening.md#observed-comparison-2026-11-16)
+stopped at an invalid reviewer response in its first group. Neither justifies
+changing the default panel.
 
 ## Usage
 

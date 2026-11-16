@@ -125,8 +125,59 @@ include the verified repairs. Raw responses, blinded judgments, timing, and
 fixture snapshots were retained locally under ignored
 `docs/superpowers/reviews/2026-11-14-review-quality/`.
 
+## Observed comparison, 2026-11-16
+
+A second attempt stopped in its first group. Inputs and skill were frozen at
+`8bd52a1c461e23c1f78f0aefc9d17cbc44e3f886`, with promotion settings
+`0/false/false`. A Claude Code parent launched every reviewer through Witch as
+a Codex `gpt-6.1-sol` session at high effort: read-only sandbox, approval
+policy `never`, with MCP servers, apps, and plugins off.
+
+All six inputs passed their command checks before dispatch. Cases 01, 03, and
+05 failed on their seeded assertion; cases 02, 04, and 06 passed. Each passed
+Ruff 0.15.13 and 0.16.0 in its exported repository. The same check at
+`c84b044` found that cases 01 and 02 failed Ruff 0.16.0 outside this checkout's
+configuration (`PLW1510` in `checks.py`); the frozen revision carries that fix.
+Eleven concurrent preflight sessions then completed on the frozen model,
+effort, sandbox, and approval policy, and each was denied a write.
+
+Case 01's full panel ran next. Ten reviewers returned schema-valid responses.
+The `performance` response failed validation: its `evidence.notes` was an
+array where `reviewers/output.schema.json` requires a string. That pair is
+incomplete. No reviewer was relaunched, the adversary did not run, no further
+group was dispatched, and nothing was judged. This attempt has no finding
+counts, seed retention, or arm comparison.
+
+| Case 01, full panel | Value |
+| --- | --- |
+| Reviewer sessions | Eleven started and completed; ten valid responses |
+| Panel elapsed | 107.7 seconds |
+| Summed session time | 753.8 seconds |
+| Dispatch to last response | 123.3 seconds |
+| Total tokens | 1,681,455 |
+| Input, of which cached | 1,656,406, of which 1,431,552 |
+| Output, of which reasoning | 25,049, of which 5,403 |
+
+Times run from each session's start to its `task_complete` in the native
+trace; the 2026-11-14 figures used report-file times. Monetary cost is
+unavailable for these sessions. The preflight used 398,698 tokens and is not a
+reviewer invocation.
+
+Every reviewer trace showed the frozen settings, no spawned session, and no
+approval flow, and the reviewed checkout stayed clean. All eleven ran
+`checks.py`; the host's default `python` is 3.11.4. None read the case table,
+another case, or this checkout. Two read the host's own Codex `gh-pr-review` skill:
+reviewers inherit the host's global Codex instructions and installed skills.
+
+The result does not support a smaller-panel recommendation, since no pair
+completed. Under the procedure one invalid response in any reviewer invocation
+ends a run. The skill's own loop can ask a reviewer to resend malformed output;
+this run's one-shot launches had no such step. Raw responses, traces, prompts,
+helper scripts, and the reviewed run plan were retained locally under ignored
+`docs/superpowers/reviews/2026-11-16-panel-comparison/`.
+
 ## Validation status
 
 **Status:** `design_only`
-**Evidence:** The dated comparison above covers three complete pairs and records the incomplete fourth pair.
+**Evidence:** The 2026-11-14 comparison covers three complete pairs and records the incomplete fourth pair. The 2026-11-16 attempt records verified inputs and one incomplete pair.
 **Missing evidence:** Complete clean controls and holdouts, plus the unused-validator and loud-failure checks, before claiming this whole scenario passed.

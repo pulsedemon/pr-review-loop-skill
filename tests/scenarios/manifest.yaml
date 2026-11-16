@@ -162,8 +162,8 @@ scenarios:
     file: 25-persona-recall-sharpening.md
     title: Persona recall sharpening
     tier: design_only
-    reason: The dated comparison covers three paired cases, but a fourth pair is incomplete;
-      clean controls, holdouts, and the unused-validator and loud-failure checks remain unverified.
+    reason: The dated comparisons cover three paired cases; a later attempt stopped at an invalid
+      response. Complete pilot pairs, holdouts, and the unused-validator and loud-failure checks remain unverified.
   - number: 26
     file: 26-parallel-reviewer-fanout.md
     title: Parallel reviewer fan-out stays batched
