@@ -33,5 +33,6 @@ select = [
 ]
 
 [tool.pytest.ini_options]
-# retained evidence there holds copies of these tests, which break collection
-addopts = "--ignore=docs/superpowers"
+# retained evidence holds copies of these tests, and reviewer fixtures fail by
+# design; either breaks collection
+addopts = "--ignore=docs/superpowers --ignore=tests/fixtures"

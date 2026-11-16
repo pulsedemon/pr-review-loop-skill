@@ -358,8 +358,73 @@ run, alongside raw responses, traces, prompts, frozen inputs, judgments,
 and the reviewed plan, under ignored
 `docs/superpowers/reviews/2026-11-16-panel-comparison-rerun/`.
 
+## Observed checks 6 and 7, 2026-11-16
+
+Fixtures and persona prompts were pinned at
+`cacdb03215ba5db7be2f876aa5d7bc319d327e83`.
+[Case 07](../fixtures/reviewer-quality/case-07/README.md) carries case 01's
+schema defect with only a test consumer. Check 6 ran `type_design` on it.
+[Case 08](../fixtures/reviewer-quality/case-08/README.md) handles every
+invalid record with exit 2, except a missing `addressed` or `deferred` array,
+which raises an uncaught `KeyError` and exits 1. Check 7 ran `blind_spots` on
+it. Each check ran once on each Witch-routed runtime: Codex `gpt-6.1-sol` at
+high effort, and Claude `claude-opus-5-5` at high effort.
+
+Before dispatch, the pinned export was checked on Python 3.14.6, 3.12.6, and
+the reviewers' default 3.11.4. Case 07's check failed at its item-field
+assertion, and the schema accepted `{"addressed":[{}],"deferred":[]}`. Only the
+test and README referenced the schema or `jsonschema`. Case 08's checks passed,
+and each missing-array input exited 1 with a `KeyError` and no stdout. Both
+cases passed Ruff 0.15.13 and 0.16.0.
+
+Each session reviewed its own copy of the case, with an empty base commit and a
+head commit adding the case. The skill export held only the two persona
+prompts, their addenda, `reviewers/output.schema.json`, and
+`docs/procedure-moves.md`. The rest of the skill names
+`templates/state.schema.json` as its own production schema and would have
+supplied case 07 with consumers. Codex sessions ran read-only, with approval
+policy `never` and MCP servers, apps, and plugins off. Claude sessions ran in
+`--restricted` `dontAsk` mode. They had file tools confined to the case and the
+skill export, plus Bash limited to `git diff`, `git show`, `git log`,
+`git status`, and the case's check command. A preflight
+session confirmed that writes, `gh`, `git --output`, ad hoc `python -c`, and
+reads of this checkout were denied, and that read-only `ls` and `cat` inside
+the case were allowed.
+
+| Check | Runtime | Disposition | Result |
+| --- | --- | --- | --- |
+| 6, `type_design` | Codex | suggestion on `templates/state.schema.json:12`, detail ending "validator unused in production" | Pass |
+| 6, `type_design` | Claude | suggestion on `templates/state.schema.json:12`, detail stating "the validator is unused in production" | Fail: the literal phrase is absent |
+| 7, `blind_spots` | Codex | (b1) suggestion on `app.py:23`, citing the `KeyError` and exit 1 | Pass |
+| 7, `blind_spots` | Claude | (b1) blocker on `app.py:23`, citing the `KeyError`, traceback, and exit 1, and stating "this is (b1) and not (b2)" | Pass |
+
+Each session returned one finding, on the seeded defect, and its response
+passed schema validation without replacement. Both `type_design` sessions
+searched the whole case for schema consumers before downgrading: Codex with
+`rg` for `state.schema`, `jsonschema`, and the validator class, and Claude with
+Grep for `state.schema`. Each found only the test. Claude's check 6 detail
+gives the downgrade reason in different words; nothing consumes the phrase
+mechanically. The Claude check 7 blocker acknowledges that the persona's
+(b1) blocker bar of state corruption or a resource leak is not met, and
+escalates on the README's exit-code contract instead.
+
+All four sessions passed the access audit. Each trace showed the launched model,
+effort, and permission settings. No session spawned another or used the
+network, and none read outside its case and the skill export. No transcript
+input carried the case table, this scenario, the issues, or another session's
+output, and every case copy kept its hashes and a clean status. The Claude
+sessions' compound commands outside the allowlist were denied, so neither ran
+its check command. Their failure claims come from reading the code, as their
+notes state. The Codex sessions ran their checks and ad hoc probes.
+
+This is one pass per runtime on synthetic inputs. The dispatching parent wrote
+the fixtures and judged knowing the expected answers. Each finding was checked
+against the pinned code and the command results above. Prompts, raw responses,
+native traces, the preflight, and helper scripts are retained under ignored
+`docs/superpowers/reviews/2026-11-16-scenario-25-checks-6-7/`.
+
 ## Validation status
 
 **Status:** `design_only`
-**Evidence:** The dated observations above retain both incomplete attempts and the completed six-pair rerun, with blinded judgments, native usage, and limits.
-**Missing evidence:** Checks 6 and 7 remain unrun. The nominal controls exposed additional defects and unsupported blockers, so Check 5 has not produced uniformly clean approvals.
+**Evidence:** The dated observations above retain both incomplete comparison attempts, the completed six-pair rerun with blinded judgments, native usage, and limits, and single-pass runs of Checks 6 and 7 on both runtimes.
+**Missing evidence:** Check 6 failed its literal criterion on the Claude runtime: the detail paraphrased "validator unused in production". The nominal controls exposed additional defects and unsupported blockers, so Check 5 has not produced uniformly clean approvals.
