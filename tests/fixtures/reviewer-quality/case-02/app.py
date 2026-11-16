@@ -12,10 +12,10 @@ def reject_constant(value):
 def main():
     try:
         schema = json.loads((Path(__file__).parent / "templates/state.schema.json").read_text())
-        raw = sys.stdin.read()
+        raw = sys.stdin.buffer.read().decode("utf-8")
         record = json.loads(raw, parse_constant=reject_constant)
         Draft202012Validator(schema).validate(record)
-    except (OSError, ValueError, ValidationError) as exc:
+    except (OSError, ValueError, RecursionError, ValidationError) as exc:
         print(str(exc), file=sys.stderr)
         return 2
     sys.stdout.write(raw)
