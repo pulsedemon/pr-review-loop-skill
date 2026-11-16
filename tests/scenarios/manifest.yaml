@@ -163,7 +163,7 @@ scenarios:
     title: Persona recall sharpening
     tier: design_only
     reason: See the scenario validation status for the remaining clean-approval
-      evidence and the Claude runtime's literal Check 6 miss.
+      evidence.
   - number: 26
     file: 26-parallel-reviewer-fanout.md
     title: Parallel reviewer fan-out stays batched
