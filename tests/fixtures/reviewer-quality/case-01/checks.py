@@ -12,6 +12,7 @@ def run(raw):
         input=raw,
         text=True,
         capture_output=True,
+        check=False,
     )
 
 
