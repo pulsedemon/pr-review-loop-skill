@@ -46,7 +46,7 @@ The runtime contract is `SKILL.md` Steps 1–5. The most non-obvious aspects:
 
 ## Editing rules specific to this repo
 
-- **Helper scripts over inlined logic in `SKILL.md`.** When the skill needs to do something procedural (write a metric, fetch comments, count LOC, run local validation, push safely, sync the skill install), extract it into `scripts/` and have `SKILL.md` invoke it. Startup sync: `scripts/sync_skill.sh`; see `docs/skill-update.md`. `SKILL.md` length is bats-pinned (`test_skill_md_length.bats`, current cap 390 lines; currently 389) precisely to force this discipline; most edits that add prose will fail the cap.
+- **Helper scripts over inlined logic in `SKILL.md`.** When the skill needs to do something procedural (write a metric, fetch comments, count LOC, run local validation, push safely, sync the skill install), extract it into `scripts/` and have `SKILL.md` invoke it. Startup sync: `scripts/sync_skill.sh`; see `docs/skill-update.md`. `SKILL.md` length is bats-pinned (`test_skill_md_length.bats` owns the cap) precisely to force this discipline; most edits that add prose will fail the cap.
 - **Don't restate cross-surface rules in `SKILL.md`.** The matcher rule, Move C body, and synthesis mechanics live in `docs/*.md`; `SKILL.md` paraphrases and links. Drift guards in `tests/run.sh` and `tests/bats/test_move_c_drift_guard.bats` enforce this.
 - **Reviewer JSON is canonical via `reviewers/output.schema.json`.** `evidence` (top-level, shallow-review detection) is distinct from `finding_evidence` (per-finding, fuels the §4d.0.5 solo-adversary path). Don't conflate them.
 
