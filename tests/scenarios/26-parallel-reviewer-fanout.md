@@ -102,7 +102,7 @@ launch reviewer or gate subagents.
 A fresh Codex parent ran the skill pinned at
 `cdc395d6dae7fc15a5f2465a25f2ad0e44f9a21a`. Witch launched the parent and every
 reviewer through a dedicated build of
-[Witch commit `29839d7`](https://github.com/pulsedemon/witch/pull/692), which
+[Witch commit `29839d7`](https://github.com/pulsedemon/witch/commit/29839d75d986bf2cec1953753c17a9c939179260), which
 repairs nested familiar registration. The earlier attempt stopped before any
 reviewer returned; its unchanged fixtures and `REVIEW_INCOMPLETE` records were
 retained separately. No skill helper or persona changed between attempts.
