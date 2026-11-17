@@ -108,14 +108,14 @@ if [[ -f package.json ]]; then
     echo "# setup-error: node stack detected but no package manager on PATH" >&2
     exit 1
   fi
-  # yarn does not honor `--if-present`; check the script exists before invoking.
+  # yarn does not honor `--if-present`, so script presence is read with jq.
+  if [[ "$PM" == "yarn" ]] && ! command -v jq >/dev/null 2>&1; then
+    echo "# setup-error: yarn stack detected but jq not on PATH; cannot tell which scripts exist" >&2
+    exit 1
+  fi
   run_node_script() {
     local script="$1"
     if [[ "$PM" == "yarn" ]]; then
-      if ! command -v jq >/dev/null 2>&1; then
-        echo "# skip: $PM run $script (jq required to detect script presence under yarn)" >&2
-        return 0
-      fi
       if ! jq -e --arg s "$script" '.scripts[$s] // empty' package.json >/dev/null 2>&1; then
         echo "# skip: no \"$script\" script in package.json" >&2
         return 0

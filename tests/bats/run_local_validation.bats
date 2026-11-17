@@ -379,7 +379,7 @@ EOFM
   [[ "$output" == *"ruff not on PATH"* ]]
 }
 
-@test "yarn stack skips script-presence check when jq is unavailable" {
+@test "yarn stack without jq is a setup error (exit 1)" {
   cat > package.json <<'EOF'
 { "name": "t", "scripts": { "test": "exit 0" } }
 EOF
@@ -400,6 +400,7 @@ exit 0
 EOFY
   chmod +x "$p/yarn"
   PATH="$p" run bash "${SCRIPTS}/run_local_validation.sh"
-  [[ "$status" -eq 0 ]]
-  [[ "$output" == *"jq required"* ]]
+  [[ "$status" -eq 1 ]]
+  [[ "$output" == *"setup-error"* ]]
+  [[ "$output" == *"jq not on PATH"* ]]
 }
