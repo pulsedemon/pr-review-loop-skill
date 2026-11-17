@@ -154,6 +154,13 @@ to keep corpus judgments reproducible.
 [Scenario 25](../tests/scenarios/25-persona-recall-sharpening.md#paired-panel-procedure)
 defines the bounded synthetic comparison and records its observed limits.
 
+Build skill exports and reviewer packets outside the checkout, and keep no
+`SKILL.md` copy under it, gitignored trees included. Codex lists every
+`SKILL.md` it finds beneath an installed skill link as another
+`pr-review-loop` skill, so a host can load the stale copy and every session
+receives its path. Record the pin and file hashes instead.
+`tests/bats/test_single_skill_md.bats` fails while a copy is present.
+
 ## Mutation-test the contract
 
 `tests/bats/test_manifest_drift_localization.bats` swaps a fixture manifest
