@@ -108,7 +108,7 @@ Installer and update fixtures pass on macOS 27.0.1 for all four host layouts. Th
 | Host | Installer fixtures | Observed runtime evidence |
 | --- | --- | --- |
 | Cursor | Passed | Not verified |
-| Claude Code | Passed | [Dry run with actual reviewer dispatch on a live GitHub PR](tests/scenarios/26-parallel-reviewer-fanout.md#live-github-dry-run-in-claude-code-2026-11-17); [changed-default fixture cases](tests/scenarios/24-adversary-full-default.md#changed-default-fixture-run-in-claude-code-2026-11-16) with injected reviews and local Git remotes; the edit path, CI handling and posting on live GitHub not verified |
+| Claude Code | Passed | [Live GitHub edit-path run](tests/scenarios/26-parallel-reviewer-fanout.md#live-github-edit-path-run-in-claude-code-2026-11-17) with edits, pushes, inline replies, summary transport and green CI observed; failed-CI conversion, full orchestration and posting correctness not verified. [Dry run](tests/scenarios/26-parallel-reviewer-fanout.md#live-github-dry-run-in-claude-code-2026-11-17) and [changed-default fixture cases](tests/scenarios/24-adversary-full-default.md#changed-default-fixture-run-in-claude-code-2026-11-16) retain their separate limits. |
 | Codex | Passed | [Live GitHub approval path](tests/scenarios/27-comment-reply-disposition.md#live-github-approval-path-2026-11-14); [multi-iteration run with a local Git remote](tests/scenarios/26-parallel-reviewer-fanout.md#live-multi-iteration-codex-run-2026-11-15) |
 | opencode | Passed | Not verified |
 
