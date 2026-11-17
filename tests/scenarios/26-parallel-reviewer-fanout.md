@@ -161,8 +161,71 @@ required-review routing. It does not establish reviewer timeout cancellation,
 Claude parent. The full sweep's findings were empty, so the adversary dispatch
 establishes full-object delivery without testing retention of nonempty findings.
 
+## Live GitHub dry run in Claude Code, 2026-11-17
+
+A fresh Claude Code 2.1.322 parent ran `Dry-run pr-review-loop on <PR URL>`
+against [PR #39](https://github.com/pulsedemon/pr-review-loop-skill/pull/39), a
+fixture PR in this repository that was closed unmerged afterwards. Witch
+launched the parent headless on `claude-opus-5-5`; the trace shows high effort
+and the `auto` permission mode with no prompt handler. The request held the
+invocation line and reporting instructions, and said nothing about batching,
+the budget or models. The parent loaded the skill with its `Skill` tool and
+resolved `SKILL_ROOT` to the install symlink, `~/.claude/skills/pr-review-loop`,
+which pointed at a checkout of `dfc878d9a05b3f2db50b4d389de6164374428d9c`.
+Startup sync was skipped with `PR_REVIEW_LOOP_SKIP_SKILL_SYNC=1`. Every loop
+input other than `dry_run` kept its default. `python3` resolved to 3.14.6 in
+all 42 Bash calls, the parent's and the reviewers'.
+
+The fixture added a 25-line pricing module whose discount excluded the
+documented 10-unit boundary, with tests that missed it. The run used the real
+`gh` and Git against GitHub from a fresh clone.
+
+| Observation | Result |
+| --- | --- |
+| Terminal state | `dry_run_complete` after one iteration: `ci_status` `skipped`, equal head SHAs at the fixture head, the full panel in `reviewers_completed`, empty `reviewer_errors` |
+| Dispatch | Every panel persona had an `Agent` call joined to its own subagent transcript by the launch id |
+| Model routing | Each reviewer call passed `model: sonnet` and each transcript ran on `claude-sonnet-5-5`; state recorded `reviewer` as `standard` / `sonnet` |
+| Validation | `correctness` first returned an extra top-level field and failed validation; the parent asked for a resend, which passed 122 seconds after launch. Three other reviewers were asked to resend with file line numbers. State kept no error entry for the recovered response, and no `shallow_review` field |
+| Findings | Six blockers and two suggestions on the seeded boundary defect, one deferred finding. The matcher merged none of them |
+| GitHub and Git | PR metadata, comments, reviews, review threads and remote refs were identical before and after. No command in the parent or any reviewer wrote to GitHub or pushed, and none was denied. The host clone ended on the fixture branch at its head with a clean tree |
+| Install checkout | `HEAD`, branch, status, stashes and tracked-file bytes of the checkout behind the install symlink were unchanged |
+
+| Scenario 26 check | Result |
+| --- | --- |
+| 1. Reviewer batching | Passed: one message held the launch of every persona in `panel_selection.ran` and the budget timer. |
+| 2. Delta-gate batching | Not run; a dry run ends in iteration 1. |
+| 3. Sequential fallback | Not run; this host supports parallel launches. |
+| 4. Persona selection | Passed: the personas launched matched `panel_selection.ran` and `reviewers/personas.yaml`. |
+| 5. `cost_saver` routing | Not run; the profile was the default `balanced`. |
+
+Budget recipe: reviewers were left in the background, and the launch message
+started `date +%s > <file>; sleep 1800` in the background with `timeout`
+1860000. The parent stopped the timer in the same message that validated the
+last two resent responses, before those results came back, where the recipe
+stops it once every reviewer has a validated response. Both validations
+passed. The run therefore does not count as independent adherence to the
+recipe. The budget did not expire.
+
+The session lasted 284 seconds; the loop's terminal metric recorded 244. Native
+counters total 2,798,180 tokens for the parent and 1,451,061 for the reviewers,
+most of them cached input. Claude Code estimated USD 3.45 at API rates; billed
+cost was unavailable. The request, launch settings, native traces, state,
+snapshots, checkout observations and the trace audit are retained locally under
+ignored `docs/superpowers/reviews/2026-11-17-claude-live-dry-run/`.
+
+This run establishes that a Claude Code parent following the installed skill
+dispatches the full panel as one batch on the routed model, validates the
+responses and completes a dry run against a live GitHub PR without writing to
+it. It does not establish the adversary, delta gates, `cost_saver`, the edit
+and push path, CI handling, inline replies, summary posting, budget expiration,
+permission prompts in an interactive session, or review quality. The target
+repository was the skill itself, so the host's working directory held this
+repository's `CLAUDE.md`, its scenario records and a root `SKILL.md`; no tool
+call in the parent or a reviewer read a scenario record or retained evidence.
+The session also carried the user's ambient Claude Code configuration.
+
 ## Validation status
 
 **Status:** `design_only`
-**Evidence:** The dated multi-iteration Codex run above establishes checks 1, 2, and 4 at its pinned revision; earlier partial observations remain recorded above.
+**Evidence:** The dated multi-iteration Codex run above establishes checks 1, 2, and 4 at its pinned revision, and the dated Claude Code dry run establishes checks 1 and 4 for that host at its pin; earlier partial observations remain recorded above.
 **Missing evidence:** Dated host runs covering conditional fallback (check 3), `cost_saver` model routing (check 5), independent adherence to the reviewer-budget recipe, and reviewer-budget expiration and cancellation.
