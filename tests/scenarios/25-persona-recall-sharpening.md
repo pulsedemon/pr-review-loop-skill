@@ -569,11 +569,11 @@ and `tools/recall-harness/report.py`, which renders `loop_unmatched` only. Its
 behaviors the two checks name, built as isolated fixtures as the Setup directs.
 This repository's own script and report do not have either defect.
 
-Case 10 holds no file that Move C counts as a spec. Move C applies when a diff
-touches a doc and a spec (`SKILL.md`, `templates/`, `reviewers/`, or
-`CLAUDE.md`), so its documented trigger does not cover the construction Check 3
+At this pin, case 10 held no file that Move C counted as a spec. Move C applied
+when a diff touched a doc and a spec (`SKILL.md`, `templates/`, `reviewers/`, or
+`CLAUDE.md`), so its documented trigger did not cover the construction Check 3
 names. [Issue #32](https://github.com/pulsedemon/pr-review-loop-skill/issues/32)
-tracks that mismatch and was filed before either session ran.
+tracked that mismatch and was filed before either session ran.
 
 Before dispatch, on an export of the pin, both fixtures failed their own
 checks at the seed on Python 3.14.6 and on the reviewers' default 3.11.4: case
@@ -618,12 +618,12 @@ amendment and its trigger before dispatch, and its wording comes from the
 persona, not from the response. The pass-criterion bullet for Check 2 already
 asked only for the cited success result and is unchanged.
 
-The `readability` finding attributes itself to Move C although case 10 holds
-no spec file. The `blind_spots` session, on a README and a script, recorded in
+The `readability` finding attributes itself to Move C although case 10 held
+no spec file at this pin. The `blind_spots` session, on a README and a script, recorded in
 its notes that "move C was not triggered because no spec file changed". The
 two sessions read the same trigger differently, as `readability` and `comments`
-did on case 05 in the rerun. Check 3 passes as worded; issue #32 owns whether
-that wording and the trigger should agree.
+did on case 05 in the rerun. Check 3 passed as worded; the rerun below records it
+after the trigger changed.
 
 | Measure | `blind_spots` | `readability` | Both |
 | --- | --- | --- | --- |
@@ -654,7 +654,7 @@ expected answer, or other reviewer's output.
 | --- | --- | --- | --- | --- |
 | 1 | Observed rerun, 2026-11-16 | `e71cbdd` | Case 01 | Pass: the full arm's `type_design` blocker on `templates/state.schema.json:12` quotes "Each entry requires string pr and cause fields." beside item definitions holding only an object type |
 | 2 | This section | `23534bc` | Case 09 | Pass under the amended expectation |
-| 3 | This section | `23534bc` | Case 10 | Pass |
+| 3 | Observed check 3 rerun, 2026-11-17 | `9a7807c` | Case 10 | Pass |
 | 4 | `tests/bats/validate_reviewer_output.bats` | current | Automated | Pass |
 | 5 | Observed check 5, 2026-11-16 | `9e63f9d` | Case 06 | Pass |
 | 6 | Observed checks 6 and 7, 2026-11-16 | `cacdb03` | Case 07 | Pass; the Claude cell under the amended criterion |
@@ -668,14 +668,91 @@ own check fails at its seed, so a reviewer that runs it sees the failure;
 result was the one being replaced, and it was already known to find that seed;
 `comments`, which Check 3 also allows, was not run. Check 2's amended
 expectation has no run independent of the one that prompted it. Check 3's pass
-rests on a Move C attribution that Move C's documented trigger does not
-support. Plan, plan reviews, prompts, raw responses, native traces, audit
+at this pin rested on a Move C attribution that Move C's documented trigger did
+not support then. Plan, plan reviews, prompts, raw responses, native traces, audit
 output, and helper scripts are retained under ignored
 `docs/superpowers/reviews/2026-11-16-scenario-25-checks-2-3/`.
 
-_Validated with Codex `gpt-6.1-sol`, high effort, on 2026-11-16, across the pins in the table above: PASS._
+## Observed check 3 rerun, 2026-11-17
+
+`docs/procedure-moves.md` changed at pin
+`9a7807c47bb1da4fa75d85330b7f6d731d3fbe34`, so Check 3 ran again on
+[case 10](../fixtures/reviewer-quality/case-10/README.md), unchanged, with both
+personas the check allows. Check 3 is met at this pin: `readability` reported
+the seed as Move C contract drift. `comments` reported the same defect without
+naming a move.
+
+Move C used to apply only to a doc and a spec, and a spec was `SKILL.md`, a
+file under `templates/` or `reviewers/`, or `CLAUDE.md`. Its contract-drift
+step already described a doc against code, so reviewers split on whether a
+protocol document beside its report qualified
+([issue #32](https://github.com/pulsedemon/pr-review-loop-skill/issues/32)).
+The pin adds one paragraph: for contract drift only, when the diff holds both
+a doc and the code that implements a contract the doc states, that code counts
+as the spec. Terminology drift and the partial-diff rule keep the listed spec
+files. The same commit replaced em dashes on five lines of that file and
+removed the adversary prompt's inline copy of the lists. The two persona
+prompts, their addenda, and the output schema are byte-identical to the
+earlier pins.
+
+Before dispatch, on an export of the pin, case 10's `checks.py` failed at its
+expected-output assertion on Python 3.14.6 and on the reviewers' default
+3.11.4, its command printed only the `loop_unmatched` line for one entry of
+each bucket, and it passed `ruff check` and `ruff format --check` on 0.15.13
+and 0.16.0. Launch settings, prompt template, isolation, and audit rules were
+those of the Checks 2 and 3 run: Codex `gpt-6.1-sol` at high effort (Codex CLI
+0.162.1), read-only sandbox, approval policy `never`, one packet per session
+holding the case and that persona's prompt, the addenda, the schema, and the
+changed `docs/procedure-moves.md`. Outcome rules were fixed in a reviewed plan
+before dispatch. One preflight session had its write refused.
+
+| Persona | Finding | Deciding text | Session result |
+| --- | --- | --- | --- |
+| `readability` | blocker on `tools/recall-harness/label.md:4`, evidence at `tools/recall-harness/report.py:7` | "this is blocking contract drift under procedure move C" | Found as Move C |
+| `comments` | blocker on `tools/recall-harness/label.md:3`, evidence at `tools/recall-harness/report.py:7` | "the labeling contract promises output for two buckets the renderer ignores" | Found without a Move C attribution |
+
+Each session returned one finding, on the seeded defect, and its response
+passed `validate_reviewer_output.py` without replacement. Both findings were
+reproduced against the pinned code. Neither session said Move C did not apply,
+and both read `docs/procedure-moves.md`. The `comments` finding names no move
+in its own text; its `evidence.notes` say it "applied cross-doc contract
+consistency checks", which the fixed rules quote but do not count as an
+attribution. On the case 05 stand-in, before this change, `comments` had
+approved with a note that no spec file was changed or referenced.
+
+| Measure | `readability` | `comments` | Both |
+| --- | --- | --- | --- |
+| Session seconds | 48.0 | 41.6 | 89.6 summed; 48.3 elapsed |
+| Total tokens | 112,859 | 120,542 | 233,401 |
+| Input, of which cached | 111,077, of which 76,928 | 119,039, of which 104,448 | 230,116, of which 181,376 |
+| Output, of which reasoning | 1,782, of which 213 | 1,503, of which 233 | 3,285, of which 446 |
+
+Times come from native session timestamps. Monetary cost is unavailable. The
+preflight used 36,124 tokens and is not a reviewer invocation.
+
+The access audit passed. Every turn showed the launched model, effort, sandbox,
+and approval policy. Neither session spawned another, raised an approval flow,
+used the network, or ran a command that read outside its own packet. Both ran
+`python -B checks.py`, saw it fail, and probed the report command with their
+own inputs. Both repositories stayed clean and every frozen packet, prompt,
+helper, and validator hash matched after the run. The parent read every
+command, with output handled as in the Checks 2 and 3 run. Each session also
+received the host's global Codex instructions and skill list, which carried no
+case table, scenario text, expected answer, or other reviewer's output.
+
+This is one pass per persona on one synthetic fixture, with one reviewer
+model, effort, and runtime. The same parent wrote the trigger change and judged
+the result knowing the expected answer. The persona prompts are unchanged; the
+doc they link is what changed. Two earlier runs on a doc beside the code that
+implements it predate the change and were not rerun: Check 5's clean pass on
+case 06 at `9e63f9d`, and Check 2's `blind_spots` run on case 09 at `23534bc`.
+Plan, plan reviews, prompts, raw responses, native traces, audit output, and
+helper scripts are retained under ignored
+`docs/superpowers/reviews/2026-11-17-move-c-trigger-check-3/`.
+
+_Validated with Codex `gpt-6.1-sol`, high effort, on 2026-11-16 and 2026-11-17, across the pins in the check table above: PASS._
 
 ## Validation status
 
 **Status:** `manual_validated`
-**Evidence:** The dated observations above retain both incomplete comparison attempts, the completed six-pair rerun with blinded judgments, native usage, and limits, single-pass runs of Checks 6 and 7 on both runtimes, a clean default-panel pass on case 06 for Check 5, and single-pass runs of Checks 2 and 3 on the constructions they name. Check 3's pass depends on a Move C attribution outside Move C's documented trigger ([issue #32](https://github.com/pulsedemon/pr-review-loop-skill/issues/32)).
+**Evidence:** The dated observations above retain both incomplete comparison attempts, the completed six-pair rerun with blinded judgments, native usage, and limits, single-pass runs of Checks 6 and 7 on both runtimes, a clean default-panel pass on case 06 for Check 5,, single-pass runs of Checks 2 and 3 on the constructions they name, and a rerun of Check 3 with `readability` and `comments` after Move C's trigger changed.

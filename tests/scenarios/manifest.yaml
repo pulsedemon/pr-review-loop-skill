@@ -163,8 +163,7 @@ scenarios:
     title: Persona recall sharpening
     tier: manual_validated
     reason: a dated reviewer run is recorded for each of checks 1 to 3 and 5 to 7, and
-      check 4 is automated; check 3's pass depends on a Move C attribution that
-      issue 32 tracks.
+      check 4 is automated; check 3 was rerun after Move C's trigger changed.
   - number: 26
     file: 26-parallel-reviewer-fanout.md
     title: Parallel reviewer fan-out stays batched
