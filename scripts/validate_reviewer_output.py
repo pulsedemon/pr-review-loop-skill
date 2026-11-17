@@ -19,7 +19,9 @@ from jsonschema.exceptions import SchemaError
 
 REPO = Path(__file__).resolve().parent.parent
 SCHEMA_PATH = REPO / "reviewers" / "output.schema.json"
-EXPECTED_SCHEMA_ID_PREFIX = "https://github.com/pulsedemon/pr-review-loop/schemas/reviewer-output/"
+EXPECTED_SCHEMA_ID_PREFIX = (
+    "https://github.com/pulsedemon/pr-review-loop-skill/schemas/reviewer-output/"
+)
 EXPECTED_SCHEMA_VERSION = "0.1.0"
 EXPECTED_SCHEMA_ID = f"{EXPECTED_SCHEMA_ID_PREFIX}{EXPECTED_SCHEMA_VERSION}.json"
 
