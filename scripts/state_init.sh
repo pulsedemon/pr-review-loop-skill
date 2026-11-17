@@ -5,11 +5,11 @@
 # State is stored under .git/ so it is never tracked by the repo.
 #
 # Exit codes (per-script ladder; the orchestrator may bucket by script):
-#   0  success (state initialized, or state already exists for this PR)
+#   0  success (state initialized, or unfinished state already exists for this PR)
 #   2  usage error (wrong arg count)
 #   3  missing dependency (jq not on PATH)
 #   4  not inside a git repo
-#   5  state file exists for a different PR
+#   5  state file holds an unfinished loop for a different PR
 #   6  helper scripts/_adversary_caps.sh missing/unreadable or failed to
 #      source (e.g., its preset-value guard tripped because ADVERSARY_CAP
 #      was preset to a conflicting value), OR ADVERSARY_CAP
@@ -130,12 +130,12 @@ trap cleanup_tmp_state EXIT
 if [[ -f "$STATE_FILE" ]]; then
   EXISTING_PR=$(jq -r '.pr_number // empty' "$STATE_FILE" 2>/dev/null || echo "")
   COMPLETED_AT=$(jq -r '.completed_at // empty' "$STATE_FILE" 2>/dev/null || echo "")
-  if [[ "$EXISTING_PR" == "$PR" && -n "$COMPLETED_AT" ]]; then
+  if [[ -n "$COMPLETED_AT" ]]; then
     # completed_at is written by write_terminal_metric.sh at Step 5. do not key
     # on status: pr_scope_step.py stores scope_split_recommended before Step 5,
     # and that loop must resume so the split summary still gets posted.
     EXISTING_STATUS=$(jq -r '.status // "unknown"' "$STATE_FILE" 2>/dev/null || echo "unknown")
-    echo "Previous loop for PR #$PR completed (${EXISTING_STATUS}) at ${COMPLETED_AT}; reinitializing."
+    echo "Previous loop for PR #${EXISTING_PR} completed (${EXISTING_STATUS}) at ${COMPLETED_AT}; reinitializing."
     rm -f "$STATE_FILE" "${STATE_DIR}/pr-scope.json"
   elif [[ "$EXISTING_PR" == "$PR" ]]; then
     echo "State already exists for PR #$PR at $STATE_FILE"
@@ -144,8 +144,8 @@ if [[ -f "$STATE_FILE" ]]; then
     echo "Resume: apply Step 3.5's resume rules (docs/pr-scope.md), then dispatch per Step 3.6."
     exit 0
   else
-    echo "ERROR: $STATE_FILE exists for a different PR (#$EXISTING_PR)." >&2
-    echo "Remove it or finish that loop first." >&2
+    echo "ERROR: $STATE_FILE holds an unfinished loop for a different PR (#$EXISTING_PR)." >&2
+    echo "Finish that loop or remove the file first." >&2
     exit 5
   fi
 fi

@@ -46,7 +46,7 @@
     "completed_at": {
       "type": "string",
       "format": "date-time",
-      "description": "Written by scripts/write_terminal_metric.sh at Step 5, before the metric append. scripts/state_init.sh reinitializes a same-PR state file only when this is present; a terminal `status` alone can be a pre-Step-5 scope-split record that must resume."
+      "description": "Written by scripts/write_terminal_metric.sh at Step 5, before the metric append. scripts/state_init.sh reinitializes a state file, for this PR or another, only when this is present; a terminal `status` alone can be a pre-Step-5 scope-split record that must resume."
     },
     "iteration": { "type": "integer", "minimum": 0 },
     "max_iterations": { "type": "integer", "minimum": 1 },

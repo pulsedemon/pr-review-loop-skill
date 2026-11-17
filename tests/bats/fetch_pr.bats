@@ -168,11 +168,22 @@ prepare_resume() {
   [[ -e "$FETCH_TEST_ACTIONS" ]]
 }
 
-@test "refuses a different pr before checkout" {
+@test "refuses unfinished state for a different pr before checkout" {
   prepare_resume
   run bash "${SCRIPTS}/fetch_pr.sh" owner repo 2
   [[ "$status" -eq 8 ]]
+  [[ "$output" == *"unfinished loop for a different pr"* ]]
   [[ ! -e "$FETCH_TEST_ACTIONS" ]]
+}
+
+@test "starts fresh over completed state for a different pr" {
+  prepare_resume
+  jq '.completed_at = "2026-09-10T00:00:00Z" | .initial_head_sha = "old" | .head_branch = "merged"' \
+    .git/pr-loop/state.json >"${BATS_TEST_TMPDIR}/updated.json"
+  cp "${BATS_TEST_TMPDIR}/updated.json" .git/pr-loop/state.json
+  run bash "${SCRIPTS}/fetch_pr.sh" owner repo 2
+  [[ "$status" -eq 0 ]]
+  [[ "$(cat "$FETCH_TEST_ACTIONS")" == pull ]]
 }
 
 @test "refuses malformed state before checkout" {
