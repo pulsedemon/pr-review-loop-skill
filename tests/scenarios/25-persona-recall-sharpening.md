@@ -435,8 +435,120 @@ against the pinned code and the command results above. Prompts, raw responses,
 native traces, the preflight, and helper scripts are retained under ignored
 `docs/superpowers/reviews/2026-11-16-scenario-25-checks-6-7/`.
 
+## Observed check 5, 2026-11-16
+
+Fixture, persona prompts, and skill export were pinned at
+`9e63f9d1251c6b1593a88449af0a188aa834030d`. The default panel reviewed
+[case 06](../fixtures/reviewer-quality/case-06/README.md) once. Every persona
+returned `verdict: approve` with `findings: []`, so Check 5 is met as written.
+
+Case 06 was named as the deciding fixture before any session ran: it is the
+smallest control, and its one known gap could be repaired without touching
+another scenario's inputs. In the rerun above its `checks.py` imported `render`
+and never ran the documented `python report.py` command, which
+`reviewers/tests.md` counts as an entry point. The pin adds that command run to
+`checks.py` in cases 05 and 06, which still differ only at `report.py:7`. A copy
+of case 06 whose `__main__` block no longer calls `render` passed the old checks
+and fails the new assertion. The rerun's judgments and counts are not
+relabelled, and `e71cbdd` remains the replay input for the paired comparison.
+
+Case 04 was not used. Its untested `greeting` is a nit whenever `tests` raises
+it, and removing the gap would change the inputs
+[scenario 30](30-tests-coverage-calibration.md) records as "case-04 as shipped".
+Case 02 was not rerun, so its repairs since the rerun have had no panel pass.
+
+Before dispatch, on an export of the pin, case 06's `checks.py` passed and case
+05's failed at its seeded assertion on Python 3.14.6 and on the reviewers'
+default 3.11.4. Both cases passed Ruff 0.15.13 and 0.16.0. The skill export was
+byte-identical to the pins of Checks 1 to 3 (`e71cbdd`) and Checks 6 and 7
+(`cacdb03`). One preflight session on the same settings had its write refused.
+
+A Claude Code parent launched every reviewer together through Witch as a Codex
+`gpt-6.1-sol` session at high effort (Codex CLI 0.162.1): read-only sandbox,
+approval policy `never`, with MCP servers, apps, and plugins off. Each session
+started in a repository holding an empty base commit and one head commit adding
+case 06, beside the skill export, and received the rerun's prompt template
+unchanged. Outcome rules, audit failure conditions, and a single permitted
+fixture-repair round were fixed in a reviewed plan before dispatch; the repair
+round was not needed.
+
+| Persona | Verdict | Findings |
+| --- | --- | --- |
+| `correctness` | approve | none |
+| `tests` | approve | none |
+| `security` | approve | none |
+| `performance` | approve | none |
+| `readability` | approve | none |
+| `yagni` | approve | none |
+| `requirements` | approve | none |
+| `comments` | approve | none |
+| `error_handling` | approve | none |
+| `type_design` | approve | none |
+| `blind_spots` | approve | none |
+
+Every response was read from its native final answer, matched the native
+completion message, and passed `validate_reviewer_output.py` without
+replacement. No launch failed or timed out.
+
+| Measure | Value |
+| --- | --- |
+| Panel elapsed | 57.4 seconds |
+| Summed session time | 436.3 seconds |
+| Total tokens | 1,172,257 |
+| Input, of which cached | 1,160,070, of which 914,304 |
+| Output, of which reasoning | 12,187, of which 1,437 |
+
+Times come from native session timestamps. Monetary cost is unavailable. The
+preflight used 36,945 tokens and is not a reviewer invocation.
+
+The access audit passed. Every turn showed the launched model, effort, sandbox,
+and approval policy. No session spawned another, raised an approval flow, used
+the network, or ran a command that read outside its repository and the skill
+export. Every session ran `python -B checks.py`; three also probed `report.py`
+with their own inputs. Two heredoc probes were refused by the sandbox and rerun
+inline. The repository stayed clean and every frozen file, prompt, and helper
+hash matched after the run. The parent read every command; output lines that
+were not lines of a file in the reviewer's packet were read in full, and the
+rest were matched to those files by program.
+
+Each session also received the host's global Codex instructions and skill
+list. That list names this checkout's installed skill link, including the
+skill copies kept in earlier retained run directories. No session read through
+it. The list carried no case table, scenario text, expected answer, or other
+reviewer's output.
+
+| Check | Recorded in | Pin | Input |
+| --- | --- | --- | --- |
+| 1 | Observed rerun, 2026-11-16 | `e71cbdd` | Case 01, the path the check names |
+| 2 | Observed rerun, 2026-11-16 | `e71cbdd` | Case 03, a stand-in |
+| 3 | Observed rerun, 2026-11-16 | `e71cbdd` | Case 05 before this pin's change to its `checks.py`, a stand-in |
+| 4 | `tests/bats/validate_reviewer_output.bats` | current | Automated |
+| 5 | This section | `9e63f9d` | Case 06 |
+| 6 | Observed checks 6 and 7, 2026-11-16 | `cacdb03` | Case 07 |
+| 7 | Observed checks 6 and 7, 2026-11-16 | `cacdb03` | Case 08 |
+
+Checks 2 and 3 have not run on the constructions they name. Check 2 specifies
+`scripts/run_local_validation.sh` with a detected stack whose package manager
+is unavailable; case 03's `scripts/validate.sh` has a missing-tool branch that
+checks for Ruff. The retained `blind_spots` response cites that branch's exit 0
+without printing the (b2) label, and the output schema has no field for it.
+Check 3 specifies `tools/recall-harness/report.py` and `label.md`; case 05 uses
+its own `report.py` and `docs/label.md`. Check 6 was held to its literal
+wording until it was amended, and the same standard keeps this scenario at
+`design_only`.
+
+This is one pass on one synthetic fixture, with one reviewer model, effort, and
+runtime. Case 06 is not held out: it was repaired in response to the same
+reviewer setup's earlier finding, and the dispatching parent wrote the repair
+and judged the result knowing the expected answer. The rerun was dispatched
+from a Codex parent on a different Witch route, and stripped Markdown fences
+before validation where this run sent each final answer to the validator
+unchanged. Plan, plan reviews, prompts, raw responses, native traces, audit
+output, and helper scripts are retained under ignored
+`docs/superpowers/reviews/2026-11-16-scenario-25-check-5/`.
+
 ## Validation status
 
 **Status:** `design_only`
-**Evidence:** The dated observations above retain both incomplete comparison attempts, the completed six-pair rerun with blinded judgments, native usage, and limits, and single-pass runs of Checks 6 and 7 on both runtimes.
-**Missing evidence:** The nominal controls exposed additional defects and unsupported blockers, so Check 5 has not produced uniformly clean approvals.
+**Evidence:** The dated observations above retain both incomplete comparison attempts, the completed six-pair rerun with blinded judgments, native usage, and limits, single-pass runs of Checks 6 and 7 on both runtimes, and a clean default-panel pass on case 06 for Check 5.
+**Missing evidence:** Checks 2 and 3 have been observed only on stand-in fixtures (cases 03 and 05), not on the constructions those checks name.
