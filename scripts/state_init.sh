@@ -123,10 +123,9 @@ cleanup_tmp_state() {
 }
 trap cleanup_tmp_state EXIT
 
-# Resume/refuse short-circuit runs BEFORE any network call: a transient
-# gh/auth failure must not mask valid resumable state by exiting 7 when a
-# state file already exists. gh pr view runs only when there is no state file
-# for this PR (the fresh-init path below).
+# Resume and refuse exit BEFORE any network call, so a transient gh/auth
+# failure cannot mask resumable state with exit 7. gh pr view runs only on the
+# fresh-init path below: no state file, or a completed one just removed.
 if [[ -f "$STATE_FILE" ]]; then
   EXISTING_PR=$(jq -r '.pr_number // empty' "$STATE_FILE" 2>/dev/null || echo "")
   COMPLETED_AT=$(jq -r '.completed_at // empty' "$STATE_FILE" 2>/dev/null || echo "")
