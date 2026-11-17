@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/pulsedemon/pr-review-loop/schemas/gate-output/0.1.0.json",
+  "$id": "https://github.com/pulsedemon/pr-review-loop-skill/schemas/gate-output/0.1.0.json",
   "title": "PR Review Loop delta-gate output",
   "description": "Strict JSON contract for one gate pre-pass subagent's output, validated by scripts/validate_gate_output.py before §4a.1 panel selection. The `reviewer` enum must match the reviewers/personas.yaml panel set; it is hand-maintained (not generator-managed) and pinned by tests/bats/test_delta_gate_skill_sync.bats. Schema version is encoded in $id; bump when changing the contract.",
   "type": "object",

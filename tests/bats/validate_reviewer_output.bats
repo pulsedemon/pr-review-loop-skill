@@ -36,7 +36,7 @@ load test_helper
 
 @test "validator fails when schema \$id has wrong version under right prefix" {
   copy_skill_tree
-  python3 -c "import json, pathlib; p = pathlib.Path('${BATS_TEST_TMPDIR}/skill/reviewers/output.schema.json'); s = json.loads(p.read_text()); s['\$id'] = 'https://github.com/pulsedemon/pr-review-loop/schemas/reviewer-output/0.2.0.json'; p.write_text(json.dumps(s))"
+  python3 -c "import json, pathlib; p = pathlib.Path('${BATS_TEST_TMPDIR}/skill/reviewers/output.schema.json'); s = json.loads(p.read_text()); s['\$id'] = 'https://github.com/pulsedemon/pr-review-loop-skill/schemas/reviewer-output/0.2.0.json'; p.write_text(json.dumps(s))"
   run bash -c "echo '{\"reviewer\":\"correctness\",\"verdict\":\"approve\",\"findings\":[]}' | python3 ${BATS_TEST_TMPDIR}/skill/scripts/validate_reviewer_output.py"
   [[ "$status" -eq 1 ]]
   [[ "$output" == *"\$id"* ]]

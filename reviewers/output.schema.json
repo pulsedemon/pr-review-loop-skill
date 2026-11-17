@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/pulsedemon/pr-review-loop/schemas/reviewer-output/0.1.0.json",
+  "$id": "https://github.com/pulsedemon/pr-review-loop-skill/schemas/reviewer-output/0.1.0.json",
   "title": "PR Review Loop reviewer output",
   "description": "Strict JSON contract for one reviewer subagent's output, validated by scripts/validate_reviewer_output.py at the start of §4c synthesize. Schema version is encoded in $id; bump when changing the contract.",
   "type": "object",
