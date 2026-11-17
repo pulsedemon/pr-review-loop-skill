@@ -653,10 +653,10 @@ expected answer, or other reviewer's output.
 | Check | Recorded in | Pin | Input | Result |
 | --- | --- | --- | --- | --- |
 | 1 | Observed rerun, 2026-11-16 | `e71cbdd` | Case 01 | Pass: the full arm's `type_design` blocker on `templates/state.schema.json:12` quotes "Each entry requires string pr and cause fields." beside item definitions holding only an object type |
-| 2 | This section | `23534bc` | Case 09 | Pass under the amended expectation |
+| 2 | Observed checks 2 and 5 rerun, 2026-11-17 | `cc1fcb5` | Case 09 | Pass |
 | 3 | Observed check 3 rerun, 2026-11-17 | `9a7807c` | Case 10 | Pass |
 | 4 | `tests/bats/validate_reviewer_output.bats` | current | Automated | Pass |
-| 5 | Observed check 5, 2026-11-16 | `9e63f9d` | Case 06 | Pass |
+| 5 | Observed checks 2 and 5 rerun, 2026-11-17, for the Move C personas; Observed check 5, 2026-11-16, for the rest | `cc1fcb5` for the Move C personas, `9e63f9d` for the rest | Case 06 | Pass |
 | 6 | Observed checks 6 and 7, 2026-11-16 | `cacdb03` | Case 07 | Pass; the Claude cell under the amended criterion |
 | 7 | Observed checks 6 and 7, 2026-11-16 | `cacdb03` | Case 08 | Pass |
 
@@ -667,7 +667,8 @@ own check fails at its seed, so a reviewer that runs it sees the failure;
 `readability` did. `readability` was chosen for Check 3 because its stand-in
 result was the one being replaced, and it was already known to find that seed;
 `comments`, which Check 3 also allows, was not run. Check 2's amended
-expectation has no run independent of the one that prompted it. Check 3's pass
+expectation had no run independent of the one that prompted it at this pin; the
+Checks 2 and 5 rerun below is one. Check 3's pass
 at this pin rested on a Move C attribution that Move C's documented trigger did
 not support then. Plan, plan reviews, prompts, raw responses, native traces, audit
 output, and helper scripts are retained under ignored
@@ -744,15 +745,130 @@ This is one pass per persona on one synthetic fixture, with one reviewer
 model, effort, and runtime. The same parent wrote the trigger change and judged
 the result knowing the expected answer. The persona prompts are unchanged; the
 doc they link is what changed. Two earlier runs on a doc beside the code that
-implements it predate the change and were not rerun: Check 5's clean pass on
+implements it predate the change and were rerun below: Check 5's clean pass on
 case 06 at `9e63f9d`, and Check 2's `blind_spots` run on case 09 at `23534bc`.
 Plan, plan reviews, prompts, raw responses, native traces, audit output, and
 helper scripts are retained under ignored
 `docs/superpowers/reviews/2026-11-17-move-c-trigger-check-3/`.
+
+## Observed checks 2 and 5 rerun, 2026-11-17
+
+The four Move C personas reviewed
+[case 06](../fixtures/reviewer-quality/case-06/README.md) again, and
+`blind_spots` reviewed
+[case 09](../fixtures/reviewer-quality/case-09/README.md) again, at pin
+`cc1fcb55d810aaeecc8e53327f029bd8eecda8e9`, one session each. Both checks are
+met at this pin. `readability`, `requirements`, `comments`, and `blind_spots`
+each returned `verdict: approve` with `findings: []` on case 06, and
+`blind_spots` reported case 09's seed.
+
+Both fixtures hold a doc beside the code that implements its contract, which
+Move C's contract-drift step has covered since `9a7807c`
+([issue #37](https://github.com/pulsedemon/pr-review-loop-skill/issues/37)).
+Between `9a7807c` and the pin only this scenario and its manifest entry
+changed. The four persona prompts, the two addenda, the output schema, and the
+response validator are byte-identical to the pins of the earlier runs
+(`e71cbdd`, `9e63f9d`, `23534bc`), `docs/procedure-moves.md` differs from them
+only by the `9a7807c` change, case 06 is unchanged since `9e63f9d`, and case
+09 since `23534bc`.
+
+The other seven panel personas were not rerun. Their Check 5 sessions read
+only their persona file, the two addenda, and the output schema, all unchanged
+at the pin, so their `9e63f9d` responses are carried forward. Nine other files
+of the full skill export those sessions were given have changed since; none
+was read.
+
+Before dispatch, on an export of the pin, case 06's `checks.py` passed and
+case 05's failed at its seeded assertion on Python 3.14.6 and on the
+reviewers' default 3.11.4, and the two cases differed only at `report.py:7`.
+Case 09's `checks.py` failed at `assert missing.returncode == 1`; with an empty
+`PATH` its script exited 0 with the skip line, and with `npm` available it ran
+`node --test` and exited 0. Both cases passed `ruff check` on 0.15.13 and
+0.16.0, case 09 passed `ruff format --check`, and its script passed ShellCheck
+at warning severity. Case 06's `checks.py` and `report.py` are not
+format-clean in a bare export, which formats at 88 columns where this
+repository formats at 100. Check 5's run had the same files and checked
+`ruff check` alone.
+
+Launch settings, prompt template, and audit rules were those of the Checks 2
+and 3 run: Codex `gpt-6.1-sol` at high effort (Codex CLI 0.162.1), read-only
+sandbox, approval policy `never`, with MCP servers, apps, and plugins off. Each
+session had its own packet: the case as one head commit over an empty base,
+beside that persona's prompt, the addenda, the schema, and
+`docs/procedure-moves.md`. Check 5 gave every session one shared packet with
+the full skill export; its four Move C sessions read only the five files this
+export holds. Outcome rules were fixed in a reviewed plan before dispatch. The
+driver was first replayed against the retained sessions of the same persona
+and case. One preflight session had its write refused.
+
+| Persona | Case | Verdict | Findings | Move C in the response |
+| --- | --- | --- | --- | --- |
+| `readability` | 06 | approve | none | not named; "Documentation and implementation agree." |
+| `requirements` | 06 | approve | none | "Cross-doc contract comparison found no drift." |
+| `comments` | 06 | approve | none | "Cross-doc contract comparison found no drift." |
+| `blind_spots` | 06 | approve | none | "No in-scope concurrency, failure-mode, configuration, test-intent, or contract-drift findings." |
+| `blind_spots` | 09 | request_changes | blocker on `scripts/run_local_validation.sh:12` | not named; "audited test intent and documentation consistency" |
+
+Every session read `docs/procedure-moves.md`, and none said Move C did not
+apply. `blind_spots` and `requirements` did not take their early exit on case
+06: both compared the documentation with the implementation and ran their own
+probes of the report command.
+
+The case 09 finding says "when package.json exists but npm is absent from
+PATH, this branch exits 0 without running tests. README.md:7-8 requires exit 1
+and reserves exit 0 for checks that actually ran and passed." It was
+reproduced against the pinned code. It names no category and no move, which
+Check 2's expectation allows. It is the first run of the amended expectation
+that did not prompt the amendment. The response's only finding is that one, so
+the widened trigger added no second report of the same disagreement. Its notes
+no longer say Move C was not triggered.
+
+Each response was read from its native final answer, matched the native
+completion message, and passed `validate_reviewer_output.py` without
+replacement. No launch failed or timed out.
+
+| Measure | `readability` | `requirements` | `comments` | `blind_spots`, case 06 | `blind_spots`, case 09 | All |
+| --- | --- | --- | --- | --- | --- | --- |
+| Session seconds | 34.3 | 40.3 | 38.5 | 44.8 | 86.0 | 243.9 summed; 86.0 elapsed |
+| Total tokens | 92,620 | 120,301 | 114,297 | 126,177 | 152,518 | 605,913 |
+| Input | 91,455 | 118,974 | 113,232 | 124,547 | 149,718 | 597,926 |
+| Cached input | 77,440 | 94,592 | 92,032 | 108,928 | 125,824 | 498,816 |
+| Output | 1,165 | 1,327 | 1,065 | 1,630 | 2,800 | 7,987 |
+| Reasoning output | 255 | 148 | 112 | 209 | 1,056 | 1,780 |
+
+Times come from native session timestamps. Cached input and reasoning output
+are subsets, not additions. Monetary cost is unavailable. The preflight used
+36,152 tokens and is not a reviewer invocation.
+
+The access audit passed. Every turn showed the launched model, effort, sandbox,
+and approval policy. No session spawned another, raised an approval flow, used
+the network, or ran a command that read outside its own packet. The four case
+06 sessions ran `python -B checks.py`; `requirements` and `blind_spots` also
+probed the report command with their own inputs, and one heredoc probe was
+refused by the sandbox and rerun inline. The case 09 session ran the script
+with `PATH=/nonexistent`, with shell-function stand-ins for `npm`, and from a
+directory with no `package.json`, and ran `node --test`. It did not run
+`checks.py`, which needs a temporary directory the sandbox refuses. Every
+repository stayed clean and every frozen packet, prompt, helper, and validator
+hash matched after the run. The parent read every command, with output handled
+as in the Checks 2 and 3 run. Each session also received the host's global
+Codex instructions and skill list, which carried no case table, scenario text,
+expected answer, or other reviewer's output.
+
+This is one pass per session on synthetic fixtures, with one reviewer model,
+effort, and runtime; no Claude session ran. The parent judged knowing the
+expected answers. Seven of the default panel's personas were carried forward
+from `9e63f9d`, not rerun. The packets differ from Check 5's shared full
+export. Case 06 is not held out: it was repaired before Check 5 in response to
+the same reviewer setup's finding. A clean result on one consistent fixture
+does not show how often the widened rule stays quiet on ordinary pull requests.
+Plan, plan reviews, prompts, raw responses, native traces, audit output, and
+helper scripts are retained under ignored
+`docs/superpowers/reviews/2026-11-17-scenario-25-checks-2-5-rerun/`.
 
 _Validated with Codex `gpt-6.1-sol`, high effort, on 2026-11-16 and 2026-11-17, across the pins in the check table above: PASS._
 
 ## Validation status
 
 **Status:** `manual_validated`
-**Evidence:** The dated observations above retain both incomplete comparison attempts, the completed six-pair rerun with blinded judgments, native usage, and limits, single-pass runs of Checks 6 and 7 on both runtimes, a clean default-panel pass on case 06 for Check 5,, single-pass runs of Checks 2 and 3 on the constructions they name, and a rerun of Check 3 with `readability` and `comments` after Move C's trigger changed.
+**Evidence:** The dated observations above retain both incomplete comparison attempts, the completed six-pair rerun with blinded judgments, native usage, and limits, single-pass runs of Checks 6 and 7 on both runtimes, a clean default-panel pass on case 06 for Check 5, single-pass runs of Checks 2 and 3 on the constructions they name, and, after Move C's trigger changed, a rerun of Check 3 with `readability` and `comments` and a rerun of Checks 2 and 5 with the Move C personas.
