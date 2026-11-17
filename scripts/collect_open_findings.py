@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
-# collect_open_findings.py — the still-open suggestion and nit sets for Step 5.
+# collect_open_findings.py: the still-open suggestion and nit sets for Step 5.
 #
 # Step 5 renders its suggestion and nit bullets from one iteration's
 # synthesized partitions. On a delta-gated run the persona that raised an
 # earlier one may not have run again, so that finding sits in
-# history[].findings — counted in n_suggestions / n_nits — and is never shown.
+# history[].findings, counted in n_suggestions / n_nits, and is never shown.
 # This script walks history[] plus the current iteration and returns the ones
 # still open. See docs/step5-summary.md#carrying-open-suggestions-and-nits.
 #
 # stdin: {
-#   iteration: int,                the iteration Step 5 is exiting from —
+#   iteration: int,                the iteration Step 5 is exiting from:
 #                                  `state.iteration + 1` on every exit before
 #                                  §4i appended it, `state.iteration` on the
 #                                  §4d.1 SUCCESS path which appended an entry
-#                                  carrying `findings: []`, and `0` before any
-#                                  iteration ran. The number is what tells the
+#                                  (carrying `findings: []` in older state),
+#                                  and `0` before any iteration ran. The number is what tells the
 #                                  first two apart; see _rounds.
 #   suggestions: [finding],        this iteration's synthesized partitions,
 #   nits: [finding],               passed through from promote_findings.py.
@@ -22,7 +22,7 @@
 #                                  (or `reviewer`, on a persisted finding);
 #                                  without one the item is never settled by
 #                                  the owner test.
-#   blockers: [finding]|null,      supersession only — never rendered from
+#   blockers: [finding]|null,      supersession only, never rendered from
 #                                  here. A suggestion promoted to blocker is
 #                                  listed under Outstanding blockers and must
 #                                  not also render as an open suggestion.
@@ -55,8 +55,8 @@
 # reaches the renderer cannot leak into it.
 #
 # exit codes:
-#   0 — emitted the open sets
-#   2 — usage / malformed input
+#   0: emitted the open sets
+#   2: usage / malformed input
 #
 # Matching rule: docs/synthesis.md.
 
@@ -96,7 +96,7 @@ def _settled(entry: dict) -> set[tuple]:
     the provenance record for exactly those.
 
     Keys, not the matcher: `_provenance` copies `file`/`line`/`summary` off the
-    finding verbatim, so exact equality is exhaustive here — and the §4c window
+    finding verbatim, so exact equality is exhaustive here, and the §4c window
     is not an equivalence relation, so a fuzzy check would let one promotion
     retire a *different* finding within five lines of it, which would then
     render in no section at all.
@@ -163,7 +163,7 @@ def _ran(entry: dict) -> tuple[set[str], bool]:
     bug this script exists to fix.
 
     `forced_full_sweep` is checked because panel_selection records the *initial*
-    §4a.1 selection only — the pre-approval sweep runs personas it does not
+    §4a.1 selection only; the pre-approval sweep runs personas it does not
     list (templates/state.schema.json, docs/delta-gate.md). It covers the panel,
     not the adversary, which is not a panel persona.
 
@@ -172,7 +172,7 @@ def _ran(entry: dict) -> tuple[set[str], bool]:
     (`reviewer_errors[]`, without a replacement response) or
     that came back shallow (`shallow_review[]`, approve with no evidence) is
     named there having decided nothing. Letting either resolve an earlier
-    finding would retire it on a review that did not happen — which is why the
+    finding would retire it on a review that did not happen, which is why the
     same entry's `adversary_error` leaves `adversary` absent.
     """
     selection = entry.get("panel_selection")
@@ -214,7 +214,7 @@ def _owners_ran(item: dict, rnd: dict) -> bool:
 
     Every, not any: §4c unions `source_reviewers` when two personas surface the
     same issue, and one of them going quiet is not the panel withdrawing it.
-    An item whose owners cannot be determined is never settled this way — it can
+    An item whose owners cannot be determined is never settled this way; it can
     still be retired by a re-raise, a promotion or a deferral.
 
     Reads the item's accumulated owner set rather than its current finding's,
@@ -251,10 +251,10 @@ def _rounds(history: list, current: dict) -> list[dict]:
     """History entries oldest-first, with the current iteration folded in.
 
     The current iteration reaches Step 5 in one of two states: not yet in
-    history[] (every exit before §4i), or in it with `findings: []` because the
-    §4d.1 SUCCESS path records no findings. Folding on the iteration number
-    covers both — and in the second case the stdin partitions are the only
-    record that iteration's panel produced anything at all.
+    history[] (every exit before §4i), or in it from the §4d.1 SUCCESS path.
+    Folding on the iteration number covers both. Older state records that
+    SUCCESS entry with `findings: []`, which leaves the stdin partitions as the
+    only record that iteration's panel produced anything at all.
     """
     rounds = []
     for entry in history:
@@ -262,7 +262,7 @@ def _rounds(history: list, current: dict) -> list[dict]:
             continue
         iteration = entry.get("iteration")
         if not isinstance(iteration, int) or isinstance(iteration, bool):
-            # Skipped whole, which does drop any findings it held — the one
+            # Skipped whole, which does drop any findings it held: the one
             # place this module loses an item. There is no honest alternative:
             # the number is what orders the rounds and dates an item, and
             # `iteration` is required by templates/state.schema.json, so an
@@ -288,9 +288,9 @@ def _rounds(history: list, current: dict) -> list[dict]:
         rounds.sort(key=lambda r: r["iteration"])
         return rounds
     rounds.sort(key=lambda r: r["iteration"])
-    # Union, not replacement. The stdin partitions are what the §4d.1 SUCCESS
-    # entry lacks — `findings: []` there would otherwise read as "the full panel
-    # ran and re-raised nothing" and resolve every carried item — but a caller
+    # Union, not replacement. The stdin partitions are what an older-state §4d.1
+    # SUCCESS entry lacks (its `findings: []` would otherwise read as "the full
+    # panel ran and re-raised nothing" and resolve every carried item), but a caller
     # that passes nothing for an already-persisted iteration must not erase what
     # §4i wrote, which would be the same silent loss from the other direction.
     #
@@ -329,7 +329,7 @@ def _rank(item: dict, finding: dict) -> tuple:
     """How well a round finding answers an open item. Higher sorts first.
 
     Only ever used to order candidate pairs that already match, so it ranks
-    matches — it does not decide them. The §4c rule owns that.
+    matches; it does not decide them. The §4c rule owns that.
     """
     distance = 0
     if item.get("line") is not None and finding.get("line") is not None:
@@ -342,14 +342,14 @@ def _pair(items: list[dict], findings: list[dict], rnd: dict) -> dict[int, dict]
 
     The ±5 line window is a window, not an equivalence relation: one re-raised
     finding can match two open items that do not match each other. Letting it
-    answer for both retires an item nothing actually revisited — the silent drop
-    this whole script exists to prevent — so each finding settles at most one
+    answer for both retires an item nothing actually revisited (the silent drop
+    this whole script exists to prevent), so each finding settles at most one
     item.
 
     Augmenting paths rather than a greedy sweep, for the reason
     `check_exit_conditions.py::_pairs_off` gives: matching is neither transitive
     nor injective, and a greedy pass can strand an item whose only match was
-    taken by one that had alternatives. Stranding is not cosmetic here — an
+    taken by one that had alternatives. Stranding is not cosmetic here: an
     item whose owners all reviewed again is dropped when it goes unpaired.
 
     At-risk items are offered first for that reason: an item whose owner was
@@ -410,8 +410,8 @@ def collect(current: dict, history: list) -> dict:
                     # Promoted, deferred, or re-raised as a blocker: it has a
                     # section of its own now.
                     continue
-                # Re-raised. Keep the newer text and location — the diff moved
-                # on — but the first sighting is what dates the item.
+                # Re-raised. Keep the newer text and location (the diff moved
+                # on), but the first sighting is what dates the item.
                 surviving.append(
                     {
                         "finding": match,
@@ -490,7 +490,7 @@ def _partition(findings: list, severity: str) -> list[dict]:
     on severity, but what Step 5 renders is the arrays, and an item that arrived
     in `nits[]` must not come back out under Suggestions because its field went
     missing in transit. out_of_scope items are dropped for the same reason the
-    history filter drops them — `deferred[]` owns that section.
+    history filter drops them: `deferred[]` owns that section.
     """
     return [{**f, "severity": severity} for f in findings if f.get("scope") != "out_of_scope"]
 
