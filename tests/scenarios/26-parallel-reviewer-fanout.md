@@ -224,8 +224,113 @@ repository's `CLAUDE.md`, its scenario records and a root `SKILL.md`; no tool
 call in the parent or a reviewer read a scenario record or retained evidence.
 The session also carried the user's ambient Claude Code configuration.
 
+## Live GitHub edit-path run in Claude Code, 2026-11-17
+
+A fresh Claude Code 2.1.322 parent ran
+`Run pr-review-loop on <PR URL> with max_iterations=5` against
+[fixture PR #42](https://github.com/pulsedemon/pr-review-loop-skill/pull/42),
+with the installed skill pinned at
+`41cbb016184e9be1f0819c94e81265a7f31a5d3f`. Witch launched the parent headless
+on `claude-opus-5-5`, with high effort and the user's ambient `auto`
+permission mode. Inputs other than `max_iterations` kept their defaults,
+including `balanced` model routing. Startup sync was disabled, and
+`CLAUDE_ENV_FILE` put the repository's Python 3.14.6 environment first on PATH.
+
+The launch used `--permission-prompts none` and `--strict-mcp-config`.
+Explicit Bash allow rules covered `safe_push.sh`, `reply_pr_comments.sh`,
+`gh pr comment`, `gh api`, `git add` and `git commit`. Disallowed tools were
+`Workflow`, `WebFetch`, `WebSearch`, PR merge/close/edit/review commands, issue
+create/comment/edit/close commands, and `git push --force` / `git push -f`.
+A separate permission probe successfully pushed an empty commit through
+`safe_push.sh` and posted through both GitHub comment commands; its two
+comments were deleted before the run. The request required stopping at a
+permission denial instead of working around it. The complete arguments and
+request are retained with the evidence.
+
+The fixture head was `122b38c58e969584b414e76174f1bb0332b5b0ff`. Its pricing
+module excluded the documented 10-unit discount boundary; its two tests
+covered quantities 5 and 11. An extra blank line in its README made the
+`markdown` check fail with MD012 while the other nine checks passed. Two
+inline threads from the PR author's account supplied a true boundary report
+and a false claim that multiplying by 90% takes 90% off.
+
+The host recorded `success` after three iterations and two repair commits:
+`559ced1` fixed the boundary and added its test; `1b6f435` removed the extra
+blank line. The final head was
+`1b6f43528a54ad98b2af3d4ecb28b39080b0c85e`. The following results use the
+rules fixed before launch. A recorded terminal status is distinct from
+passing the audit.
+
+| Rule | Result and evidence |
+| --- | --- |
+| E1. Terminal and completion gate | Passed. Three history entries, `completed_at` set, and a final no-commit entry with green CI, eleven validated panel responses, a validated adversary and no blockers. After append, fresh comments and matching local/remote heads produced `terminal_status: null`, `continue_full_panel: false`. |
+| E2. Commits | Passed. Two single-parent repair commits matched the two changing entries and formed a continuous chain from the fixture head. Both messages followed the commit template. No prohibited Git operation executed. |
+| E3. Pushes | Passed. Two successful `safe_push.sh` calls used the fixture branch and the preceding remote heads. No reviewer pushed. |
+| E4. Fix and regression | Passed. Independent checks at a unit price of 100 returned 500, 900, 900 and 990 for quantities 5, 9, 10 and 11. All three final tests passed; the new threshold test failed against the seed with 1000 instead of 900. |
+| E5. Local validation | Passed. Both repair iterations ran `run_local_validation.sh` after the last edit and before committing, exiting 0. Fixture tests are excluded from that helper's pytest run; E4 checks them separately. |
+| E6. CI | Live wait passed: the sole `ci_wait.sh` call exited 0 on the final head, with all ten checks passing. Failed-check conversion and its seeded-defect path were not exercised: iteration 2's adversary found MD012 before the first CI wait, and its finding drove the repair. |
+| E7. Inline replies | Passed. Both changing iterations recomputed dispositions, successfully called the reply helper for both roots and appended fresh receipts atomically. The no-commit iteration returned no roots. Each thread retained one owned reply and remained unresolved; the ledger recorded the boundary as addressed and the false claim as deferred. |
+| E8. Summary | Failed content accuracy. One marked summary was posted before the terminal metric and included both dispositions and the open suggestion. Its iteration-3 line nevertheless said "no findings", although the adversary had returned the suggestion listed below it. |
+| E9. Other writes | Passed for executed writes. Snapshot differences were limited to fixture heads, replies, their empty `COMMENTED` reviews and the summary. A PR-body edit was attempted and denied; the body and other metadata stayed unchanged. |
+| E10. Dispatch | Batching, selection, sweeps, adversaries and models passed. Response handling failed: the host added a missing final brace to the selected iteration-2 `tests` response before validation, without validating the original or requesting a resend. The other 39 panel/adversary responses matched their validation inputs. |
+| E11. Reviewer budget | Failed adherence. Every panel batch included the background timer, but all four timers stopped before the final validation results returned. Expiration and cancellation were not exercised. |
+| E12. Environment and isolation | Failed. All 113 environment observations named the repository's Python 3.14.6, and the install checkout was unchanged. However, one `gh pr edit` was denied, and both adversaries read snippets from earlier scenario records through repository-wide searches. |
+| E13. Host checkout | Passed. The host ended on the fixture branch at the final head with a clean working tree. |
+| E14. Metrics | Passed. Three iteration metrics matched history, followed by one `SUCCESS` terminal metric. |
+
+The receipt and timer failures depart from
+[reviewer orchestration](../../docs/reviewer-orchestration.md#completed-reviewer-responses).
+The original malformed response fails the validator; the host's repaired copy
+passes. A later full sweep supplied valid replacement receipts before the
+next edit, so the final panel evidence passes E1, but that does not establish
+correct malformed-response handling in the earlier pass. These failures are
+tracked in [#43](https://github.com/pulsedemon/pr-review-loop-skill/issues/43)
+and [#44](https://github.com/pulsedemon/pr-review-loop-skill/issues/44).
+Together with E8, they prevent an unqualified orchestration or posting
+correctness claim. The audit covers E1 through E14 and departures observed
+while reading their evidence, not exhaustive skill compliance or review quality.
+
+| Scenario 26 check | Result |
+| --- | --- |
+| 1. Reviewer batching | Passed. The initial panel, selected panel and two sweeps each launched in one message. |
+| 2. Delta-gate batching | Passed. Iteration 2 launched eight gates together; iteration 3 launched eleven together. |
+| 3. Sequential fallback | Not run; this host supports parallel launches. |
+| 4. Persona selection | Passed. Iteration 2 carried over `correctness`, `requirements` and `comments`; gates added `tests` and `yagni`, selecting five reviewers. Iteration 3 selected none. Both zero-blocker partial passes triggered eleven-persona sweeps. |
+| 5. `cost_saver` routing | Not run; the profile was `balanced`. |
+
+There were 59 child launches: 38 panel reviews, 19 gates and two adversaries.
+Each launch joined to its native transcript. Requested aliases resolved to
+`claude-sonnet-5-5`, `claude-haiku-5-5` and `claude-opus-5-5`, respectively.
+Both adversaries ran on the approval path; no forced shallow-review path ran.
+All final sweep and adversary validations passed.
+
+Budget recipe: every panel launch message also started `sleep 1800` in the
+background with `timeout: 1860000`. Each timer's `TaskStop` shared a message
+with the last validation command for that batch, before its result was known.
+No per-batch `date +%s` launch receipt was recorded. This run therefore does
+not establish independent adherence to the recipe. No timer expired.
+
+The native session lasted about 910 seconds; the loop's terminal metric
+recorded 881. Native counters total 14,279,174 tokens for the parent and
+4,744,585 for its children, including 16,871,967 cached-input tokens across
+both. Claude Code estimated USD 10.93 at API rates; billed cost was unavailable.
+These figures exclude setup, plan review and the permission probe. Raw traces,
+before/after snapshots, state, commits, independent fix checks, response
+comparisons and per-rule judgments are retained locally under ignored
+`docs/superpowers/reviews/2026-11-17-claude-live-edit-run/`.
+
+This run observes live edits, guarded pushes, inline replies, summary transport
+and a green final CI check. It does not verify failed-CI conversion, full
+orchestration or summary correctness, timeout handling, `cost_saver`, a host
+without parallel support, interactive permissions, bot comments, Sonar, or
+review quality. The target was this skill's repository, with its instructions
+and previous scenario records available to the host. The adversaries' searches
+returned prior scenario snippets, so this is not an isolated evaluation. The
+fixture PR was closed unmerged afterwards and both disposable remote branches
+were deleted. No second full host run was made.
+
 ## Validation status
 
 **Status:** `design_only`
-**Evidence:** The dated multi-iteration Codex run above establishes checks 1, 2, and 4 at its pinned revision, and the dated Claude Code dry run establishes checks 1 and 4 for that host at its pin; earlier partial observations remain recorded above.
-**Missing evidence:** Dated host runs covering conditional fallback (check 3), `cost_saver` model routing (check 5), independent adherence to the reviewer-budget recipe, and reviewer-budget expiration and cancellation.
+**Evidence:** The dated multi-iteration Codex run and Claude Code edit-path run above establish checks 1, 2, and 4 at their pinned revisions; the Claude dry run establishes checks 1 and 4 at its pin. The edit-path record separately reports its receipt, budget, summary and isolation failures.
+**Missing evidence:** Dated host runs covering conditional fallback (check 3), `cost_saver` model routing (check 5), independent adherence to the reviewer-budget recipe, and reviewer-budget expiration and cancellation. The Claude live edit-path run also leaves failed-CI conversion and correct handling of original malformed responses unverified.
