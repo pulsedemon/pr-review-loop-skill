@@ -5,7 +5,7 @@ All review checks pass. <CI is green. | No CI checks were found on this PR.>
 
 **Reviewed across <N> iteration(s):**
 
-- Iteration 1: <concise summary of findings + what was addressed>
+- Iteration 1: <blockers found and how each was addressed; other findings by severity>
 - Iteration 2: <...>
 
 **Suggestions (in scope, not blocking):**

@@ -67,7 +67,25 @@ load test_helper
 @test "step5 routing covers the all-skipped CI case, not just no-checks" {
   # ci_wait.sh exits 0 when every check concluded as `skip`, recording
   # ci_status "success". Routing on that alone renders "CI is green." for
-  # checks that never ran — the same false claim the exit-4 rule removes.
+  # checks that never ran, the same false claim the exit-4 rule removes.
   grep -qF 'only skipped' "${REPO_ROOT}/docs/step5-summary.md"
   grep -qF 'last_ci_status.json' "${REPO_ROOT}/docs/step5-summary.md"
+}
+
+@test "iteration summary lines read each iteration's merged result from history" {
+  # an approval entry recorded as `findings: []`, or a bullet with no source rule,
+  # let a host print "no findings" over an open adversary suggestion.
+  grep -qF 'Record this iteration'"'"'s merged `findings` and `deferred` as on other paths' "${REPO_ROOT}/SKILL.md"
+  grep -qF 'Each iteration bullet describes that iteration'"'"'s merged review result from its `history[]` entry' \
+    "${REPO_ROOT}/docs/step5-summary.md"
+  grep -qF 'including out-of-scope findings whatever their severity' "${REPO_ROOT}/docs/step5-summary.md"
+  grep -qF 'Count an in-scope finding as a blocker when its severity is `blocker` or `addressed[]` holds its promotion record' \
+    "${REPO_ROOT}/docs/step5-summary.md"
+  grep -qF 'State the blocker count separately from the other findings' "${REPO_ROOT}/docs/step5-summary.md"
+  grep -qF 'say it had no blockers and that its non-blocking result was not recorded.' \
+    "${REPO_ROOT}/docs/step5-summary.md"
+  grep -qF 'Write "no findings" only when the iteration'"'"'s complete result is known to be empty.' \
+    "${REPO_ROOT}/docs/step5-summary.md"
+  grep -qF '<blockers found and how each was addressed; other findings by severity>' \
+    "${REPO_ROOT}/templates/summary_ready.md"
 }

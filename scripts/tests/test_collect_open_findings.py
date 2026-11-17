@@ -173,7 +173,7 @@ def test_evidence_verification_failure_stays_in_deferred():
 def test_a_re_raise_settles_one_item_not_every_item_it_matches():
     # The ±5 window is not an equivalence relation: X at 10 and Y at 20 do not
     # match each other, but Z at 15 matches both. Letting Z answer for both
-    # retires an item nothing revisited — the silent drop this script exists to
+    # retires an item nothing revisited, the silent drop this script exists to
     # prevent. Same hazard check_exit_conditions.py::_pairs_off documents.
     same = "the tenant id is missing from the cache key"
     history = [
@@ -246,10 +246,10 @@ def test_an_adversary_re_run_that_drops_it_resolves_it():
 
 
 def test_success_path_entry_folds_in_this_iterations_partitions():
-    # §4d.1 appends `findings: []` for the approving iteration, so history alone
-    # reads as "the full panel ran and re-raised nothing". Folding the stdin
-    # partitions onto that entry — rather than treating them as a later round —
-    # is what keeps a re-raised item dated to its first sighting.
+    # Older state records the §4d.1 approving entry with `findings: []`, so history
+    # alone reads as "the full panel ran and re-raised nothing". Folding the stdin
+    # partitions onto that entry, rather than treating them as a later round, is
+    # what keeps a re-raised item dated to its first sighting.
     f = finding(severity="nit")
     history = [
         entry(1, findings=[f], ran=["tests"]),
@@ -263,7 +263,7 @@ def test_success_path_entry_folds_in_this_iterations_partitions():
 
 def test_folding_never_erases_what_this_iteration_already_persisted():
     # A caller that passes empty partitions for an iteration §4i already wrote
-    # must not lose that iteration's findings — replacement rather than union
+    # must not lose that iteration's findings: replacement rather than union
     # would drop them, which is the same silent loss from the other direction.
     f = finding()
     history = [entry(2, findings=[f], ran=["tests"])]
@@ -474,7 +474,7 @@ def test_well_formed_defaults_to_requiring_an_owner():
 def test_a_synthesized_finding_is_owned_by_its_source_reviewers():
     # reviewers/output.schema.json puts `reviewer` at the response level with
     # additionalProperties:false on each finding, so a finding coming out of
-    # promote_findings.py has no `reviewer` at all — only source_reviewers.
+    # promote_findings.py has no `reviewer` at all, only source_reviewers.
     f = {
         "source_reviewers": ["tests"],
         "severity": "suggestion",
@@ -728,7 +728,7 @@ def test_the_fold_de_duplicates_injectively():
 def test_pairing_finds_a_maximum_matching_not_a_greedy_one():
     # item_a matches only shared; item_b matches shared and its own. A greedy
     # pass that gives `shared` to item_b strands item_a, whose owners all
-    # reviewed again — so it would be dropped despite having been re-raised.
+    # reviewed again, so it would be dropped despite having been re-raised.
     a = finding("tests", line=10, summary="the tenant id is missing from the cache key")
     b = finding("tests", line=20, summary="the tenant id is missing from the cache key")
     shared = finding("tests", line=15, summary="the tenant id is missing from the cache key")
