@@ -162,8 +162,8 @@ scenarios:
     file: 25-persona-recall-sharpening.md
     title: Persona recall sharpening
     tier: design_only
-    reason: See the scenario validation status for the remaining clean-approval
-      evidence.
+    reason: Checks 2 and 3 have been observed only on stand-in fixtures; see the
+      scenario validation status.
   - number: 26
     file: 26-parallel-reviewer-fanout.md
     title: Parallel reviewer fan-out stays batched
