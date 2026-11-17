@@ -6,7 +6,7 @@
 
 Build isolated PR fixtures for the checks below. They exercise schema enforcement, silent validation failures, and documentation drift without requiring private repositories, historical commits, or a labeled corpus. Keep unrelated preconditions valid so each intended defect determines the result.
 
-Use the current persona prompts and record their revisions. These fixtures describe expected behavior; they are not a recorded validation pass or a shipping quota.
+Use the current persona prompts and record their revisions. The checks describe expected behavior, not a shipping quota; the dated sections below record the runs.
 
 ## Replay caveat
 
@@ -16,7 +16,7 @@ A merged revision can already contain the fix for a previously reported defect. 
 
 1. **Schema enforcement.** Construct `templates/state.schema.json` with prose declaring that `addressed[]` and `deferred[]` entries require `pr` and `cause`, but omit the corresponding item schemas and required fields. Retain a production caller that validates data with the schema, and demonstrate that an entry missing those fields is accepted. Run `type_design` against the diff. Expect a finding quoting both the declared constraint and the missing enforcement. Removing the prose as well would remove the contradiction this check needs.
 
-2. **Silent validation failure.** Construct `scripts/run_local_validation.sh` with a detected stack whose package manager is unavailable and whose missing-tool path returns success. Keep the package manifest valid and all unrelated tools available. Run `blind_spots` against the diff. Expect a category (b2) finding citing the path that reports success although validation did not run.
+2. **Silent validation failure.** Construct `scripts/run_local_validation.sh` with a detected stack whose package manager is unavailable and whose missing-tool path returns success. Keep the package manifest valid and all unrelated tools available. Run `blind_spots` against the diff. Expect a finding citing the path that reports success although validation did not run, which is the persona's category (b2); the response need not print the label.
 
 3. **Documented buckets ignored.** Construct `tools/recall-harness/report.py` without handling the unanchored buckets while retaining their protocol in `tools/recall-harness/label.md`. Include nonempty unanchored input so the omission changes the result. Run `comments` or `readability` against both changed files. Expect a Move C finding identifying the protocol and the omitted processing.
 
@@ -527,15 +527,15 @@ reviewer's output.
 | 6 | Observed checks 6 and 7, 2026-11-16 | `cacdb03` | Case 07 |
 | 7 | Observed checks 6 and 7, 2026-11-16 | `cacdb03` | Case 08 |
 
-Checks 2 and 3 have not run on the constructions they name. Check 2 specifies
+Checks 2 and 3 had not run on the constructions they name at this pin. Check 2 specifies
 `scripts/run_local_validation.sh` with a detected stack whose package manager
 is unavailable; case 03's `scripts/validate.sh` has a missing-tool branch that
 checks for Ruff. The retained `blind_spots` response cites that branch's exit 0
 without printing the (b2) label, and the output schema has no field for it.
 Check 3 specifies `tools/recall-harness/report.py` and `label.md`; case 05 uses
 its own `report.py` and `docs/label.md`. Check 6 was held to its literal
-wording until it was amended, and the same standard keeps this scenario at
-`design_only`.
+wording until it was amended, and the same standard kept this scenario at
+`design_only` at that pin.
 
 This is one pass on one synthetic fixture, with one reviewer model, effort, and
 runtime. Case 06 is not held out: it was repaired in response to the same
@@ -547,8 +547,135 @@ unchanged. Plan, plan reviews, prompts, raw responses, native traces, audit
 output, and helper scripts are retained under ignored
 `docs/superpowers/reviews/2026-11-16-scenario-25-check-5/`.
 
+## Observed checks 2 and 3, 2026-11-16
+
+Fixtures and persona prompts were pinned at
+`23534bcc7b89771aea5a7afd7d35535a54c88e94`. The personas and
+`docs/procedure-moves.md` are byte-identical to the pins of Checks 1, 5, 6,
+and 7. Check 2 ran `blind_spots` on
+[case 09](../fixtures/reviewer-quality/case-09/README.md) and Check 3 ran
+`readability` on [case 10](../fixtures/reviewer-quality/case-10/README.md), one
+session each. Both checks are met: Check 3 as written, and Check 2 under an
+expectation amended after the run.
+
+Case 09 holds `scripts/run_local_validation.sh`, a valid `package.json` whose
+`test` script is `node --test`, and one tested function. The script detects a
+Node stack from `package.json`; when `npm` is not on `PATH` it prints
+`# skip: npm not on PATH` and exits 0, where its README requires exit 1. Case 10
+holds `tools/recall-harness/label.md`, whose protocol requires one output line
+for each `loop_unmatched`, `unanchored_external`, and `unanchored_loop` entry,
+and `tools/recall-harness/report.py`, which renders `loop_unmatched` only. Its
+`checks.py` supplies one entry of each bucket. These are the paths and
+behaviors the two checks name, built as isolated fixtures as the Setup directs.
+This repository's own script and report do not have either defect.
+
+Case 10 holds no file that Move C counts as a spec. Move C applies when a diff
+touches a doc and a spec (`SKILL.md`, `templates/`, `reviewers/`, or
+`CLAUDE.md`), so its documented trigger does not cover the construction Check 3
+names. [Issue #32](https://github.com/pulsedemon/pr-review-loop-skill/issues/32)
+tracks that mismatch and was filed before either session ran.
+
+Before dispatch, on an export of the pin, both fixtures failed their own
+checks at the seed on Python 3.14.6 and on the reviewers' default 3.11.4: case
+09 at `assert missing.returncode == 1`, case 10 at its expected-output
+assertion. With an empty `PATH`, case 09's script exited 0 with the skip line;
+with `npm` available it ran `node --test` and exited 0 with one passing test.
+Case 10's command printed only the `loop_unmatched` line for one entry of each
+bucket. Both cases passed `ruff check` and `ruff format --check` on 0.15.13 and
+0.16.0, and the script passed ShellCheck at warning severity. Copies with the
+two-line script fix and the one-line renderer fix passed their checks.
+
+A Claude Code parent launched both reviewers together through Witch as Codex
+`gpt-6.1-sol` sessions at high effort (Codex CLI 0.162.1): read-only sandbox,
+approval policy `never`, with MCP servers, apps, and plugins off. Each session
+had its own packet: a repository holding an empty base commit and one head
+commit adding its case, beside a skill export. The export held only that
+session's persona prompt, the two addenda, `reviewers/output.schema.json`, and
+`docs/procedure-moves.md`. The full export carries this repository's own
+`scripts/run_local_validation.sh`, which fails closed, at the path of case 09's
+seed. Both sessions received the rerun's prompt template unchanged. Outcome
+rules and audit failure conditions were fixed in a reviewed plan before
+dispatch. One preflight session on the same settings had its write refused.
+
+| Check | Finding | Deciding text | Result |
+| --- | --- | --- | --- |
+| 2, `blind_spots` | blocker on `scripts/run_local_validation.sh:12` | "when package.json exists but npm is absent from PATH, this branch exits 0 without executing any checks" | Failed the literal expectation in force at the run, which asked for a category (b2) finding; passes the amended one |
+| 3, `readability` | blocker on `tools/recall-harness/label.md:4`, evidence at `tools/recall-harness/report.py:7` | "Move C contract drift: label.md:3-5 requires output for loop_unmatched, unanchored_external, and unanchored_loop ... but report.py:7 accepts only loop_unmatched" | Pass |
+
+Each session returned one finding, on the seeded defect, and its response
+passed `validate_reviewer_output.py` without replacement. Both findings were
+reproduced against the pinned code. No launch failed or timed out.
+
+The `blind_spots` finding names no category. It describes the shape the
+persona defines as (b2), success although validation could not run, and it
+calls the path neither (b1) nor anything else. When the session ran, Check 2
+expected "a category (b2) finding". The expectation was amended afterwards to
+define the finding by that behavior and to say the label need not be printed:
+`reviewers/blind_spots.md` defines (b2) by its distinguishing test without
+telling the reviewer to print the category, and
+`reviewers/output.schema.json` has no field for one. The plan fixed this
+amendment and its trigger before dispatch, and its wording comes from the
+persona, not from the response. The pass-criterion bullet for Check 2 already
+asked only for the cited success result and is unchanged.
+
+The `readability` finding attributes itself to Move C although case 10 holds
+no spec file. The `blind_spots` session, on a README and a script, recorded in
+its notes that "move C was not triggered because no spec file changed". The
+two sessions read the same trigger differently, as `readability` and `comments`
+did on case 05 in the rerun. Check 3 passes as worded; issue #32 owns whether
+that wording and the trigger should agree.
+
+| Measure | `blind_spots` | `readability` | Both |
+| --- | --- | --- | --- |
+| Session seconds | 48.4 | 60.6 | 109.0 summed; 60.7 elapsed |
+| Total tokens | 98,119 | 173,038 | 271,157 |
+| Input, of which cached | 96,422, of which 80,128 | 170,836, of which 143,744 | 267,258, of which 223,872 |
+| Output, of which reasoning | 1,697, of which 352 | 2,202, of which 317 | 3,899, of which 669 |
+
+Times come from native session timestamps. Monetary cost is unavailable. The
+preflight used 36,145 tokens and is not a reviewer invocation.
+
+The access audit passed. Every turn showed the launched model, effort, sandbox,
+and approval policy. Neither session spawned another, raised an approval flow,
+used the network, or ran a command that read outside its own packet. The
+`blind_spots` session ran the script with `PATH=/nonexistent` and ran
+`node --test`; it did not run `checks.py`, which needs a temporary directory
+the sandbox refuses. The `readability` session ran `python -B checks.py`, saw it
+fail, and probed the report command with its own inputs; one heredoc probe was
+refused by the sandbox and rerun inline. Both repositories stayed clean and
+every frozen packet, prompt, helper, and validator hash matched after the run.
+The parent read every command; output lines that were not lines of a file in
+the session's packet were read in full, and the rest were matched to those
+files by program. Each session also received the host's global Codex
+instructions and skill list, which carried no case table, scenario text,
+expected answer, or other reviewer's output.
+
+| Check | Recorded in | Pin | Input | Result |
+| --- | --- | --- | --- | --- |
+| 1 | Observed rerun, 2026-11-16 | `e71cbdd` | Case 01 | Pass: the full arm's `type_design` blocker on `templates/state.schema.json:12` quotes "Each entry requires string pr and cause fields." beside item definitions holding only an object type |
+| 2 | This section | `23534bc` | Case 09 | Pass under the amended expectation |
+| 3 | This section | `23534bc` | Case 10 | Pass |
+| 4 | `tests/bats/validate_reviewer_output.bats` | current | Automated | Pass |
+| 5 | Observed check 5, 2026-11-16 | `9e63f9d` | Case 06 | Pass |
+| 6 | Observed checks 6 and 7, 2026-11-16 | `cacdb03` | Case 07 | Pass; the Claude cell under the amended criterion |
+| 7 | Observed checks 6 and 7, 2026-11-16 | `cacdb03` | Case 08 | Pass |
+
+This is one pass per check on synthetic fixtures, with one reviewer model,
+effort, and runtime; no Claude session ran. The dispatching parent wrote the
+fixtures and judged the results knowing the expected answers. Each fixture's
+own check fails at its seed, so a reviewer that runs it sees the failure;
+`readability` did. `readability` was chosen for Check 3 because its stand-in
+result was the one being replaced, and it was already known to find that seed;
+`comments`, which Check 3 also allows, was not run. Check 2's amended
+expectation has no run independent of the one that prompted it. Check 3's pass
+rests on a Move C attribution that Move C's documented trigger does not
+support. Plan, plan reviews, prompts, raw responses, native traces, audit
+output, and helper scripts are retained under ignored
+`docs/superpowers/reviews/2026-11-16-scenario-25-checks-2-3/`.
+
+_Validated with Codex `gpt-6.1-sol`, high effort, on 2026-11-16, across the pins in the table above: PASS._
+
 ## Validation status
 
-**Status:** `design_only`
-**Evidence:** The dated observations above retain both incomplete comparison attempts, the completed six-pair rerun with blinded judgments, native usage, and limits, single-pass runs of Checks 6 and 7 on both runtimes, and a clean default-panel pass on case 06 for Check 5.
-**Missing evidence:** Checks 2 and 3 have been observed only on stand-in fixtures (cases 03 and 05), not on the constructions those checks name.
+**Status:** `manual_validated`
+**Evidence:** The dated observations above retain both incomplete comparison attempts, the completed six-pair rerun with blinded judgments, native usage, and limits, single-pass runs of Checks 6 and 7 on both runtimes, a clean default-panel pass on case 06 for Check 5, and single-pass runs of Checks 2 and 3 on the constructions they name. Check 3's pass depends on a Move C attribution outside Move C's documented trigger ([issue #32](https://github.com/pulsedemon/pr-review-loop-skill/issues/32)).

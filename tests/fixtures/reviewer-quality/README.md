@@ -14,9 +14,11 @@ seeded defects when changing the surrounding tooling.
 | case-06 | All required output buckets are rendered | No finding for that defect |
 | case-07 | Required item fields are not enforced; only tests consume the schema | Suggestion: validator unused in production |
 | case-08 | A missing record array raises an uncaught error | (b1) loud failure, not (b2) silent success |
+| case-09 | A missing package manager reports success | (b2) silent success, not (b1) loud failure |
+| case-10 | Unanchored buckets are omitted from the report | Finding on the labeling protocol and the omitted processing |
 
 The evaluation procedure is [Scenario 25](../../scenarios/25-persona-recall-sharpening.md).
-Cases 01 to 06 are its defective/corrected pairs; cases 07 and 08 are single-case
-inputs for its checks 6 and 7.
+Cases 01 to 06 are its defective/corrected pairs; cases 07 to 10 are single-case
+inputs for its checks 6, 7, 2 and 3.
 Give reviewers only one case's contents, its Git diff, and the reviewer contract.
 Keep this case table and the paired variant outside their context.

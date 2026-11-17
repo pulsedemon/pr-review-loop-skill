@@ -105,7 +105,7 @@ To run a manual scenario by hand:
 | 22 | `tests/scenarios/22-skill-split-anchors.md` | SKILL split docs anchors and drift guard | `ci_trusted` |
 | 23 | `tests/scenarios/23-blind-spots-persona.md` | Blind-spots persona | `design_only` |
 | 24 | `tests/scenarios/24-adversary-full-default.md` | full adversary context and required review completion | `manual_validated` |
-| 25 | `tests/scenarios/25-persona-recall-sharpening.md` | Persona recall sharpening | `design_only` |
+| 25 | `tests/scenarios/25-persona-recall-sharpening.md` | Persona recall sharpening | `manual_validated` |
 | 26 | `tests/scenarios/26-parallel-reviewer-fanout.md` | Parallel reviewer fan-out stays batched | `design_only` |
 | 27 | `tests/scenarios/27-comment-reply-disposition.md` | Inline-comment disposition + reply + SUCCESS gate | `manual_validated` |
 | 28 | `tests/scenarios/28-reviewer-working-tree.md` | Reviewers do not mutate the shared working tree | `design_only` |
