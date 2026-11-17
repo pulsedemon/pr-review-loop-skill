@@ -16,7 +16,7 @@
 #   5: origin remote does not match <owner>/<repo>
 #   6: working tree is dirty
 #   7: gh CLI missing or older than 2.50.0 (required for `gh pr checks --json`)
-#   8 invalid state or state for a different pr
+#   8 invalid state, or unfinished state for a different pr
 #   12 EXTERNAL_PUSH on unsafe resume
 #   13 MAX_ITERATIONS on exhausted resume
 #   14 SCOPE_SPLIT_RECOMMENDED on recorded scope abort
@@ -81,15 +81,15 @@ fi
 STATE_FILE="$(git rev-parse --git-dir)/pr-loop/state.json"
 RESUMING=false
 if [[ -f "$STATE_FILE" ]]; then
-  if ! jq -e --arg owner "$OWNER" --arg repo "$REPO" --arg pr "$PR" '
-    type == "object" and .owner == $owner and .repo == $repo
-    and (.pr_number | tostring) == $pr
-  ' "$STATE_FILE" >/dev/null; then
-    echo "error: invalid state or state belongs to a different pr: $STATE_FILE" >&2
-    exit 8
-  fi
   COMPLETED=$(python3 "${HERE}/pr_loop_state.py" completion-marker --state "$STATE_FILE") || exit 8
+  # a completed loop's state blocks nothing, whichever pr it was for: state_init.sh replaces it.
   if [[ "$COMPLETED" == false ]]; then
+    if ! jq -e --arg owner "$OWNER" --arg repo "$REPO" --arg pr "$PR" '
+      .owner == $owner and .repo == $repo and (.pr_number | tostring) == $pr
+    ' "$STATE_FILE" >/dev/null; then
+      echo "error: invalid state, or an unfinished loop for a different pr: $STATE_FILE" >&2
+      exit 8
+    fi
     if ! jq -e '.head_branch | type == "string" and length > 0' "$STATE_FILE" >/dev/null; then
       echo "error: state has no recorded head branch" >&2
       exit 8

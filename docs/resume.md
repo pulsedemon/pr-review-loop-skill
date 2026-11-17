@@ -33,8 +33,9 @@ resume. malformed state exits 2 and maps to `SETUP_ERROR`.
   iteration budget returns `MAX_ITERATIONS` before another review.
 
 checkout safety runs before scope and budget decisions. completed state is
-reinitialized by `state_init.sh`; state for another pr refuses setup. an unfinished
-scope decision still follows [the scope rules](pr-scope.md).
+reinitialized by `state_init.sh`, whichever pr it was for; unfinished state for
+another pr refuses setup. an unfinished scope decision still follows
+[the scope rules](pr-scope.md).
 
 ## interrupted work
 

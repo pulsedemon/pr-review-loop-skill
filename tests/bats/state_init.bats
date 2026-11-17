@@ -95,12 +95,30 @@ JSON'
   [[ -f .git/pr-loop/pr-scope.json ]]
 }
 
-@test "refuses to overwrite different PR" {
+@test "refuses to overwrite an unfinished loop for a different PR" {
   run bash "${SCRIPTS}/state_init.sh" o r 42
   [[ "$status" -eq 0 ]]
   run bash "${SCRIPTS}/state_init.sh" o r 99
   [[ "$status" -eq 5 ]]
-  [[ "$output" == *"different PR"* ]]
+  [[ "$output" == *"unfinished loop for a different PR (#42)"* ]]
+  [[ "$(jq -r .pr_number .git/pr-loop/state.json)" == "42" ]]
+}
+
+@test "a completed loop's state for a different PR is replaced" {
+  run bash "${SCRIPTS}/state_init.sh" o r 42
+  [[ "$status" -eq 0 ]]
+  local state=".git/pr-loop/state.json"
+  jq '.status = "success" | .iteration = 3 | .completed_at = "2026-09-10T17:00:00Z"' "$state" > "$state.tmp" && mv "$state.tmp" "$state"
+  echo '{}' > .git/pr-loop/pr-scope.json
+  stub_cmd gh 'cat <<JSON
+{"number":99,"title":"Other","url":"https://github.com/o/r/pull/99","headRefName":"other","baseRefName":"main","headRefOid":"cafef00d","body":"","isDraft":false}
+JSON'
+  run bash "${SCRIPTS}/state_init.sh" o r 99
+  [[ "$status" -eq 0 ]]
+  [[ "$output" == *"PR #42 completed"* ]]
+  jq -e '.pr_number == 99 and .head_branch == "other" and .status == "running" and .iteration == 0
+    and (has("completed_at") | not)' "$state"
+  [[ ! -f .git/pr-loop/pr-scope.json ]]
 }
 
 @test "usage error exits 2" {

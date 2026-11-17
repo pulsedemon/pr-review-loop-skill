@@ -119,7 +119,7 @@ Operates in-place in the user's current checkout. Run `bash "$SKILL_ROOT/scripts
 bash "$SKILL_ROOT/scripts/state_init.sh" <owner> <repo> <pr_number> <max_iterations> <dry_run>
 ```
 
-Creates `<git-dir>/pr-loop/state.json`, never tracked, following `templates/state.schema.json`. If the script reports state already exists for this PR, resume: Step 3.5 applies its resume rules first (a recorded abort re-emits `SCOPE_SPLIT_RECOMMENDED` → Step 5), then Step 3.6 dispatches; the automation contract allows no reset prompt. A same-PR file whose loop already finished Step 5 (`completed_at` set) is reinitialized by the script, never resumed. If it exists for a different PR, refuse. `<git-dir>` is the output of `git rev-parse --git-dir`: `.git` in an ordinary clone, an absolute path such as `/repo/.git/worktrees/<name>` in a linked worktree. On a fresh run, persist explicit promotion overrides before synthesis; on resume, use recorded values.
+Creates `<git-dir>/pr-loop/state.json`, never tracked, following `templates/state.schema.json`. If the script reports state already exists for this PR, resume: Step 3.5 applies its resume rules first (a recorded abort re-emits `SCOPE_SPLIT_RECOMMENDED` → Step 5), then Step 3.6 dispatches; the automation contract allows no reset prompt. A file whose loop already finished Step 5 (`completed_at` set) is reinitialized by the script for any PR, never resumed. If an unfinished one exists for a different PR, refuse. `<git-dir>` is the output of `git rev-parse --git-dir`: `.git` in an ordinary clone, an absolute path such as `/repo/.git/worktrees/<name>` in a linked worktree. On a fresh run, persist explicit promotion overrides before synthesis; on resume, use recorded values.
 
 ### Step 3.5: PR-scope check (optional)
 
