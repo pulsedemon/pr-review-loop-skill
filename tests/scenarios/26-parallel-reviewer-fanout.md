@@ -290,6 +290,21 @@ Together with E8, they prevent an unqualified orchestration or posting
 correctness claim. The audit covers E1 through E14 and departures observed
 while reading their evidence, not exhaustive skill compliance or review quality.
 
+Follow-up, 2026-11-17: bounded Claude Code checks (`claude-opus-5-5`, Claude
+Code 2.1.322) replayed iteration 3's recorded state, empty panel result and
+merged partitions without a live loop. At `3e4b146` the Step 5 replay wrote
+`iteration 3: a full review found nothing blocking.`, omitting the open
+suggestion, and its iteration-2 line omitted that iteration's suggestion too.
+At `e16e794`, which records the approving iteration's merged findings and
+sources each line from history, a Step 5 replay on the recorded state and a run
+that started at §4i both wrote that iteration 3 had no blockers and one
+suggestion, and named iteration 2's suggestion. The §4i run recorded the
+suggestion in `history[2].findings`, and its state validated against the schema.
+Each run is one sample. Posting, replies, the terminal metric and an older-state
+approval entry before the final iteration were not exercised. Evidence is
+retained locally under ignored
+`docs/superpowers/reviews/2026-11-17-step5-iteration-lines/`.
+
 | Scenario 26 check | Result |
 | --- | --- |
 | 1. Reviewer batching | Passed. The initial panel, selected panel and two sweeps each launched in one message. |
@@ -332,5 +347,5 @@ were deleted. No second full host run was made.
 ## Validation status
 
 **Status:** `design_only`
-**Evidence:** The dated multi-iteration Codex run and Claude Code edit-path run above establish checks 1, 2, and 4 at their pinned revisions; the Claude dry run establishes checks 1 and 4 at its pin. The edit-path record separately reports its receipt, budget, summary and isolation failures.
+**Evidence:** The dated multi-iteration Codex run and Claude Code edit-path run above establish checks 1, 2, and 4 at their pinned revisions; the Claude dry run establishes checks 1 and 4 at its pin. The edit-path record separately reports its receipt, budget, summary and isolation failures; its follow-up Step 5 replay shows the summary failure fixed at `e16e794`.
 **Missing evidence:** Dated host runs covering conditional fallback (check 3), `cost_saver` model routing (check 5), independent adherence to the reviewer-budget recipe, and reviewer-budget expiration and cancellation. The Claude live edit-path run also leaves failed-CI conversion and correct handling of original malformed responses unverified.
