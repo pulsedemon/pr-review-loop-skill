@@ -7,3 +7,11 @@ def test_small_order_pays_full_price():
 
 def test_large_order_gets_discount():
     assert bulk_discount(11, 100) == 990
+
+
+def test_threshold_order_gets_discount():
+    assert bulk_discount(10, 100) == 900
+
+
+def test_order_below_threshold_pays_full_price():
+    assert bulk_discount(9, 100) == 900
