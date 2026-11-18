@@ -220,6 +220,13 @@ canonical_dir() {
   (cd "$1" && pwd -P)
 }
 
+# True when $1 is this checkout itself, not a link to it. A clone living at a
+# host's skill path is already the install: Cursor's legacy inode check would
+# match its SKILL.md against itself and rm -rf the checkout.
+target_is_source() {
+  [[ ! -L "$1" && -d "$1" ]] && [[ "$(canonical_dir "$1")" == "$SOURCE_DIR" ]]
+}
+
 symlink_points_to_source() {
   local link_path="$1"
   local current resolved
@@ -408,6 +415,11 @@ cursor_install_one() {
   local parent install_mode refresh=0
   parent="$(dirname "$CURSOR_TARGET")"
 
+  if target_is_source "$CURSOR_TARGET"; then
+    echo "skipped (target is this source checkout): $CURSOR_TARGET (Cursor)"
+    return
+  fi
+
   if ((UNINSTALL)); then
     if [[ -L "$CURSOR_TARGET" ]]; then
       local current
@@ -495,6 +507,11 @@ link_one() {
   local label="$2"
   local parent
   parent="$(dirname "$target")"
+
+  if target_is_source "$target"; then
+    echo "skipped (target is this source checkout): $target ($label)"
+    return
+  fi
 
   if ((UNINSTALL)); then
     if [[ -L "$target" ]]; then
