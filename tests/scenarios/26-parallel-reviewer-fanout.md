@@ -402,8 +402,55 @@ Traces, validator logs, state, judge output and the harness are retained
 locally under ignored
 `docs/superpowers/reviews/2026-11-17-claude-reviewer-handling/`.
 
+## Timer stop after validation in Claude Code, 2026-11-17
+
+A bounded host check for
+[issue #44](https://github.com/pulsedemon/pr-review-loop-skill/issues/44)'s
+remaining failure, at `72f6a8f`. That commit adds one sentence to the Claude
+Code budget recipe: a response is validated only once its validation call's
+result is back, so `TaskStop` the timer in a later message than the last
+`validate_reviewer_output.py` call. The setup is the reviewer-response record's
+above, with Claude Code 2.1.322, the parent on `claude-opus-5-5` and reviewers
+on `sonnet` under the default routing, plus two variants:
+
+- Run D, `correctness` and `tests`: `tests` replies malformed to every message,
+  so after one resend the parent records an error and the timer stop follows a
+  failed validation.
+- Run B2, `correctness` and `security`: once the timer has finished,
+  `security` keeps running for another 300 s, so the parent has to stop a
+  reviewer that is still running.
+
+A batch counts as having `TaskStop` loaded when the `ToolSearch` result that
+made it callable sits at an earlier transcript line than the batch's terminal
+validation call. A load alongside or after that call does not count. This is
+stricter than the count in the reviewer-response record.
+
+Runs A1, D1, C1, C2, C3, B1 and B2 ran in parallel. B1's parent decoded
+`review-tool`'s source before the timer expired, so B1 was discarded and
+repeated once as B1r.
+
+| Rule | Result at `72f6a8f` |
+| --- | --- |
+| Foreground `date +%s` launch receipt per batch (all runs) | Passed in every batch |
+| Timer stopped in a later message than, and after the result of, the last validation call (A1, D1, C1-C3) | Passed in 8 of 8 batches, 6 of them with `TaskStop` loaded, across 5 sessions |
+| Stop after an error: original malformed bytes rejected, malformed resend rejected, `tests` recorded as an error, `REVIEW_INCOMPLETE` (D1) | Passed |
+| Original malformed bytes validated and rejected, recovery through a validated resend (A1) | Passed |
+| Forced full sweep with receipts for both personas (C1-C3) | Passed |
+| Expiry with a late reply: `security` recorded as `timed out`, late reply reached the parent and was discarded unvalidated, `REVIEW_INCOMPLETE` with no success summary (B1r) | Passed |
+| Expiry with a running reviewer: after expiry the parent `TaskStop`ped `security`, the stop reported success, no `security` reply arrived, `timed out` recorded, `REVIEW_INCOMPLETE` (B2) | Passed |
+| No edits, commits or writes outside the run (all) | Passed |
+
+This record establishes the timer stop after the last validation result, the
+stop after a recorded error, and stopping a running reviewer at expiry, in
+Claude Code 2.1.322 with stub reviewers. There is no same-period baseline: the
+failure rate it replaces comes from the reviewer-response record's runs at
+`e37d8e2`. It does not establish the behavior with real reviewers, through a
+host's own delta-gate pass, or with the adversary. Traces, validator logs,
+state, judge output and the harness are retained locally under ignored
+`docs/superpowers/reviews/2026-11-17-claude-timer-stop/`.
+
 ## Validation status
 
 **Status:** `design_only`
-**Evidence:** The dated multi-iteration Codex run and Claude Code edit-path run above establish checks 1, 2, and 4 at their pinned revisions; the Claude dry run establishes checks 1 and 4 at its pin. The edit-path record separately reports its receipt, budget, summary and isolation failures; its follow-up Step 5 replay shows the summary failure fixed at `e16e794`. The reviewer-response record establishes original-byte validation, resend, per-batch launch receipts and budget expiration with late-output discard at `e37d8e2`, with stub reviewers.
-**Missing evidence:** Dated host runs covering conditional fallback (check 3), `cost_saver` model routing (check 5), and a Claude Code timer stop that waits for the last validation result in every batch (the reviewer-response record failed it). The Claude live edit-path run also leaves failed-CI conversion unverified.
+**Evidence:** The dated multi-iteration Codex run and Claude Code edit-path run above establish checks 1, 2, and 4 at their pinned revisions; the Claude dry run establishes checks 1 and 4 at its pin. The edit-path record separately reports its receipt, budget, summary and isolation failures; its follow-up Step 5 replay shows the summary failure fixed at `e16e794`. The reviewer-response record establishes original-byte validation, resend, per-batch launch receipts and budget expiration with late-output discard at `e37d8e2`, with stub reviewers. The timer-stop record establishes a timer stop after the last validation result in every judged A, C and D batch (8 batches, 6 with `TaskStop` loaded before the terminal validation), and a still-running reviewer stopped at expiry, at `72f6a8f`, with stub reviewers, Claude Code 2.1.322.
+**Missing evidence:** Dated host runs covering conditional fallback (check 3) and `cost_saver` model routing (check 5). The Claude live edit-path run also leaves failed-CI conversion unverified.
