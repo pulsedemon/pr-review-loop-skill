@@ -49,10 +49,13 @@ while :; do
   # single argument.
   BATCH=$(jq -c --arg p "${PROJECT_KEY}:" '
     [.issues[] | . + {component: (.component | sub("^" + $p; ""))}]
-  ' <<<"$RESP")
+  ' <<<"$RESP") || {
+    echo "ERROR: unreadable 'sonar list issues' response for project=$PROJECT_KEY pr=$PR page=$PAGE" >&2
+    exit 5
+  }
   BATCHES+="${BATCH}"$'\n'
 
-  sonar_has_next_page "$RESP" || break
+  sonar_has_next_page "$RESP" "$PAGE" || break
   PAGE=$((PAGE + 1))
 done
 

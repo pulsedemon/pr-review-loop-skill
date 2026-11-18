@@ -12,9 +12,9 @@
 #   2 — sonar CLI missing
 #   3 — sonar not authenticated
 #   4 — project key could not be determined
-#   5 — a list response has no usable paging
+#   5 — `sonar list projects` failed, or a list response has no usable paging
 #
-# Also defines sonar_has_next_page <response-json>.
+# Also defines sonar_has_next_page <response-json> <requested-page>.
 
 if ! command -v sonar >/dev/null 2>&1; then
   echo "ERROR: 'sonar' CLI not found on PATH." >&2
@@ -32,15 +32,17 @@ if ! sonar auth status >/dev/null 2>&1; then
 fi
 
 # `sonar list issues` prints only pageIndex, pageSize and total under .paging;
-# `list projects` adds hasNextPage, so derive it for both. Exits 5 on a response
-# without numeric paging, which would otherwise end the fetch early.
+# `list projects` adds hasNextPage, so derive it for both. Exits 5 on paging that
+# is missing, which would end the fetch early, or that is not for the requested
+# page or has no page size, which would never end it.
 sonar_has_next_page() {
   local rc=0
-  jq -e '.paging | [.pageIndex, .pageSize, .total]
-    | if all(type == "number") then .[0] * .[1] < .[2] else error("no numeric paging") end' \
+  jq -e --argjson page "$2" '.paging | [.pageIndex, .pageSize, .total]
+    | if all(type == "number") and .[0] == $page and .[1] > 0
+      then .[0] * .[1] < .[2] else error("unusable paging") end' \
     <<<"$1" >/dev/null || rc=$?
   if ((rc > 1)); then
-    echo "ERROR: Sonar response has no usable paging; cannot tell whether more pages exist." >&2
+    echo "ERROR: Sonar response has no usable paging for page $2; cannot tell whether more pages exist." >&2
     exit 5
   fi
   return "$rc"
@@ -62,10 +64,10 @@ if [[ -z "$PROJECT_KEY" ]]; then
   while :; do
     RESP=$(sonar list projects --query "$REPO_NAME" --page "$PAGE" --page-size 500) || {
       echo "ERROR: 'sonar list projects' failed for query=$REPO_NAME page=$PAGE" >&2
-      exit 4
+      exit 5
     }
     PROJECT_PAGES+="${RESP}"$'\n'
-    sonar_has_next_page "$RESP" || break
+    sonar_has_next_page "$RESP" "$PAGE" || break
     PAGE=$((PAGE + 1))
   done
   PROJECTS=$(jq -s '{projects: (map(.projects) | add)}' <<<"$PROJECT_PAGES")

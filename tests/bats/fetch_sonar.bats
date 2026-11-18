@@ -95,6 +95,17 @@ filler_keys() {
   grep -q -- '--page 2 ' "$SONAR_LOG"
 }
 
+@test "stops after a page that exactly fills the total" {
+  stub_paged_sonar
+  issues_page 1 500 1 500
+
+  bats_require_minimum_version 1.5.0
+  run --separate-stderr bash "${SCRIPTS}/fetch_sonar.sh" 42 org_repo
+  [[ "$status" -eq 0 ]]
+  [[ "$(jq 'length' <<<"$output")" -eq 500 ]]
+  [[ "$(grep -c '^list issues' "$SONAR_LOG")" -eq 1 ]]
+}
+
 @test "exits 5 with no issue array when a later issue page fails" {
   stub_paged_sonar
   issues_page 1 501 1 500
@@ -116,6 +127,29 @@ filler_keys() {
   [[ "$status" -eq 5 ]]
   [[ -z "$output" ]]
   [[ "$stderr" == *"paging"* ]]
+}
+
+@test "exits 5 when a page reports a different page than the one requested" {
+  stub_paged_sonar
+  issues_page 1 501 1 500
+  cp "${SONAR_FIXTURES}/issues-1.json" "${SONAR_FIXTURES}/issues-2.json"
+
+  bats_require_minimum_version 1.5.0
+  run --separate-stderr bash "${SCRIPTS}/fetch_sonar.sh" 42 org_repo
+  [[ "$status" -eq 5 ]]
+  [[ -z "$output" ]]
+  [[ "$(grep -c '^list issues' "$SONAR_LOG")" -eq 2 ]]
+}
+
+@test "exits 5 when the issues response is not JSON" {
+  stub_paged_sonar
+  echo 'warning: not json' >"${SONAR_FIXTURES}/issues-1.json"
+
+  bats_require_minimum_version 1.5.0
+  run --separate-stderr bash "${SCRIPTS}/fetch_sonar.sh" 42 org_repo
+  [[ "$status" -eq 5 ]]
+  [[ -z "$output" ]]
+  [[ "$stderr" == *"unreadable 'sonar list issues' response"* ]]
 }
 
 @test "explicit project key skips project discovery" {
@@ -153,13 +187,13 @@ filler_keys() {
   grep -q '^list issues --project z_repo ' "$SONAR_LOG"
 }
 
-@test "exits 4 when a later project page fails" {
+@test "exits 5 when a later project page fails" {
   git remote add origin https://github.com/owner/repo.git
   stub_paged_sonar
   projects_page 1 501 "$(filler_keys 499 | jq -c '["a_repo"] + .')"
 
   run bash "${SCRIPTS}/fetch_sonar.sh" 42
-  [[ "$status" -eq 4 ]]
+  [[ "$status" -eq 5 ]]
   [[ "$output" == *"server error on page 2"* ]]
   ! grep -q '^list issues' "$SONAR_LOG"
 }
