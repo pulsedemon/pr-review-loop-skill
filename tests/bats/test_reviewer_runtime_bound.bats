@@ -84,6 +84,8 @@ _require() {
     'a reviewer that answered before the deadline would be recorded as timed out'
   _require "$body" 'Record the launch time (`date +%s`)' \
     'Codex and Cursor compute the time left from the launch time'
+  _require "$body" 'for each batch as its own foreground call' \
+    'Claude Code hosts folded the date into the background timer, so no launch time came back'
   _require "$body" 'with neither a validated response nor a recorded error is stopped where the host allows' \
     'an overrun reviewer would keep running, and an errored one would be recorded twice'
   _require "$body" 'recorded in `reviewer_errors` as' \
