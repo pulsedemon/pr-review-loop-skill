@@ -249,6 +249,28 @@ setup() {
   [[ "$(status_of "$output")" == "null" ]]
 }
 
+@test "a deferred out-of-scope blocker in history does not mask a repeated blocker" {
+  # partition() defers every out_of_scope finding, so the loop never tried to
+  # fix this one. Counting it makes history one larger than any current set.
+  local a deferred
+  a=$(blocker "src/db.ts" 88 "$SQL")
+  deferred=$(blocker "src/parse.ts" 31 "$NULLDEREF" | jq -c '.scope = "out_of_scope"')
+  write_state "$STATE" "$(jq -nc --argjson a "$a" --argjson d "$deferred" \
+    '[{iteration:1,findings:[$a,$d]}]')"
+  run check_exit "$(jq -nc --argjson a "$a" '{blockers:[$a]}')" "$STATE"
+  [[ "$(status_of "$output")" == "NO_PROGRESS" ]]
+}
+
+@test "a blocker deferred last iteration is not a repeat when it becomes in-scope" {
+  local b deferred
+  b=$(blocker "src/parse.ts" 31 "$NULLDEREF")
+  deferred=$(jq -c '.scope = "out_of_scope"' <<<"$b")
+  write_state "$STATE" "$(jq -nc --argjson d "$deferred" '[{iteration:1,findings:[$d]}]')"
+  run check_exit "$(jq -nc --argjson b "$b" '{blockers:[$b]}')" "$STATE"
+  [[ "$status" -eq 0 ]]
+  [[ "$(status_of "$output")" == "null" ]]
+}
+
 @test "empty history does not exit" {
   local b; b=$(blocker "src/db.ts" 88 "$SQL")
   write_state "$STATE" '[]'

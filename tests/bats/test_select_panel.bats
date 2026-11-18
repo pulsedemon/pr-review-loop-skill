@@ -149,7 +149,7 @@ PANEL='["correctness","tests","security","performance","readability","yagni","re
 }
 
 # A history entry whose findings include a blocker raised by `security`.
-# Findings use the singular `reviewer` field — the shape templates/state.schema.json
+# Findings use the singular `reviewer` field, the shape templates/state.schema.json
 # requires for a persisted history[].findings entry.
 PREV_WITH_BLOCKER='{"findings":[
   {"reviewer":"security","severity":"blocker","scope":"in_scope","file":"a.py","line":1,"summary":"sql injection"},
@@ -195,6 +195,60 @@ PREV_WITH_BLOCKER='{"findings":[
   # candidate runs. The assertion checks open_blocker_carryover, not ran:
   # readability raised only a suggestion, so it must not be carried over.
   [ "$(jq -r '.open_blocker_carryover | index("readability")' <<<"$out")" = "null" ]
+}
+
+# Gate results marking every persona except `correctness` irrelevant, so only
+# carryover can put another persona in `ran`.
+only_correctness_relevant() {
+  jq -nc --argjson p "$PANEL" \
+    '[$p[] | select(. != "correctness") | {reviewer:., relevant:false, reason:"no relevant changes"}]'
+}
+
+@test "a deferred out-of-scope blocker does not force its persona to rerun" {
+  local prev input out
+  prev='{"findings":[
+    {"reviewer":"correctness","severity":"blocker","scope":"in_scope","file":"a.py","line":1,"summary":"lost update"},
+    {"reviewer":"security","severity":"blocker","scope":"out_of_scope","file":"b.py","line":2,"summary":"token in logs"}
+  ]}'
+  input=$(jq -nc --argjson p "$PANEL" --argjson h "$prev" --argjson g "$(only_correctness_relevant)" \
+    '{panel:$p, iteration:3, delta_gate:true, delta_gate_min_candidates:4,
+      prev_history:$h, gate_results:$g}')
+  out=$(select_panel "$input")
+  [ "$(jq -c '.open_blocker_carryover' <<<"$out")" = '["correctness"]' ]
+  [ "$(jq -c '.ran' <<<"$out")" = '["correctness"]' ]
+  jq -e '.skipped | index("security")' <<<"$out"
+}
+
+@test "an out-of-scope finding sharing a promoted key does not carry its persona over" {
+  # §4d.0.5 keeps a scope disagreement as two findings with one key. Only the
+  # in-scope one was promoted.
+  local prev input out
+  prev='{"findings":[
+    {"reviewer":"correctness","severity":"suggestion","scope":"in_scope","file":"c.py","line":7,"summary":"retry never backs off"},
+    {"reviewer":"security","severity":"suggestion","scope":"out_of_scope","file":"c.py","line":7,"summary":"retry never backs off"}
+  ],"addressed":[
+    {"file":"c.py","line":7,"summary":"retry never backs off","promoted_from":"suggestion",
+     "promoted_by":"multi-persona","source_reviewers":["correctness","tests"],"promotion_reason":"multi_source"}
+  ]}'
+  input=$(jq -nc --argjson p "$PANEL" --argjson h "$prev" --argjson g "$(only_correctness_relevant)" \
+    '{panel:$p, iteration:3, delta_gate:true, delta_gate_min_candidates:4,
+      prev_history:$h, gate_results:$g}')
+  out=$(select_panel "$input")
+  [ "$(jq -c '.open_blocker_carryover' <<<"$out")" = '["correctness"]' ]
+}
+
+@test "a blocker with no scope still carries its persona over" {
+  # Malformed history fails open toward rerunning: only an explicit
+  # out_of_scope drops an owner.
+  local prev input out
+  prev='{"findings":[
+    {"reviewer":"security","severity":"blocker","file":"a.py","line":1,"summary":"sql injection"}
+  ]}'
+  input=$(jq -nc --argjson p "$PANEL" --argjson h "$prev" --argjson g "$(only_correctness_relevant)" \
+    '{panel:$p, iteration:3, delta_gate:true, delta_gate_min_candidates:4,
+      prev_history:$h, gate_results:$g}')
+  out=$(select_panel "$input")
+  [ "$(jq -c '.open_blocker_carryover' <<<"$out")" = '["security"]' ]
 }
 
 @test "below the candidate cap, all candidates run without a gate" {
