@@ -11,7 +11,7 @@
 # the manifest. It does NOT pin the per-persona links, which is the half that
 # actually delivers the rules to the reviewer. This file pins those.
 #
-# Two addendums are covered:
+# Three addendums are covered:
 #
 #   _working_tree_addendum.md   — every panel persona AND the adversary. The
 #     adversary is not in `panel:`, so a panel-driven loop misses it; it gets
@@ -20,11 +20,15 @@
 #   _human_comments_addendum.md — panel personas only. The adversary is
 #     deliberately excluded (it receives no human_comments; SKILL.md §4b), and
 #     that exclusion is asserted rather than assumed.
+#   _output_addendum.md         — every panel persona AND the adversary, linked
+#     from `## Output`. Its key lists restate reviewers/output.schema.json, so
+#     they are compared with the schema here.
 
 load test_helper
 
 WORKING_TREE_ADDENDUM="_working_tree_addendum.md"
 HUMAN_COMMENTS_ADDENDUM="_human_comments_addendum.md"
+OUTPUT_ADDENDUM="_output_addendum.md"
 
 # Maximum non-blank line count for a persona's "## Working tree" section.
 # The stub is the heading plus a one-line pointer. The cap exists because a
@@ -90,12 +94,12 @@ _resolve_link() {
   }
 }
 
-@test "addendums: both shared addendums are declared in the manifest and exist on disk" {
+@test "addendums: every shared addendum is declared in the manifest and exists on disk" {
   local declared
   declared=$(python3 "${SCRIPTS}/personas_manifest.py" --list addendums)
 
   local a
-  for a in "$WORKING_TREE_ADDENDUM" "$HUMAN_COMMENTS_ADDENDUM"; do
+  for a in "$WORKING_TREE_ADDENDUM" "$HUMAN_COMMENTS_ADDENDUM" "$OUTPUT_ADDENDUM"; do
     grep -qxF "$a" <<<"$declared" || {
       echo "$a is not declared in reviewers/personas.yaml addendums:"
       echo "manifest addendums: $declared"
@@ -283,4 +287,96 @@ _resolve_link() {
       return 1
     }
   done
+}
+
+@test "addendums: every panel persona links the output addendum, resolved on disk" {
+  local files=()
+  while IFS= read -r line; do files+=("$line"); done < <(_panel_files)
+
+  local f section resolved expected
+  expected="${REPO_ROOT}/reviewers/${OUTPUT_ADDENDUM}"
+  for f in "${files[@]}"; do
+    section=$(_extract_section "$f" "## Output")
+    [[ -n "$section" ]] || {
+      echo "'## Output' section missing in $f"
+      return 1
+    }
+    resolved=$(_resolve_link "$f" "$section" "$OUTPUT_ADDENDUM")
+    [[ "$resolved" = "$expected" ]] || {
+      echo "output link in $f resolves to '$resolved', not '$expected'"
+      echo "(without it the reviewer is never told which keys the schema"
+      echo " accepts, and an unlisted key costs a resend.)"
+      return 1
+    }
+  done
+}
+
+@test "addendums: the adversary links the output addendum too" {
+  local f section resolved expected
+  f="${REPO_ROOT}/reviewers/adversary.md"
+  expected="${REPO_ROOT}/reviewers/${OUTPUT_ADDENDUM}"
+
+  section=$(_extract_section "$f" "## Output")
+  [[ -n "$section" ]] || {
+    echo "'## Output' section missing in reviewers/adversary.md"
+    return 1
+  }
+  resolved=$(_resolve_link "$f" "$section" "$OUTPUT_ADDENDUM")
+  [[ "$resolved" = "$expected" ]] || {
+    echo "adversary output link resolves to '$resolved', not '$expected'"
+    return 1
+  }
+}
+
+@test "addendums: output addendum names exactly the schema's keys at each level" {
+  local canonical="${REPO_ROOT}/reviewers/${OUTPUT_ADDENDUM}"
+  local schema="${REPO_ROOT}/reviewers/output.schema.json"
+
+  local pairs=(
+    '- Top level:|.'
+    '- Each finding:|.properties.findings.items'
+    '- `evidence`:|.properties.evidence'
+    '- `finding_evidence`:|.properties.findings.items.properties.finding_evidence'
+  )
+
+  local pair prefix object line count listed expected
+  for pair in "${pairs[@]}"; do
+    prefix="${pair%%|*}"
+    object="${pair#*|}"
+
+    count=$(grep -cF -- "$prefix" "$canonical" || true)
+    [[ "$count" -eq 1 ]] || {
+      echo "expected one addendum line starting '$prefix', found $count"
+      return 1
+    }
+    line=$(grep -F -- "$prefix" "$canonical")
+    listed=$(printf '%s\n' "${line#"$prefix"}" | grep -oE '`[^`]+`' | tr -d '`' | sort)
+    expected=$(jq -r "${object} | .properties | keys[]" "$schema" | sort)
+    [[ "$listed" = "$expected" ]] || {
+      echo "addendum line '$prefix' does not match the schema keys at ${object}"
+      echo "addendum: $(echo "$listed" | tr '\n' ' ')"
+      echo "schema:   $(echo "$expected" | tr '\n' ' ')"
+      return 1
+    }
+
+    # "rejects any key it does not list" is only true of a closed object.
+    jq -e "${object} | .additionalProperties == false" "$schema" >/dev/null || {
+      echo "schema object ${object} is no longer closed; the addendum says"
+      echo "the schema rejects any key it does not list, at every level."
+      return 1
+    }
+  done
+}
+
+@test "addendums: output addendum keeps its no-prose and no-top-level-summary canaries" {
+  local canonical="${REPO_ROOT}/reviewers/${OUTPUT_ADDENDUM}"
+
+  grep -qF 'the first character is' "$canonical" || {
+    echo "output addendum no longer says the reply starts with the object"
+    return 1
+  }
+  grep -qF 'There is no top-level' "$canonical" || {
+    echo "output addendum no longer rules out a top-level summary"
+    return 1
+  }
 }

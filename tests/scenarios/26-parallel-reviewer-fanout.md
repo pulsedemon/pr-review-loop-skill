@@ -578,10 +578,70 @@ adversary suggestion. Malformed-response recovery, expiration, inline replies,
 failed-CI conversion, sequential fallback and `cost_saver` were not exercised.
 It does not establish exhaustive orchestration compliance or review quality.
 
+## Reviewer output shape in Claude Code, 2026-11-18
+
+A fresh Claude Code 2.1.322 parent ran `Dry-run pr-review-loop on <PR URL>`
+against [fixture PR #68](https://github.com/pulsedemon/pr-review-loop-skill/pull/68),
+the pricing fixture of the first dry run above, closed unmerged afterwards.
+Witch launched the parent headless on `claude-opus-5-5` in the ambient `auto`
+permission mode with the first dry run's request and launch arguments. The
+installed skill was a checkout of
+`2be61f87909aa49a78055ca3846ba301e5935fab`, the commit that adds
+`reviewers/_output_addendum.md` and links it from every reviewer's
+`## Output` section. `python3` resolved to 3.14.6 in all 53 logged Bash calls.
+The parent reached `DRY_RUN_COMPLETE` with eleven receipts and no reviewer
+error.
+
+The check is [issue #67](https://github.com/pulsedemon/pr-review-loop-skill/issues/67):
+no first response rejected for a key the schema does not list or for text
+outside the JSON object. Each reviewer's first `SubagentHandback` message was
+taken from its own transcript and validated unchanged with
+`scripts/validate_reviewer_output.py --reviewer <persona>` at the pin.
+
+| Reviewer | First response | Read the addendum before it |
+| --- | --- | --- |
+| `correctness` | valid | yes |
+| `tests` | valid | yes |
+| `security` | valid | yes |
+| `performance` | valid | yes |
+| `readability` | valid | yes |
+| `yagni` | valid | yes |
+| `requirements` | valid | yes |
+| `comments` | valid | yes |
+| `error_handling` | valid | yes |
+| `type_design` | valid | yes |
+| `blind_spots` | valid | yes |
+
+The parent launched one `Agent` call per persona on `sonnet`, which the traces
+resolve to `claude-sonnet-5-5`, and no reviewer was sent a second time. "Read"
+means a `Read` or Bash call naming the addendum returned its text before the
+first handback.
+
+The parent's own dispatch also constrained the output. Every panel prompt
+ended: "Your final message must be exactly one JSON object matching
+/Users/michael/.claude/skills/pr-review-loop/reviewers/output.schema.json with
+`"reviewer": "<persona>"`, no prose and no code fence around it. Include the
+top-level `evidence` object recording what you read." Each prompt also told
+the reviewer to follow every addendum its persona links. The addendum
+therefore shares credit for the result with the host's wording.
+
+This run meets the issue's condition and does not by itself show that the
+addendum works. In the four earlier Claude Code runs above, 3 of 86 first
+panel responses were rejected for an unlisted key, each a top-level `summary`,
+and none for text outside the object. At that rate a clean panel of eleven
+happens about two times in three with no change. The limits are one panel, one
+fixture and Claude Code only. The adversary did not run, because a dry run
+exits before §4d.0, so its link is pinned by
+`tests/bats/test_addendum_link_sync.bats` and was not observed in use. The
+request, launch settings, traces, judge with its controls and per-response
+classification are retained locally under ignored
+`docs/superpowers/reviews/2026-11-18-reviewer-output-shape/`.
+
 ## Validation status
 
 **Status:** `design_only`
 **Evidence:** The dated multi-iteration Codex run and Claude Code edit-path run above establish checks 1, 2, and 4 at their pinned revisions; the Claude dry run establishes checks 1 and 4 at its pin. The edit-path record separately reports its receipt, budget, summary and isolation failures; its follow-up Step 5 replay shows the summary failure fixed at `e16e794`. The reviewer-response record establishes original-byte validation, resend, per-batch launch receipts and budget expiration with late-output discard at `e37d8e2`, with stub reviewers. The timer-stop record establishes a timer stop after the last validation result in every judged A, C and D batch (8 batches, 6 with `TaskStop` loaded before the terminal validation), and a still-running reviewer stopped at expiry, at `72f6a8f`, with stub reviewers, Claude Code 2.1.322. The failed-CI conversion record establishes conversion of a real failed check through repair, re-review and green CI at `4d2d334`, from a prepared §4d.1 start.
 The integrated live run above additionally observes the repaired timer ordering with real reviewers and accurate adversary-suggestion reporting on `dac0089`, with its recorded permission and snapshot-recovery limits.
+The reviewer output shape run above observes eleven valid first responses on `2be61f8` with the output addendum delivered through each persona.
 
 **Missing evidence:** Dated host runs covering conditional fallback (check 3) and `cost_saver` model routing (check 5).
