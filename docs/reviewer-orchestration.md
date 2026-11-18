@@ -24,7 +24,7 @@ Receipts establish valid responses, not assigned-file read coverage.
 
 ## Reviewer budget
 
-The panel has 30 minutes from its batch launch. Record the launch time (`date +%s`) once, right after the launch message. When the budget runs out, stop waiting. A valid response already received counts. Every reviewer with neither a validated response nor a recorded error is stopped where the host allows and recorded in `reviewer_errors` as `{"reviewer": "<persona>", "error": "timed out"}`. A resend requested for malformed output stays inside the same budget. Anything an overrun reviewer sends later is discarded, not validated, and earns no receipt. Neither a relaunch nor a message to a stopped reviewer recovers a timeout. From there a timeout is handled like any other reviewer error under [completed reviewer responses](#completed-reviewer-responses).
+The panel has 30 minutes from its batch launch. Record the launch time (`date +%s`) for each batch as its own foreground call, right after the launch message; folded into the background timer's command, it returns nothing until the timer ends. When the budget runs out, stop waiting. A valid response already received counts. Every reviewer with neither a validated response nor a recorded error is stopped where the host allows and recorded in `reviewer_errors` as `{"reviewer": "<persona>", "error": "timed out"}`. A resend requested for malformed output stays inside the same budget. Anything an overrun reviewer sends later is discarded, not validated, and earns no receipt. Neither a relaunch nor a message to a stopped reviewer recovers a timeout. From there a timeout is handled like any other reviewer error under [completed reviewer responses](#completed-reviewer-responses).
 
 How each host keeps the budget:
 

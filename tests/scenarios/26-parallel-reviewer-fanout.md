@@ -344,8 +344,66 @@ returned prior scenario snippets, so this is not an isolated evaluation. The
 fixture PR was closed unmerged afterwards and both disposable remote branches
 were deleted. No second full host run was made.
 
+## Reviewer-response handling in Claude Code, 2026-11-17
+
+Bounded host checks for
+[issue #43](https://github.com/pulsedemon/pr-review-loop-skill/issues/43) and
+[issue #44](https://github.com/pulsedemon/pr-review-loop-skill/issues/44).
+Each run gave a fresh headless Claude Code 2.1.322 parent on `claude-opus-5-5`
+a read-only `git archive` export of the pin and a local fixture repository with
+a one-line diff and no GitHub access. The prompt started the loop at §4b with
+`approvers_required` limiting the panel to two personas. Reviewers ran on
+`sonnet` under the default routing. Every persona file in the export held the
+same generic text: run `review-tool <persona>` and reply with its output
+unchanged. The tool's logic and replies were encoded, so a parent reading the
+persona files learned nothing about which reviewer misbehaves.
+
+- Run A, `correctness` and `tests`: `tests` first replies with valid JSON
+  missing its final `}`, and with a different valid object to any later
+  message.
+- Run B, `correctness` and `security`: `security` replies only once the
+  parent's 30-minute timer has finished, so its reply arrives late.
+- Run C, `correctness` and `tests` at iteration 2: a delta-gated pass ran
+  `correctness` alone, so §4d's forced full sweep launched a second batch in the
+  same session.
+
+A `python3` shim logged every `validate_reviewer_output.py` call's argv, exact
+input bytes and exit code. A judge compared those inputs with each child's
+`SubagentHandback` message and ordered calls by transcript line and message id.
+
+Run 1 was a baseline at `07ff2de` (`main`). Run 2 was the tested pin
+`e37d8e2`, which adds one guidance sentence. The first baseline A, B and C
+hosts read the stub reply files before launching reviewers, so those runs were
+discarded and repeated with the encoded tool. The first pin A host read the
+tool's source and was repeated once.
+
+| Rule | `07ff2de` | `e37d8e2` |
+| --- | --- | --- |
+| Original malformed bytes validated and rejected (A) | Passed | Passed |
+| Receipt only for a validated genuine resend, through `SendMessage` (A and C's sweep) | Passed | Passed |
+| Foreground `date +%s` launch receipt per batch (A, B, C) | Failed: A and both C batches folded it into the timer as `date +%s; sleep 1800`, so it returned nothing at launch; B passed | Passed in all four batches |
+| Timer stopped only after every validation result returned (A, C) | Passed in A and both C batches | Failed in both C batches: `TaskStop` shared a message with the last validation call; A passed |
+| Expiry: timer ran 1800 s, `security` recorded `timed out`, late reply reached the parent and was discarded unvalidated, `REVIEW_INCOMPLETE` with no success summary (B) | Passed | Passed |
+| No edits, commits or writes outside the run (all) | Passed | Passed |
+
+The timer-stop failure reproduces the edit-path run's. It happened only after
+the parent had loaded the deferred `TaskStop` schema: in 7 of 11 such batches
+across this record's runs (discarded ones included) and the edit-path run, and
+in neither batch where `TaskStop` was still deferred. With the tool loaded, the parent issues the stop
+in parallel with a validation it expects to pass. The guidance makes the stop
+wait for "a validated response" but not for the validation's result. One
+sample per run at each pin cannot show a fix, and no further fix cycle was run.
+
+This record establishes original-byte validation, resend, timeout recording
+and late-output discard in Claude Code with stub reviewers. It does not
+establish them with real reviewers, through a host's own delta-gate pass, or
+with the adversary. The receipts and launch times come from these runs only.
+Traces, validator logs, state, judge output and the harness are retained
+locally under ignored
+`docs/superpowers/reviews/2026-11-17-claude-reviewer-handling/`.
+
 ## Validation status
 
 **Status:** `design_only`
-**Evidence:** The dated multi-iteration Codex run and Claude Code edit-path run above establish checks 1, 2, and 4 at their pinned revisions; the Claude dry run establishes checks 1 and 4 at its pin. The edit-path record separately reports its receipt, budget, summary and isolation failures; its follow-up Step 5 replay shows the summary failure fixed at `e16e794`.
-**Missing evidence:** Dated host runs covering conditional fallback (check 3), `cost_saver` model routing (check 5), independent adherence to the reviewer-budget recipe, and reviewer-budget expiration and cancellation. The Claude live edit-path run also leaves failed-CI conversion and correct handling of original malformed responses unverified.
+**Evidence:** The dated multi-iteration Codex run and Claude Code edit-path run above establish checks 1, 2, and 4 at their pinned revisions; the Claude dry run establishes checks 1 and 4 at its pin. The edit-path record separately reports its receipt, budget, summary and isolation failures; its follow-up Step 5 replay shows the summary failure fixed at `e16e794`. The reviewer-response record establishes original-byte validation, resend, per-batch launch receipts and budget expiration with late-output discard at `e37d8e2`, with stub reviewers.
+**Missing evidence:** Dated host runs covering conditional fallback (check 3), `cost_saver` model routing (check 5), and a Claude Code timer stop that waits for the last validation result in every batch (the reviewer-response record failed it). The Claude live edit-path run also leaves failed-CI conversion unverified.
