@@ -68,6 +68,25 @@ setup() {
   [[ "$status" -eq 2 ]]
 }
 
+@test "an empty diff counts zero" {
+  git update-ref refs/remotes/origin/main HEAD
+
+  run bash -c "${SCRIPTS}/count_new_loc.sh main 2>${BATS_TEST_TMPDIR}/err"
+  [[ "$status" -eq 0 ]]
+  [[ "$output" == "0" ]]
+  [[ ! -s "${BATS_TEST_TMPDIR}/err" ]]
+}
+
+@test "existing refs without a merge base return exit 2 with git's diagnostic and no count" {
+  git checkout -q --orphan unrelated
+  git commit -q --allow-empty -m "unrelated root"
+
+  run bash -c "${SCRIPTS}/count_new_loc.sh main 2>${BATS_TEST_TMPDIR}/err"
+  [[ "$status" -eq 2 ]]
+  [[ -z "$output" ]]
+  grep -q "no merge base" "${BATS_TEST_TMPDIR}/err"
+}
+
 @test "rename handling uses the post-rename path and still excludes lockfiles" {
   make_tmp_repo "${BATS_TEST_TMPDIR}/rename-repo"
   printf 'old line\n' > old.ts
