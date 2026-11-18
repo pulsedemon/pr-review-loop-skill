@@ -75,7 +75,7 @@ It does not mean the panel found the issue *first*. A1 parses the current summar
 
   The manifest is updated manually. The weekly workflow collects the live merged set, while `--manifest` collects the committed list. `check_manifest_drift.py` fails the weekly run when merged PRs are missing from the manifest and names them in its diagnostic.
 
-  The committed manifest and labels start empty; populate them with your own cleared evaluation set. The collector also supports your own cross-repository manifests, but `--manifest` requires access to every listed repository and exits non-zero if one is unreachable. Keep private manifests and their generated corpora outside the published tree. The optional workflow authenticates with the repository's `GITHUB_TOKEN` and collects only this repository. It remains disabled in the initial private repository until the maintainer chooses to collect a corpus.
+  The committed manifest and labels start empty; populate them with your own cleared evaluation set. The collector also supports your own cross-repository manifests, but `--manifest` requires access to every listed repository and exits non-zero if one is unreachable. Keep private manifests and their generated corpora outside the published tree. The optional workflow authenticates with the repository's `GITHUB_TOKEN` and collects only this repository. It remains disabled until the maintainer chooses to collect a corpus.
 - `label.md`: the labeling protocol document.
 - `tools/recall-harness/tests/fixtures/orchestrator-review-sample.md`: a synthetic ORCHESTRATOR_REVIEW body that pins the FINDING-block parser; re-record only when the upstream format changes.
 
