@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# fetch_sonar_gate.sh — fetch the Quality Gate status for a PR, emitting only
+# fetch_sonar_gate.sh: fetch the Quality Gate status for a PR, emitting only
 # the FAILING conditions as JSON.
 #
 # Usage:
@@ -15,7 +15,7 @@
 #
 # Exits: 0 on success (array may be empty), 1 usage / jq missing,
 #        2 CLI missing, 3 auth failure, 4 project key not determinable,
-#        5 API error.
+#        5 API call failed or response unreadable.
 
 set -euo pipefail
 
@@ -31,9 +31,15 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=scripts/_sonar_common.sh
 . "${HERE}/_sonar_common.sh"
 
-RESP=$(sonar api get "/api/qualitygates/project_status?projectKey=${PROJECT_KEY}&pullRequest=${PR}" 2>/dev/null) || {
-  echo "ERROR: Quality gate API call failed." >&2
+RESP=$(sonar api get "/api/qualitygates/project_status?projectKey=${PROJECT_KEY}&pullRequest=${PR}") || {
+  echo "ERROR: quality gate API call failed for project=$PROJECT_KEY pr=$PR" >&2
   exit 5
 }
 
-echo "$RESP" | jq '[.projectStatus.conditions[] | select(.status != "OK")]'
+# jq exits 0 and prints nothing for an empty response, so read the answer, not the status.
+FAILING=$(jq '[.projectStatus.conditions[] | select(.status != "OK")]' <<<"$RESP") || FAILING=""
+if [[ -z "$FAILING" ]]; then
+  echo "ERROR: unreadable quality gate response for project=$PROJECT_KEY pr=$PR" >&2
+  exit 5
+fi
+printf '%s\n' "$FAILING"
