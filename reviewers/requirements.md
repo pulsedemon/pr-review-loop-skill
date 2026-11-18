@@ -63,9 +63,9 @@ When the diff touches both a doc and a spec, flag terminology drift (`severity: 
 
 See [`docs/procedure-moves.md#move-c--cross-doc-consistency-mandatory-when-diff-touches-both-a-doc-and-a-spec`](../docs/procedure-moves.md#move-c--cross-doc-consistency-mandatory-when-diff-touches-both-a-doc-and-a-spec) for the doc/spec file-type lists, the partial-diff handling rule, and the scope carve-out.
 
-## Output contract
+## Output
 
-Return only the JSON object. No prose before or after.
+Return only the JSON object. No prose before or after. Read [_output_addendum.md](_output_addendum.md) before answering: it lists the only keys the schema accepts.
 
 For each blocker, the `detail` field must include a direct quote of the requirement being violated, e.g.:
 

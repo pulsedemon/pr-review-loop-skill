@@ -48,7 +48,7 @@ For every new or modified test in the diff, after Move A: ask whether each asser
 4. **missing_state_assertion**: The test's name describes a state transition (`enable`, `disable`, `submit`, `complete`, `cancel`, `terminate`) and the test body triggers the transition, but no assertion targets the post-transition state. The test passes whether or not the transition fired. (Verbs are deliberately a closed set; `clear` and `error` were dropped during plan review because `error` fires on every `should error when X` test and `clear` is too generic to reliably name a state transition. A future labeling round may justify adding `reset` / `confirm` / `expire` with their own evidence base.)
 5. **describe_label_drift**: The enclosing `describe`/`context`/`it` label promises behavior the test body does not exercise (e.g., `describe('when admin')` but no admin fixture is constructed).
 
-If any sub-mechanic holds for an assertion, raise `severity: blocker, scope: in_scope`. Also set the top-level `file`, `line`, and `detail` properties: the schema's `if/then` block (the `scope: in_scope` branch in `reviewers/output.schema.json`) requires all three for `scope: in_scope` findings, independent of `finding_evidence`. Populate `finding_evidence`:
+If any sub-mechanic holds for an assertion, raise `severity: blocker, scope: in_scope`. Also set the finding's own `file`, `line`, and `detail` properties: the schema's `if/then` block (the `scope: in_scope` branch in `reviewers/output.schema.json`) requires all three for `scope: in_scope` findings, independent of `finding_evidence`. Populate `finding_evidence`:
 
 - `file`: the test file path
 - `line`: the asserting line (or the test's opening line for `missing_state_assertion` / `describe_label_drift`)
@@ -56,7 +56,7 @@ If any sub-mechanic holds for an assertion, raise `severity: blocker, scope: in_
 - `snippet`: the asserting line, truncated to 200 characters (for `missing_state_assertion` use the transition-triggering line; for `describe_label_drift` use the `describe`/`context`/`it` header line)
 
 <!-- regen:move-a1-enum:start -->
-Additionally, set the top-level finding property `move_a1_pattern` to one of `cross_fixture`, `testid_unmounted`, `conditional_unmounted`, `missing_state_assertion`, `describe_label_drift`. (This is a sibling of `move_b_pattern` on the finding object, NOT a `finding_evidence` sub-field; see `reviewers/output.schema.json`.)
+Additionally, set the finding property `move_a1_pattern` to one of `cross_fixture`, `testid_unmounted`, `conditional_unmounted`, `missing_state_assertion`, `describe_label_drift`. (This is a sibling of `move_b_pattern` on the finding object, NOT a `finding_evidence` sub-field; see `reviewers/output.schema.json`.)
 <!-- regen:move-a1-enum:end -->
 
 Move A.1 feeds the evidence-gated solo-adversary promotion path in SKILL.md §4d.0.5 the same way Move A does; the `symbol` + `snippet` + `move_a1_pattern` triple anchors the verification.
@@ -161,7 +161,7 @@ Run every probe on a copy, never in the checkout. See [_working_tree_addendum.md
 
 ## Output
 
-Return only the JSON object. No prose before or after.
+Return only the JSON object. No prose before or after. Read [_output_addendum.md](_output_addendum.md) before answering: it lists the only keys the schema accepts.
 
 ## Human comments addendum
 

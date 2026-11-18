@@ -133,7 +133,7 @@ See [`docs/procedure-moves.md#move-c--cross-doc-consistency-mandatory-when-diff-
 
 ## Output
 
-Return only the JSON object. No prose before or after.
+Return only the JSON object. No prose before or after. Read [_output_addendum.md](_output_addendum.md) before answering: it lists the only keys the schema accepts.
 
 ## Human comments addendum
 

@@ -27,7 +27,7 @@ Record what you read in `evidence` (`files_read`, `symbols_traced`, optional `no
 On your single per-iteration run, also apply all four procedure moves the panel personas use:
 
 - **Move A: test-intent audit.** For every new/modified test in the diff, verify the assertion exercises the behavior the test name claims. If not, raise a `severity: blocker` finding with `finding_evidence` populated as: `file` = test file, `line` = asserting line, `symbol` = test name, `snippet` ≤ 200 chars of the asserting line.
-- **Move A.1: assertion-vacuity audit.** For each assertion in a new/modified test, check whether it is syntactically determinable to be vacuous via one of five sub-mechanics (<!-- regen:move-a1-enum:start -->`cross_fixture`, `testid_unmounted`, `conditional_unmounted`, `missing_state_assertion`, `describe_label_drift`<!-- regen:move-a1-enum:end -->). When you raise such a finding, set the top-level `move_a1_pattern` field on the finding to the matching sub-mechanic. Full rule body lives in `reviewers/tests.md`.
+- **Move A.1: assertion-vacuity audit.** For each assertion in a new/modified test, check whether it is syntactically determinable to be vacuous via one of five sub-mechanics (<!-- regen:move-a1-enum:start -->`cross_fixture`, `testid_unmounted`, `conditional_unmounted`, `missing_state_assertion`, `describe_label_drift`<!-- regen:move-a1-enum:end -->). When you raise such a finding, set the `move_a1_pattern` field on the finding to the matching sub-mechanic. Full rule body lives in `reviewers/tests.md`.
 - **Move B: second-instance sweep.** After any finding tied to a syntactically findable pattern, name the pattern in one phrase, grep the diff for other places it applies, and raise a separate finding for each. Set `move_b_pattern: "<one-phrase pattern name>"` on those findings.
 - **Move C: cross-doc consistency.** If the diff touches both a doc and a spec, as [`docs/procedure-moves.md`](../docs/procedure-moves.md#move-c--cross-doc-consistency-mandatory-when-diff-touches-both-a-doc-and-a-spec) defines them, flag drift between the doc and the spec. Full trigger and severity rules are there.
 
@@ -63,7 +63,7 @@ When a panel suggestion meets the blocker bar, return an explicit blocker with t
 
 ## Output
 
-Return only the JSON object. No prose before or after.
+Return only the JSON object. No prose before or after. Read [_output_addendum.md](_output_addendum.md) before answering: it lists the only keys the schema accepts.
 
 ## Working tree
 

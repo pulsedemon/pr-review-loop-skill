@@ -65,7 +65,7 @@ dependent surfaces and caveats. Edits not listed here are routed by the
   `tests/bats/test_reviewer_enum_filesystem_sync.bats` pins the file against the
   manifest, `tests/bats/test_addendum_link_sync.bats` pins the per-persona links
 - *Caveat:* the adversary is not in `panel:`, so a panel-driven loop misses it.
-  Decide per addendum whether it applies (working-tree rules do, human-comments
+  Decide per addendum whether it applies (working-tree and output rules do, human-comments
   deliberately do not) and assert that choice in its own test.
 - *Caveat:* `reviewers/*.md` is in the `--validate-coverage` corpus, so addendum
   prose must not carry unwrapped numbered persona-count phrases.

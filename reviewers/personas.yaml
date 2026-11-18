@@ -139,3 +139,4 @@ addendums:
   # themselves. The enum-sync test excludes them from the persona-set check.
   - _human_comments_addendum.md
   - _working_tree_addendum.md
+  - _output_addendum.md
