@@ -20,6 +20,9 @@ prepare_resume() {
     iteration: 0, max_iterations: 2, history: []
   }' >.git/pr-loop/state.json
   stub_cmd gh '
+    if [[ "$1" != --version && -n "${FETCH_TEST_TRACE:-}" ]]; then
+      printf "gh %s\n" "$*" >> "$FETCH_TEST_TRACE"
+    fi
     case "$*" in
       --version) echo "gh version 2.50.0" ;;
       "pr view "*)
@@ -31,6 +34,12 @@ prepare_resume() {
       *) exit 1 ;;
     esac'
   stub_cmd git '
+    case "$1" in
+      fetch|pull|checkout)
+        if [[ -n "${FETCH_TEST_TRACE:-}" ]]; then
+          printf "git %s\n" "$*" >> "$FETCH_TEST_TRACE"
+        fi ;;
+    esac
     case "$1" in
       fetch)
         if [[ "${FETCH_TEST_FETCH_FAIL:-}" == true ]]; then exit 1; fi
@@ -45,8 +54,7 @@ prepare_resume() {
 }
 
 @test "exits 7 when gh CLI missing" {
-  # Build a minimal PATH lacking gh; PATH= on the run invocation is what
-  # actually constrains the subshell, the trim was a no-op.
+  # constrain the subprocess PATH so an installed gh cannot satisfy the check.
   local p
   p="${BATS_TEST_TMPDIR}/empty-path"
   mkdir -p "$p"
@@ -84,6 +92,85 @@ prepare_resume() {
   run bash "${SCRIPTS}/fetch_pr.sh" owner repo 1
   [[ "$status" -eq 5 ]]
   [[ "$output" == *"does not match"* ]]
+}
+
+@test "rejects foreign origin authorities before outbound operations on fresh and resumed runs" {
+  prepare_resume
+  export FETCH_TEST_TRACE="${BATS_TEST_TMPDIR}/origin-actions"
+  local state_file=.git/pr-loop/state.json
+  local saved_state="${BATS_TEST_TMPDIR}/saved-state.json"
+  local mode origin
+  cp "$state_file" "$saved_state"
+
+  for mode in fresh resume; do
+    if [[ "$mode" == resume ]]; then
+      cp "$saved_state" "$state_file"
+    else
+      rm "$state_file"
+    fi
+    for origin in \
+      https://evilgithub.com/owner/repo.git \
+      https://github.com.evil.example/owner/repo.git \
+      https://github.com/evil-owner/repo.git \
+      git@github.com:evil-owner/repo.git \
+      https://example.com/path/https://github.com/owner/repo.git \
+      https://example.com/path@github.com/owner/repo.git \
+      https://example.com/github.com/owner/repo.git \
+      file:///tmp/github.com/owner/repo.git \
+      evil.example:git@github.com:owner/repo.git \
+      git@evilgithub.com:owner/repo.git \
+      'https://example.com?@github.com/owner/repo.git' \
+      'https://example.com#@github.com/owner/repo.git' \
+      https://www.github.com/owner/repo.git \
+      https://github.com:443/owner/repo.git \
+      'https://github.com/owner/repo.git?query' \
+      'https://github.com/owner/repo.git#fragment' \
+      https://github.com/owner/repo/; do
+      echo "$mode: $origin"
+      git remote set-url origin "$origin"
+      : >"$FETCH_TEST_TRACE"
+      run bash "${SCRIPTS}/fetch_pr.sh" owner repo 1
+      [[ "$status" -eq 5 ]]
+      [[ "$output" == *"does not match"* ]]
+      [[ ! -s "$FETCH_TEST_TRACE" ]]
+      [[ "$(git rev-parse HEAD)" == "$FETCH_TEST_REMOTE" ]]
+      [[ "$(git branch --show-current)" == feature ]]
+      if [[ "$mode" == resume ]]; then
+        cmp "$saved_state" "$state_file"
+      else
+        [[ ! -e "$state_file" ]]
+      fi
+    done
+  done
+}
+
+@test "accepts GitHub transports and optional git suffixes through fresh setup" {
+  prepare_resume
+  rm .git/pr-loop/state.json
+  local origin suffix
+  for origin in \
+    https://github.com/owner/repo \
+    https://user:fake-token@github.com/owner/repo \
+    http://github.com/owner/repo \
+    ssh://git@github.com/owner/repo \
+    ssh://github.com/owner/repo \
+    git://github.com/owner/repo \
+    git+ssh://git@github.com/owner/repo \
+    ssh+git://git@github.com/owner/repo \
+    git@github.com:owner/repo; do
+    for suffix in '' .git; do
+      echo "$origin$suffix"
+      git remote set-url origin "$origin$suffix"
+      : >"$FETCH_TEST_ACTIONS"
+      run bash "${SCRIPTS}/fetch_pr.sh" owner repo 1
+      [[ "$status" -eq 0 ]]
+      [[ "$output" == *"Ready in:"* ]]
+      [[ "$(cat "$FETCH_TEST_ACTIONS")" == pull ]]
+      [[ "$(git rev-parse HEAD)" == "$FETCH_TEST_REMOTE" ]]
+      [[ "$(git branch --show-current)" == feature ]]
+      [[ ! -e .git/pr-loop/state.json ]]
+    done
+  done
 }
 
 @test "accepts gh 2.50.0 and resumes a matching recorded head without checkout or pull" {
@@ -226,7 +313,6 @@ prepare_resume() {
   [[ "$output" == *SCOPE_SPLIT_RECOMMENDED* ]]
   [[ ! -e "$FETCH_TEST_ACTIONS" ]]
 }
-
 
 @test "invalid completion markers cannot bypass resume checks" {
   prepare_resume
