@@ -11,8 +11,8 @@ harmed by silently dropping a malformed one: a smaller reconstructed set fires
 NO_PROGRESS on a blocker set that really shrank, or hides a still-open
 suggestion from the terminal summary. So anything either filter reads is
 validated here, and they treat a failure as "this entry is unusable" rather
-than skipping the item. `select_panel.py` validates nothing and fails open
-toward rerunning a persona.
+than skipping the item. `select_panel.py` runs no per-finding shape check; a
+malformed history entry or promotion record makes it rerun every persona.
 """
 
 import re
