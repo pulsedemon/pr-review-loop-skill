@@ -43,7 +43,7 @@ The procedure is about the context you gather. It does not change what you flag 
 
 ## Output
 
-Return only the JSON object. No prose before or after.
+Return only the JSON object. No prose before or after. Read [_output_addendum.md](_output_addendum.md) before answering: it lists the only keys the schema accepts.
 
 ## Human comments addendum
 
