@@ -16,10 +16,10 @@
 #   5: origin remote does not match <owner>/<repo>
 #   6: working tree is dirty
 #   7: gh CLI missing or older than 2.50.0 (required for `gh pr checks --json`)
-#   8 invalid state, or unfinished state for a different pr
-#   12 EXTERNAL_PUSH on unsafe resume
-#   13 MAX_ITERATIONS on exhausted resume
-#   14 SCOPE_SPLIT_RECOMMENDED on recorded scope abort
+#   8: invalid state, or unfinished state for a different pr
+#   12: EXTERNAL_PUSH on unsafe resume
+#   13: MAX_ITERATIONS on exhausted resume
+#   14: SCOPE_SPLIT_RECOMMENDED on recorded scope abort
 
 set -euo pipefail
 
@@ -64,15 +64,15 @@ if [[ -z "$ORIGIN_URL" ]]; then
 fi
 
 EXPECTED_SLUG="${OWNER}/${REPO}"
-NORMALIZED=$(echo "$ORIGIN_URL" |
-  sed -E 's#^git@github\.com:#https://github.com/#' |
-  sed -E 's#\.git$##')
-
-# Suffix-anchored match: a substring (`*...*`) match would false-accept a
-# sibling repo whose name is a prefix of the PR's (e.g. origin owner/repo-internal
-# passing for PR repo owner/repo). NORMALIZED already had its `.git` suffix
-# stripped above, so the slug must be the final path component.
-if [[ "$NORMALIZED" != *"github.com/${EXPECTED_SLUG}" ]]; then
+ORIGIN_PATH=""
+GITHUB_URL_PATTERN='^(https?|ssh|git|git\+ssh|ssh\+git)://([^/@?#]+@)?github\.com/(.+)$'
+# match the authority first; a suffix also accepts foreign hosts and paths.
+if [[ "$ORIGIN_URL" == git@github.com:* ]]; then
+  ORIGIN_PATH="${ORIGIN_URL#git@github.com:}"
+elif [[ "$ORIGIN_URL" =~ $GITHUB_URL_PATTERN ]]; then
+  ORIGIN_PATH="${BASH_REMATCH[3]}"
+fi
+if [[ "${ORIGIN_PATH%.git}" != "$EXPECTED_SLUG" ]]; then
   echo "ERROR: origin remote ($ORIGIN_URL) does not match PR repo ($EXPECTED_SLUG)." >&2
   echo "Run this from a checkout of ${EXPECTED_SLUG}." >&2
   exit 5
