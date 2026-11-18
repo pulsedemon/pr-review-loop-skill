@@ -34,27 +34,29 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 . "${HERE}/_sonar_common.sh"
 
 PAGE=1
-ALL="[]"
+BATCHES=""
 while :; do
   RESP=$(sonar list issues \
     --project "$PROJECT_KEY" \
     --pull-request "$PR" \
     --page "$PAGE" \
-    --page-size 500 2>/dev/null) || {
+    --page-size 500) || {
     echo "ERROR: 'sonar list issues' failed for project=$PROJECT_KEY pr=$PR page=$PAGE" >&2
     exit 5
   }
 
-  BATCH=$(echo "$RESP" | jq --arg p "${PROJECT_KEY}:" '
+  # Pages reach jq on stdin: one page of issues can exceed the size limit on a
+  # single argument.
+  BATCH=$(jq -c --arg p "${PROJECT_KEY}:" '
     [.issues[] | . + {component: (.component | sub("^" + $p; ""))}]
-  ')
-  ALL=$(jq -n --argjson a "$ALL" --argjson b "$BATCH" '$a + $b')
+  ' <<<"$RESP") || {
+    echo "ERROR: unreadable 'sonar list issues' response for project=$PROJECT_KEY pr=$PR page=$PAGE" >&2
+    exit 5
+  }
+  BATCHES+="${BATCH}"$'\n'
 
-  HAS_NEXT=$(echo "$RESP" | jq -r '.paging.hasNextPage // false')
-  if [[ "$HAS_NEXT" != "true" ]]; then
-    break
-  fi
+  sonar_has_next_page "$RESP" "$PAGE" || break
   PAGE=$((PAGE + 1))
 done
 
-echo "$ALL"
+jq -s 'add' <<<"$BATCHES"
