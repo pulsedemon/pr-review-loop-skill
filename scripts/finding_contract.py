@@ -2,15 +2,17 @@
 """Shape checks for a finding persisted in `history[].findings`.
 
 The contract itself is canonical in `templates/state.schema.json`; this module
-is the runtime reading of it, shared by the two scripts that re-read history[]
-after the fact (`check_exit_conditions.py`, `collect_open_findings.py`).
+is the runtime reading of it, shared by the scripts that re-read history[]
+after the fact (`check_exit_conditions.py`, `collect_open_findings.py`,
+`select_panel.py`).
 
-Both callers make decisions by *matching* persisted findings, and both are
-harmed by silently dropping a malformed one — a smaller reconstructed set fires
+The first two make decisions by *matching* persisted findings, and both are
+harmed by silently dropping a malformed one: a smaller reconstructed set fires
 NO_PROGRESS on a blocker set that really shrank, or hides a still-open
 suggestion from the terminal summary. So anything either filter reads is
-validated here, and callers treat a failure as "this entry is unusable" rather
-than skipping the item.
+validated here, and they treat a failure as "this entry is unusable" rather
+than skipping the item. `select_panel.py` validates nothing and fails open
+toward rerunning a persona.
 """
 
 import re
@@ -23,7 +25,7 @@ SCOPES = ("in_scope", "out_of_scope")
 # record no longer compares equal to the finding it came from, so the format
 # lives here rather than inline at the one site that writes it.
 #
-# DOTALL because the reason interpolates un-repr'd strings from LLM JSON — a
+# DOTALL because the reason interpolates un-repr'd strings from LLM JSON: a
 # symbol name or path with a newline in it would otherwise defeat the strip and
 # the finding would render under Deferred *and* as an open suggestion.
 _EVIDENCE_FAILURE_ANNOTATION = re.compile(r" \[evidence_verification_failed: .*\]$", re.DOTALL)
@@ -59,7 +61,7 @@ def owners(f: dict) -> set[str]:
     finding object never has one until something attaches it. §4c unions
     `source_reviewers` across the personas that raised the same issue, and
     `templates/state.schema.json` additionally requires a singular `reviewer` on
-    each persisted finding — hence both, in that order.
+    each persisted finding. Hence both, in that order.
 
     An empty set means "owner unknown", which callers must treat as "nothing can
     speak for this finding" rather than as "nobody owns it".
@@ -114,3 +116,15 @@ def promoted_keys(entry: dict) -> set[tuple] | None:
             return None
         keys.add((record.get("file"), record.get("line"), record.get("summary")))
     return keys
+
+
+def is_open_blocker(f: dict, promoted: set[tuple]) -> bool:
+    """Whether a persisted finding was in its iteration's actionable blocker set.
+
+    An out_of_scope finding never was: partition() defers it whatever its
+    severity. `promoted` is the entry's `promoted_keys`.
+    """
+    if f.get("scope") == "out_of_scope":
+        return False
+    key = (f.get("file"), f.get("line"), f.get("summary"))
+    return f.get("severity") == "blocker" or key in promoted

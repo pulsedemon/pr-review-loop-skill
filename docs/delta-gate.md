@@ -10,16 +10,16 @@ On iterations ≥ 2, the loop runs only the reviewer personas that plausibly
 have something to say, instead of the full §4b panel every iteration. A
 persona runs this iteration if any of these hold:
 
-- it raised a **blocker** last iteration, including a promoted suggestion recorded in provenance (open-blocker carryover), or
+- it raised an in-scope **blocker** last iteration, including a promoted suggestion recorded in provenance (open-blocker carryover), or
 - the **delta-gate pre-pass** judged it relevant to the prior commit's delta, or
 - it failed open (its gate result was missing/untrustworthy), or
 - this is iteration 1, or the forced pre-approval full sweep, or
-  `delta_gate=false` — all of which run the full panel unconditionally.
+  `delta_gate=false`, all of which run the full panel unconditionally.
 
 Selection is computed by `scripts/select_panel.py` (deterministic, unit-tested);
 the only LLM work added is the gate pre-pass subagents.
 
-## §4a.1 — delta-gate pre-pass (iterations ≥ 2, `delta_gate=true`)
+## §4a.1: delta-gate pre-pass (iterations ≥ 2, `delta_gate=true`)
 
 1. **Compute the delta.** `git diff <prev.head_sha_before>..<prev.head_sha_after>`
    where `prev` is `history[N-1]`. SKILL.md §4g commits exactly once per
@@ -38,7 +38,7 @@ the only LLM work added is the gate pre-pass subagents.
    run sequentially, but keep outputs independent until validation/selection.
    Each
    receives only the persona name, its one-line domain summary from
-   `reviewers/personas.yaml` (`description`) — not the full persona prompt —
+   `reviewers/personas.yaml` (`description`), not the full persona prompt,
    the delta diff, and the delta's changed-file list. Prompt body below.
 5. **Validate.** Pipe each subagent's output through
    `scripts/validate_gate_output.py --reviewer <dispatched-name>`. Exit 0 ⇒ trust
@@ -47,20 +47,20 @@ the only LLM work added is the gate pre-pass subagents.
    `delta_gate_min_candidates`, `prev_history` (the `history[N-1]` entry), and
    `gate_results` (only the validated, trusted outputs) to
    `scripts/select_panel.py`. Any candidate absent from `gate_results` fails
-   open — it runs, and is recorded under `gate_fail_open`.
+   open: it runs, and is recorded under `gate_fail_open`.
 7. **Record.** Persist the script's `panel_selection` object to this
    iteration's `history[]` entry. Run §4b for the personas in `ran` only.
    An empty `ran` is valid: when every candidate's gate says `false` (or the
    delta is empty), §4b spawns no reviewers, synthesis yields `blockers == 0`,
    and the §4d forced pre-approval full sweep re-runs the whole panel before
-   the loop can approve — so nothing is missed.
+   the loop can approve, so nothing is missed.
 
 ## Gate prompt body
 
 > You are the relevance gate for the `<NAME>` reviewer persona. Its domain:
 > `<ONE-LINE DESCRIPTION>`.
 >
-> Below is the *delta* — the diff a single commit added since the last review
+> Below is the *delta*: the diff a single commit added since the last review
 > iteration. Answer one question: does this delta contain anything in your
 > persona's domain that would be worth a full review pass?
 >
@@ -71,7 +71,7 @@ the only LLM work added is the gate pre-pass subagents.
 > Return strict JSON: `{"reviewer": "<NAME>", "relevant": true|false,
 > "reason": "<one line>"}`. Nothing else.
 
-## Fail-open — the core safety property
+## Fail-open: the core safety property
 
 The gate may only ever *remove* work on a clean, confident `false`. Every
 other outcome runs the persona:
@@ -90,7 +90,7 @@ proceed straight to §4d.0 if any persona was skipped. It first re-runs the
 **full** panel (`select_panel.py` is bypassed; every persona runs). Only after
 a full panel produces `blockers == 0` does the loop continue to the adversary /
 CI / `SUCCESS` path. The sweep sets `forced_full_sweep: true` on the history
-entry. It is part of the same iteration N — no counter increment, no extra
+entry. It is part of the same iteration N: no counter increment, no extra
 `history[]` entry. If it surfaces new blockers, the post-sweep set becomes
 iteration N's recorded blocker set and §4d is re-entered from the top against
 it: the `NO_PROGRESS` and `TESTS_REGRESSED` exit rows still apply, so a sweep
@@ -104,7 +104,7 @@ rather than churning into another fix attempt.
 - `delta_gate_min_candidates` (default `4`): below this many candidates, skip
   the gate pre-pass and run all candidates directly.
 
-## Break-even — why the cap defaults to 4
+## Break-even: why the cap defaults to 4
 
 A gate subagent and a full review are both subagent spawns, so the gate pays
 off only when one gate call is far cheaper than the full review it may skip.
@@ -112,7 +112,7 @@ A gate call carries a one-line domain summary (no persona prompt), the small
 delta diff, and a fixed question; it does no file reads, no caller/test greps,
 and no procedure Moves A/A.1/B/C. A full review carries the whole persona
 prompt, the full cumulative diff, mandatory file reads, multiple greps, and the
-per-persona moves — empirically a much larger footprint. If a gate call costs
+per-persona moves, empirically a much larger footprint. If a gate call costs
 `g` and a full review costs `R` with `R ≫ g`, gating `k` candidates and
 skipping fraction `s` nets `k·g` spent to save `s·k·R`; positive whenever
 `s > g/R`. With `R` an order of magnitude over `g`, even a 1-in-10 skip rate
@@ -129,8 +129,9 @@ Tune it after observing real-PR `panel_selection` data, like
 - **Shallow-review detection.** Skipped personas produce no output and are
   absent from the synthesis input array; `flag_shallow_reviews.py` only sees
   personas that ran.
-- **`NO_PROGRESS`.** A persona with an open blocker is always re-run, so a
-  blocker can never vanish via skipping.
+- **`NO_PROGRESS`.** A persona with an open in-scope blocker is always re-run,
+  so a blocker can never vanish via skipping. A deferred `out_of_scope` blocker
+  forces nothing; its owner goes through the gate like any other candidate.
 - **Adversary.** Unchanged; the forced pre-approval sweep runs before §4d.0, so
   the adversary always sees a fully-reviewed state.
 - **Move-bearing personas.** A persona's procedure moves are mandatory only on
@@ -153,8 +154,8 @@ Tune it after observing real-PR `panel_selection` data, like
   exit rows (`MAX_ITERATIONS`, `NO_PROGRESS`). Reason from the trigger rather
   than from a list of statuses: several are multi-sourced, and the same status
   can land on either side of the sweep depending on where it fired.
-- **Step 5 summary.** Suggestions and nits have no carryover rule of their own —
-  only blockers do — so a skipped persona leaves its earlier ones unrevisited.
+- **Step 5 summary.** Suggestions and nits have no carryover rule of their own
+  (only blockers do), so a skipped persona leaves its earlier ones unrevisited.
   Step 5 accumulates them from `history[]` rather than rendering the last
   iteration's partitions; see
   [`docs/step5-summary.md`](step5-summary.md#carrying-open-suggestions-and-nits).

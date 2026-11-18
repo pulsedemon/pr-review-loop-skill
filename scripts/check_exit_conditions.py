@@ -29,7 +29,7 @@ from comment_context import (  # noqa: E402
     _disposition_roots,
     _reviewed_comments,
 )
-from finding_contract import promoted_keys, well_formed  # noqa: E402
+from finding_contract import is_open_blocker, promoted_keys, well_formed  # noqa: E402
 from finding_matcher import is_match_or_summary  # noqa: E402
 from flag_shallow_reviews import is_shallow  # noqa: E402
 from pr_loop_state import (  # noqa: E402
@@ -61,15 +61,7 @@ def _blockers(entry: dict) -> list[dict] | None:
     for f in findings:
         if not isinstance(f, dict) or not well_formed(f):
             return None
-        if (
-            f.get("severity") == "blocker"
-            or (
-                f.get("file"),
-                f.get("line"),
-                f.get("summary"),
-            )
-            in promoted
-        ):
+        if is_open_blocker(f, promoted):
             blockers.append(f)
     return blockers
 

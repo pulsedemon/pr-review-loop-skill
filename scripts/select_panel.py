@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# select_panel.py — decide which reviewer personas run this iteration.
+# select_panel.py: decide which reviewer personas run this iteration.
 #
 # Implements the delta-gated panel selection described in
 # docs/delta-gate.md. The orchestrator calls this once per iteration after
@@ -16,13 +16,13 @@
 # stdout: panel_selection object (see docs/delta-gate.md).
 #
 # exit codes:
-#   0 — emitted a panel_selection
-#   2 — usage / malformed input
+#   0: emitted a panel_selection
+#   2: usage / malformed input
 
 import json
 import sys
 
-from finding_contract import promoted_keys
+from finding_contract import is_open_blocker, promoted_keys
 
 REQUIRED = ("panel", "iteration", "delta_gate", "delta_gate_min_candidates")
 
@@ -43,13 +43,11 @@ def _usable_prev_history(prev_history: dict | None) -> bool:
 
 
 def _open_blocker_personas(prev_history: dict | None, panel: list) -> list:
-    """Personas that owned a blocker in history[N-1].
+    """Personas that owned an open (not deferred) blocker in history[N-1].
 
-    A persisted history[].findings entry carries the singular `reviewer`
-    (required by templates/state.schema.json); `source_reviewers` is only
-    present on findings that went through adversary/multi-source merge in
-    promote_findings.py. Read both so a single-persona blocker still carries
-    its owner over — the "a blocker can never vanish via skipping" invariant.
+    Owners are `source_reviewers` plus the singular `reviewer` that
+    templates/state.schema.json requires on a persisted finding. Read both so
+    a blocker never loses an owner: a blocker cannot vanish via skipping.
     """
     if not _usable_prev_history(prev_history):
         return []
@@ -61,8 +59,7 @@ def _open_blocker_personas(prev_history: dict | None, panel: list) -> list:
     for finding in prev_history.get("findings") or []:
         if not isinstance(finding, dict):
             continue
-        key = (finding.get("file"), finding.get("line"), finding.get("summary"))
-        if finding.get("severity") != "blocker" and key not in promoted:
+        if not is_open_blocker(finding, promoted):
             continue
         owners = list(finding.get("source_reviewers") or [])
         reviewer = finding.get("reviewer")

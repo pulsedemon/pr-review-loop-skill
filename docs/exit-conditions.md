@@ -79,19 +79,24 @@ Compares the current blocker set against `history[-1]` and `history[-2]`, each *
   matching is neither transitive nor injective, so one current blocker can satisfy two previous ones
   (lines 10 and 20 are both within the window of 15) and a genuine shrink from two blockers to one
   would read as unchanged. Each current blocker must pair with a *distinct* previous one.
-- **Two entries, never pooled.** An oscillation — a fix for A reintroduces B, whose fix reintroduces
-  A — never repeats consecutively, so `history[-1]` alone would run to `MAX_ITERATIONS` pushing a
+- **Two entries, never pooled.** An oscillation (a fix for A reintroduces B, whose fix reintroduces
+  A) never repeats consecutively, so `history[-1]` alone would run to `MAX_ITERATIONS` pushing a
   commit per iteration. But pooling the two entries into one candidate set is also wrong: a current
   `{A,B}` would match a union of `{B}` and `{A}` and fire on a set that repeats neither iteration.
 - **Promoted blockers count.** `promote_findings.py` appends a promoted suggestion to its
-  `blockers[]` partition without rewriting `severity` (the one severity rewrite — the merge-layer
-  adversary-blocker-over-nit override — lands with `severity: "blocker"` and matches the filter), so a `severity == "blocker"` filter alone
+  `blockers[]` partition without rewriting `severity` (the one severity rewrite, the merge-layer
+  adversary-blocker-over-nit override, lands with `severity: "blocker"` and matches the filter), so a `severity == "blocker"` filter alone
   drops every promoted blocker from the lookback and an unchanged one would never fire. The
   effective set is reconstructed from `addressed[]`, which records each promotion by file, line and
   summary.
+- **Deferred blockers do not count.** `promote_findings.py` routes every `out_of_scope` finding to
+  `deferred[]` whatever its severity, so one persisted with `severity: "blocker"` was never in the
+  set the loop tried to fix. Counting it adds an entry the current set never has, so an unchanged
+  in-scope set fails the equal-size check, and a finding's first in-scope appearance reads as a
+  repeat.
 - **The two sides are not the same kind of set.** What the caller passes is this iteration's
   synthesized panel blockers, which are **pre-adversary**: §4d evaluates `NO_PROGRESS` before §4d.0
-  runs. What it is compared against is the **post-merge** set persisted in `history[].findings` —
+  runs. What it is compared against is the **post-merge** set persisted in `history[].findings`:
   panel blockers plus any adversary endorsements, unmatched adversary findings, and
   blocker-over-nit overrides merged in by §4d.0/§4d.0.5, because §4i writes at iteration end. Don't "fix" the caller to pass a post-adversary set.
 
@@ -133,7 +138,7 @@ a **non-empty intersection** with this visit's names.
 - **Not set equality.** `{build, lint}` followed by `{build}` is a stuck `build`; equality would read
   the departed `lint` as progress and keep looping.
 - Only names are compared. Whether the commits in between "addressed" the failure is unanswerable in
-  practice — the loop commits every iteration, so the answer is always yes and the exit would never
+  practice: the loop commits every iteration, so the answer is always yes and the exit would never
   fire.
 
 See [`ci-conversion.md`](ci-conversion.md) for how `ci_wait.sh` exit codes map to statuses.
@@ -145,7 +150,7 @@ the bad item: dropping one unparseable finding or promotion record would leave a
 current set could match exactly, firing `NO_PROGRESS` on a blocker set that genuinely shrank. An
 unusable entry is skipped whole, and the other lookback entry is still consulted.
 
-A persisted finding is usable only if it satisfies the schema's whole finding contract — `reviewer`,
+A persisted finding is usable only if it satisfies the schema's whole finding contract: `reviewer`,
 `severity`, `scope`, `summary`, plus well-typed `file`/`line`. Checking a subset is not enough:
 anything the severity filter reads but the check ignores gets dropped silently, which is the same
 shrinking-set bug by another route. A missed `NO_PROGRESS` costs
