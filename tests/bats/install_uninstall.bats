@@ -831,3 +831,40 @@ load test_helper
   [[ ! "$output" == *"installed ("* ]]
   [[ "$(readlink "${fakehome}/.cursor/skills/pr-review-loop")" == "${REPO_ROOT}" ]]
 }
+
+@test "cursor install and uninstall leave a checkout living at the Cursor skill path intact" {
+  local fakehome="${BATS_TEST_TMPDIR}/home"
+  local checkout="${fakehome}/.cursor/skills/pr-review-loop" args
+  mkdir -p "$checkout/.git"
+  cp "${REPO_ROOT}/install.sh" "$checkout/install.sh"
+  printf 'fixture\n' >"$checkout/SKILL.md"
+  printf 'uncommitted\n' >"$checkout/local-work.txt"
+
+  for args in "--cursor" "--cursor --force" "--uninstall"; do
+    # shellcheck disable=SC2086
+    HOME="$fakehome" XDG_CONFIG_HOME="$fakehome/.config" CODEX_HOME="$fakehome/.codex" run bash "$checkout/install.sh" $args
+
+    [[ "$status" -eq 0 ]]
+    [[ "$output" == *"skipped (target is this source checkout): ${checkout} (Cursor)"* ]]
+    [[ -d "$checkout/.git" ]]
+    [[ "$(<"$checkout/local-work.txt")" == "uncommitted" ]]
+    [[ ! -e "$checkout/.pr-review-loop-source" ]]
+  done
+}
+
+@test "a checkout living at a symlink host's skill path is skipped, not reported as foreign" {
+  local fakehome="${BATS_TEST_TMPDIR}/home"
+  local checkout="${fakehome}/.claude/skills/pr-review-loop" args
+  mkdir -p "$checkout"
+  cp "${REPO_ROOT}/install.sh" "$checkout/install.sh"
+  printf 'fixture\n' >"$checkout/SKILL.md"
+
+  for args in "--claude" "--uninstall"; do
+    HOME="$fakehome" XDG_CONFIG_HOME="$fakehome/.config" CODEX_HOME="$fakehome/.codex" run bash "$checkout/install.sh" "$args"
+
+    [[ "$status" -eq 0 ]]
+    [[ "$output" == *"skipped (target is this source checkout): ${checkout} (Claude Code)"* ]]
+    [[ "$output" != *"Remove it manually"* ]]
+    [[ -f "$checkout/SKILL.md" ]]
+  done
+}
