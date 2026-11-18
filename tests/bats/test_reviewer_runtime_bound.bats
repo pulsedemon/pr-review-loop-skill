@@ -113,6 +113,8 @@ _require() {
     'the timer would fire and nothing would stop the reviewers, or a stopped timer would read as the budget'
   _require "$body" 'has a validated response or a recorded error, `TaskStop` the timer' \
     'a leftover timer exits later and reads as a timeout'
+  _require "$body" 'in a later message than the last `validate_reviewer_output.py` call' \
+    'Claude Code hosts stopped the timer in the same message as a validation whose result was not back'
   _require "$body" 'call `wait_agent` in waits of at most 60000 ms' \
     'Codex would wait on reviewers with no deadline'
   _require "$body" '`interrupt_agent` each one still running' \
