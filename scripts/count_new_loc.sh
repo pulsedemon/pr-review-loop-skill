@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# count_new_loc.sh — count added LOC vs. base, excluding generated/lock/snapshot files.
+# count_new_loc.sh: count added LOC vs. base, excluding generated/lock/snapshot files.
 #
 # Usage:
 #   count_new_loc.sh <base_branch>
@@ -13,9 +13,9 @@
 #   Capture stderr separately if you need the exclusion list.
 #
 # Exits:
-#   0 — counted successfully
-#   1 — usage error
-#   2 — git error (not a repo, base ref missing, etc.)
+#   0: counted successfully
+#   1: usage error
+#   2: git error (not a repo, base ref missing, etc.)
 
 set -euo pipefail
 
@@ -72,6 +72,12 @@ is_excluded() {
   return 1
 }
 
+# captured first: inside process substitution a failed diff would read as a zero count.
+# the loop below skips printf when this is empty, or it would read one blank row.
+if ! NUMSTAT=$(git -c core.quotepath=false diff --numstat "${BASE_REF}...HEAD"); then
+  exit 2
+fi
+
 TOTAL=0
 INCLUDED_LINES=""
 EXCLUDED_LINES=""
@@ -99,7 +105,7 @@ while IFS=$'\t' read -r added deleted path; do
   fi
   TOTAL=$((TOTAL + added))
   INCLUDED_LINES+="${added}"$'\t'"${deleted}"$'\t'"${path}"$'\n'
-done < <(git -c core.quotepath=false diff --numstat "${BASE_REF}...HEAD")
+done < <(if [[ -n "$NUMSTAT" ]]; then printf '%s\n' "$NUMSTAT"; fi)
 
 printf '%s\n' "$TOTAL"
 if [[ -n "$INCLUDED_LINES" ]]; then
