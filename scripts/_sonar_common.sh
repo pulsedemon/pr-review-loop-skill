@@ -36,16 +36,17 @@ fi
 # is missing, which would end the fetch early, or that is not for the requested
 # page or has no page size, which would never end it.
 sonar_has_next_page() {
-  local rc=0
-  jq -e --argjson page "$2" '.paging | [.pageIndex, .pageSize, .total]
+  local next
+  # jq exits 0 and prints nothing for an empty response, so read the answer, not the status.
+  next=$(jq --argjson page "$2" '.paging | [.pageIndex, .pageSize, .total]
     | if all(type == "number") and .[0] == $page and .[1] > 0
-      then .[0] * .[1] < .[2] else error("unusable paging") end' \
-    <<<"$1" >/dev/null || rc=$?
-  if ((rc > 1)); then
-    echo "ERROR: Sonar response has no usable paging for page $2; cannot tell whether more pages exist." >&2
-    exit 5
-  fi
-  return "$rc"
+      then .[0] * .[1] < .[2] else error("unusable paging") end' <<<"$1") || next=""
+  case "$next" in
+    true) return 0 ;;
+    false) return 1 ;;
+  esac
+  echo "ERROR: Sonar response has no usable paging for page $2; cannot tell whether more pages exist." >&2
+  exit 5
 }
 
 if [[ -z "$PROJECT_KEY" ]]; then

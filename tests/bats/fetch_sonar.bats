@@ -129,6 +129,33 @@ filler_keys() {
   [[ "$stderr" == *"paging"* ]]
 }
 
+@test "exits 5 when an issue page is empty output" {
+  stub_paged_sonar
+  echo "" >"${SONAR_FIXTURES}/issues-1.json"
+  issues_page 2 501 501 501
+
+  bats_require_minimum_version 1.5.0
+  run --separate-stderr bash "${SCRIPTS}/fetch_sonar.sh" 42 org_repo
+  [[ "$status" -eq 5 ]]
+  [[ -z "$output" ]]
+  [[ "$(grep -c '^list issues' "$SONAR_LOG")" -eq 1 ]]
+}
+
+@test "exits 5 when paging reports a page size of zero" {
+  stub_paged_sonar
+  for page in 1 2; do
+    jq -n --argjson page "$page" \
+      '{issues: [], paging: {pageIndex: $page, pageSize: 0, total: 1}}' \
+      >"${SONAR_FIXTURES}/issues-${page}.json"
+  done
+
+  bats_require_minimum_version 1.5.0
+  run --separate-stderr bash "${SCRIPTS}/fetch_sonar.sh" 42 org_repo
+  [[ "$status" -eq 5 ]]
+  [[ -z "$output" ]]
+  [[ "$(grep -c '^list issues' "$SONAR_LOG")" -eq 1 ]]
+}
+
 @test "exits 5 when a page reports a different page than the one requested" {
   stub_paged_sonar
   issues_page 1 501 1 500
