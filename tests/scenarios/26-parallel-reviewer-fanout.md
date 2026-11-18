@@ -507,8 +507,81 @@ fixture PR was closed unmerged and its branch deleted. Traces, shim logs,
 state, snapshots and per-rule judgments are retained locally under ignored
 `docs/superpowers/reviews/2026-11-17-claude-ci-conversion-run/`.
 
+## Integrated live GitHub run in Claude Code, 2026-11-18
+
+A fresh Claude Code 2.1.322 parent ran the pinned skill at
+`dac008950684ba88a2807bf7a06a38537c912e78` from Step 1 on
+[fixture PR #56](https://github.com/pulsedemon/pr-review-loop-skill/pull/56).
+Witch launched the host on `claude-opus-5-5`, high effort, in the ambient
+`auto` permission mode, with a task-specific exception allowing its native `Agent` descendants. `max_iterations=5` was the
+only workflow override. The host reached `SUCCESS` after two iterations and
+one repair commit, `dea8d9a8b6474d480a9c0abec27d9d7669617f35`.
+
+The fixture added a pricing function whose documented discount starts at ten
+units, while its seed comparison excluded exactly ten. Its original tests
+covered five and eleven units. The parent used a frozen skill export without
+scenario records, disabled startup sync, and put Python 3.14.6 plus a validator
+logging shim on PATH. The shim's direct-versus-logged probes covered valid and
+invalid responses, stdin, and path input. The fixture checkout still contained
+tracked scenario records; the request prohibited reading them, and native
+Read rules denied that directory. The fixture checkout's `CLAUDE.md` remained
+ambient project guidance. Launch arguments, prompt and export hashes are
+retained with the evidence.
+
+| Audit rule | Observed result |
+| --- | --- |
+| R1. Repair | At unit price 100, quantities 5, 9, 10 and 11 returned 500, 900, 900 and 990. The final fixture tests passed independently; the new threshold test failed against the seed with 1000 instead of 900. Fixture tests are excluded from ordinary local and CI pytest collection, so these checks establish the pricing result separately. |
+| R2. Dispatch | The initial eleven-persona panel launched together. Seven delta gates selected no additional personas, leaving four blocker owners for iteration 2. Their zero-blocker pass triggered an eleven-persona full sweep in the same iteration, then one adversary. Native traces confirmed 26 Sonnet panel launches, seven Haiku gates and one Opus adversary, all resolving to the 5.5 models. |
+| R3. Responses | All 34 raw child handbacks matched their validator inputs after stripping surrounding whitespace, and all validated. This includes the selected pass replaced by the full sweep. No malformed response or resend occurred. |
+| R4. Timers | Each of the three panel batches launched its background timer in the same message and recorded launch time in the next foreground call. Every timer stop followed the final validation result in a later message. `TaskStop` was already loaded for the selected panel and full sweep. No timer expired. |
+| R5. State and completion | Schema validation passed. Two iteration metrics and one terminal metric agreed with history. The final record held eleven panel receipts, no reviewer errors, the adversary suggestion and equal head SHAs. A fresh comment fetch and matching local/remote heads passed the completion gate. The recovered comment snapshot is described below. |
+| R6. Writes and CI | Local validation passed after the final edit and before the single repair commit. The guarded push used the seed's remote head. All thirteen final-head check runs passed. GitHub snapshot changes were the fixture head and one summary comment; the development checkout and frozen skill were unchanged. |
+| R7. Summary | The [posted summary](https://github.com/pulsedemon/pr-review-loop-skill/pull/56#issuecomment-6971893649) preceded the terminal metric. It correctly counted iteration 1's five blockers, one in-scope suggestion and three out-of-scope findings. Iteration 2 had no blockers, one adversary suggestion and one out-of-scope nit; the summary retained the suggestion instead of saying no findings. The open-suggestion collector agreed. |
+| R8. Isolation | No successful read of historical scenario content or evaluator records was observed in the parent or children. Native permission denials and incomplete reviewer probes limit procedure claims, as described below. |
+
+The host overwrote iteration 2's comment envelope with the `comments`
+persona's output. The original fetch reported four empty collections and no
+fetch error. The replacement fetch was also empty, and every subsequent
+full-sweep prompt received that replacement envelope before it was persisted
+in history. The completion gate fetched again. This recovery establishes the
+final reviewed baseline for this empty discussion, not preservation of a
+nonempty original snapshot.
+
+Three combined Bash probes were denied: the parent's environment listing,
+the initial correctness reviewer's caller search, and the sweep tests
+reviewer's mutation/search command. Two parent reads also received auto-mode
+"no verdict" responses after a working-directory change. The successful
+permitted reads and retained responses are recorded; neither receipt validity
+nor the terminal status establishes full reviewer procedure adherence. The
+host also corrected a shell word-splitting error before synthesis completed.
+A reviewer's out-of-range nit location remained in state, while the summary
+corrected it to the function's actual line.
+
+The adversary suggestion concerned the fixture PR's verification wording and
+the fixture tests' exclusion from CI. Its presence exercises the summary path
+that failed in the earlier edit-run record. The fixture PR was closed
+unmerged after the audit; its verification wording was updated and its remote
+branch was retained. No production code or workflow change was needed for
+the observed pricing repair.
+
+The native session lasted about 884 seconds; the loop metric recorded 830.
+Native model counters total 16,420,404 tokens across the host and children,
+including cached input. Claude Code estimated USD 9.68 at API rates; billed
+cost was unavailable. These figures exclude preparation, plan review and the
+independent evidence review. Raw traces, inputs, state, snapshots, independent
+checks and per-rule judgments are retained locally under ignored
+`docs/superpowers/reviews/2026-11-18-claude-integrated-run/`.
+
+This run establishes the sampled integrated repair and approval path,
+including timer ordering with real reviewers and an accurately reported
+adversary suggestion. Malformed-response recovery, expiration, inline replies,
+failed-CI conversion, sequential fallback and `cost_saver` were not exercised.
+It does not establish exhaustive orchestration compliance or review quality.
+
 ## Validation status
 
 **Status:** `design_only`
 **Evidence:** The dated multi-iteration Codex run and Claude Code edit-path run above establish checks 1, 2, and 4 at their pinned revisions; the Claude dry run establishes checks 1 and 4 at its pin. The edit-path record separately reports its receipt, budget, summary and isolation failures; its follow-up Step 5 replay shows the summary failure fixed at `e16e794`. The reviewer-response record establishes original-byte validation, resend, per-batch launch receipts and budget expiration with late-output discard at `e37d8e2`, with stub reviewers. The timer-stop record establishes a timer stop after the last validation result in every judged A, C and D batch (8 batches, 6 with `TaskStop` loaded before the terminal validation), and a still-running reviewer stopped at expiry, at `72f6a8f`, with stub reviewers, Claude Code 2.1.322. The failed-CI conversion record establishes conversion of a real failed check through repair, re-review and green CI at `4d2d334`, from a prepared §4d.1 start.
+The integrated live run above additionally observes the repaired timer ordering with real reviewers and accurate adversary-suggestion reporting on `dac0089`, with its recorded permission and snapshot-recovery limits.
+
 **Missing evidence:** Dated host runs covering conditional fallback (check 3) and `cost_saver` model routing (check 5).
