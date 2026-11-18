@@ -75,6 +75,12 @@ INVOICE_SPLIT = {
     ],
     "estimated_new_loc": 520,
 }
+STRINGS_SPLIT = {
+    "name": "strings utils",
+    "rationale": "Shared helpers.",
+    "files": ["apps/web/utils/strings.ts", "apps/web/utils/strings.test.ts"],
+    "estimated_new_loc": 90,
+}
 REMAINING_PATHS = [
     "apps/web/utils/strings.ts",
     "apps/web/utils/strings.test.ts",
@@ -358,6 +364,56 @@ def test_validate_pr_scope_output_rejects_self_dependency() -> None:
             excluded_paths=EXCLUDED_PATHS,
             new_loc_total=NEW_LOC_TOTAL,
         )
+
+
+def validate_three_split_dependencies(
+    *, catalog: list[str], invoice: list[str], strings: list[str]
+) -> None:
+    validate_pr_scope_output(
+        payload=make_payload(
+            splits=[
+                {**CATALOG_SPLIT, "depends_on": catalog},
+                {**INVOICE_SPLIT, "depends_on": invoice},
+                {**STRINGS_SPLIT, "depends_on": strings},
+            ],
+            remaining_in_original=["docs/changelog.md"],
+        ),
+        per_file=PER_FILE,
+        excluded_paths=EXCLUDED_PATHS,
+        new_loc_total=NEW_LOC_TOTAL,
+    )
+
+
+def test_validate_pr_scope_output_rejects_two_split_dependency_cycle() -> None:
+    with pytest.raises(
+        PrScopeOutputValidationError,
+        match="forms a cycle: invoice-renderer refactor -> strings utils -> "
+        "invoice-renderer refactor$",
+    ):
+        validate_three_split_dependencies(
+            catalog=[], invoice=["strings utils"], strings=["invoice-renderer refactor"]
+        )
+
+
+def test_validate_pr_scope_output_rejects_three_split_dependency_cycle() -> None:
+    with pytest.raises(
+        PrScopeOutputValidationError,
+        match="forms a cycle: catalog-preview middleware -> invoice-renderer refactor -> "
+        "strings utils -> catalog-preview middleware$",
+    ):
+        validate_three_split_dependencies(
+            catalog=["invoice-renderer refactor"],
+            invoice=["strings utils"],
+            strings=["catalog-preview middleware"],
+        )
+
+
+def test_validate_pr_scope_output_accepts_dependency_chain() -> None:
+    validate_three_split_dependencies(
+        catalog=["invoice-renderer refactor", "strings utils"],
+        invoice=["strings utils"],
+        strings=[],
+    )
 
 
 def test_validate_pr_scope_output_rejects_partial_split_missing_from_remaining() -> None:
