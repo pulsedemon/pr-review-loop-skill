@@ -42,6 +42,29 @@ def _reject_unexpected_keys(obj: dict[str, Any], *, allowed: set[str], label: st
         )
 
 
+def _reject_dependency_cycles(dependencies: dict[str, list[str]]) -> None:
+    """Reject split merge orders that cannot be satisfied."""
+    finished: set[str] = set()
+    path: list[str] = []
+
+    def visit(name: str) -> None:
+        if name in finished:
+            return
+        if name in path:
+            cycle = [*path[path.index(name) :], name]
+            raise PrScopeOutputValidationError(
+                "split.depends_on forms a cycle: " + " -> ".join(cycle)
+            )
+        path.append(name)
+        for dependency in dependencies[name]:
+            visit(dependency)
+        path.pop()
+        finished.add(name)
+
+    for name in dependencies:
+        visit(name)
+
+
 def _path_from_file_entry(entry: Any) -> tuple[str, bool]:
     if isinstance(entry, str):
         return entry, False
@@ -193,6 +216,7 @@ def validate_pr_scope_output(
     split_names: set[str] = set()
     saw_partial = False
     estimated_total = 0
+    dependencies: dict[str, list[str]] = {}
 
     for split in splits:
         if not isinstance(split, dict):
@@ -220,16 +244,16 @@ def validate_pr_scope_output(
             raise PrScopeOutputValidationError(
                 "split.depends_on must be a list of non-empty strings when present"
             )
-        if isinstance(depends_on, list):
-            for dependency in depends_on:
-                if dependency == name:
-                    raise PrScopeOutputValidationError(
-                        f"split.depends_on for '{name}' cannot reference itself"
-                    )
-                if dependency not in split_names:
-                    raise PrScopeOutputValidationError(
-                        f"split.depends_on references unknown split '{dependency}'"
-                    )
+        dependencies[name] = depends_on or []
+        for dependency in dependencies[name]:
+            if dependency == name:
+                raise PrScopeOutputValidationError(
+                    f"split.depends_on for '{name}' cannot reference itself"
+                )
+            if dependency not in split_names:
+                raise PrScopeOutputValidationError(
+                    f"split.depends_on references unknown split '{dependency}'"
+                )
         estimated_total += estimated
         split_has_partial = False
 
@@ -263,6 +287,8 @@ def validate_pr_scope_output(
             raise PrScopeOutputValidationError(
                 "partial-file splits must have positive estimated_new_loc"
             )
+
+    _reject_dependency_cycles(dependencies)
 
     remaining_paths = _remaining_paths(
         remaining,
