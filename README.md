@@ -30,7 +30,7 @@ cd pr-review-loop-skill
 ./install.sh --codex
 ```
 
-Choose the flag for your host below, then restart that host. This repository is private, so cloning requires GitHub access. Run `gh auth login` if you have not authenticated yet.
+Choose the flag for your host below, then restart that host.
 
 Keep the cloned skill directory: installed links depend on it. The default checkout follows `main` through [startup sync](docs/skill-update.md#startup-sync). To keep a fixed revision instead, use [version pinning](docs/skill-update.md#pinning-a-version).
 

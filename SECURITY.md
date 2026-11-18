@@ -2,11 +2,11 @@
 
 ## Reporting a vulnerability
 
-Report vulnerabilities through [GitHub private vulnerability reporting](https://github.com/pulsedemon/pr-review-loop-skill/security/advisories/new) when it is enabled. If that form is unavailable, [open an issue](https://github.com/pulsedemon/pr-review-loop-skill/issues/new) requesting a private contact channel without describing the vulnerability. Do not put credentials, private source, or exploit details in a public issue.
+Report vulnerabilities through [GitHub private vulnerability reporting](https://github.com/pulsedemon/pr-review-loop-skill/security/advisories/new). If that form is unavailable, [open an issue](https://github.com/pulsedemon/pr-review-loop-skill/issues/new) requesting a private contact channel without describing the vulnerability. Do not put credentials, private source, or exploit details in a public issue.
 
 Include the skill commit or release, host and version, affected helper or workflow, impact, and a minimal reproduction with sensitive values removed.
 
-Security fixes target the latest release. Until the first release, reports are accepted against `main`; no release has been designated as supported yet.
+Security fixes target the latest release.
 
 ## Access and execution
 
