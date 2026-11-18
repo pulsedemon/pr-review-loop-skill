@@ -449,8 +449,66 @@ host's own delta-gate pass, or with the adversary. Traces, validator logs,
 state, judge output and the harness are retained locally under ignored
 `docs/superpowers/reviews/2026-11-17-claude-timer-stop/`.
 
+## Live failed-CI conversion run in Claude Code, 2026-11-17
+
+A bounded host run for
+[issue #46](https://github.com/pulsedemon/pr-review-loop-skill/issues/46) at
+`4d2d334`. A fresh headless Claude Code 2.1.322 parent on `claude-opus-5-5`
+ran a read-only export of the pin against
+[fixture PR #51](https://github.com/pulsedemon/pr-review-loop-skill/pull/51)
+with `max_iterations=5`, under the user's ambient `auto` permission mode and
+the edit run's allow and deny rules plus denials for the install checkout and
+the installed skill. The fixture added the edit run's corrected pricing module,
+its three tests and a README with one extra blank line, so CI's `markdown`
+check failed with MD012 and the other nine checks passed.
+
+The host did not start at Step 1. In the edit run the iteration-2 adversary
+looked up the already-red `markdown` job with `gh run view` and the host fixed
+it before the first `ci_wait.sh`, and every check here finishes within two
+minutes, so a red seed is visible before any reviewer runs. This run therefore
+prepared Steps 1 to 3.5 with the pinned scripts and handed the host a validated
+iteration-1 approval: eleven approving panel responses, an approving
+adversary, the §4c result and an empty comment envelope. The request told the
+host to skip Step 3.6's resume dispatch and continue iteration 1 at §4d.1.
+Iteration 2 was a real review. A `python3` shim logged every reviewer and gate
+validation input byte for byte.
+
+The host recorded `success` after two iterations and one repair commit,
+`2068f29`. Rules were fixed before launch.
+
+| Rule | Result |
+| --- | --- |
+| Conversion | Passed. The first `ci_wait.sh` ran on the fixture head and exited 1 with `markdown` failed. A `check_exit_conditions.py` call carried the failed name and returned no terminal status. `fetch_ci_log.sh 51 markdown` exited 0 before the edit check. Iteration 1's entry has `ci_status: "failure"`, `ci_failed_checks: ["markdown"]` and one blocker, `reviewer: "ci"`, `scope: "in_scope"`, `summary: "markdown failed"`, whose detail is the fetched log tail with the MD012 line. The prepared fields and comment envelope were recorded unchanged. |
+| Edit and local validation | Passed. A non-terminal edit check, one edit to the fixture README, then `run_local_validation.sh` exiting 0 before the commit. |
+| Commit and push | Passed. One single-parent commit removing the blank line, pushed with `safe_push.sh` against the fixture head, and the `code_changed: true` disposition call before the append. The message has no `Addressed:` body; the host loaded `commit-message`, whose rules allow none for a single change. |
+| Re-review | Passed. Iteration 2 gated all eleven personas in one message (`haiku`); every gate said not relevant, so all were skipped and the forced full sweep ran eleven reviewers in one message (`sonnet`). Three replies failed the schema; their original bytes were validated and rejected, each was resent with `SendMessage`, and the resends validated. Every validator input matched the reviewer's raw reply. One adversary (`opus`) approved with one in-scope suggestion. |
+| CI wait to green | Passed. The second `ci_wait.sh` ran after the adversary and before the append, exited 0, and its recorded job ids match the final head's ten passing checks, `markdown` included. |
+| Completion gate and terminal | Passed. The completion call had a fresh comment fetch and matching local and remote heads, returned no terminal status, and preceded the summary and terminal metric. `metrics.jsonl` has two iteration lines and one `SUCCESS` line. |
+| Summary | One marked comment, posted before the terminal metric, naming the CI failure and its fix and iteration 2's suggestion and two deferred nits, in plain sentences rather than the template's headings. |
+| Other writes and environment | Only the push and the summary reached GitHub. Every Python call ran 3.14.6 through the shim; the install checkout was unchanged; no denials. |
+| Budget recipe | Passed for the sweep batch: background reviewers, a `sleep 1800` timer with `timeout: 1860000`, `date +%s` in its own call, and the timer stopped in a later message than the last validation, after its result, with `TaskStop` already loaded. |
+
+The native session lasted about 665 seconds. Native counters total 7,681,939
+tokens for the parent and 2,112,793 for its 23 children, mostly cached input.
+
+This run establishes, once and in Claude Code 2.1.322, that a real failed
+check reaching `ci_wait.sh` is converted to a `ci` blocker from its fetched
+log, repaired, committed, pushed, re-reviewed and taken to green CI through
+the completion gate. It does not establish the loop's own path to that point:
+the host never ran Steps 1 to 3.6 or iteration 1's review, the prepared
+approval differs from what the edit run's real adversary did on the same
+content, and the natural pre-emption of a red check by reviewers is not
+retested. The `CI_STUCK` repeat comparison and `fetch_ci_log.sh` fallback
+exits did not occur. The fixture PR body linked #46, so the host read the
+issue as a linked ticket. `loop_started_at` was set during preparation, so the
+terminal metric's 760 seconds include it. Local validation never runs
+markdownlint here, so only the green `markdown` check proves the repair. The
+fixture PR was closed unmerged and its branch deleted. Traces, shim logs,
+state, snapshots and per-rule judgments are retained locally under ignored
+`docs/superpowers/reviews/2026-11-17-claude-ci-conversion-run/`.
+
 ## Validation status
 
 **Status:** `design_only`
-**Evidence:** The dated multi-iteration Codex run and Claude Code edit-path run above establish checks 1, 2, and 4 at their pinned revisions; the Claude dry run establishes checks 1 and 4 at its pin. The edit-path record separately reports its receipt, budget, summary and isolation failures; its follow-up Step 5 replay shows the summary failure fixed at `e16e794`. The reviewer-response record establishes original-byte validation, resend, per-batch launch receipts and budget expiration with late-output discard at `e37d8e2`, with stub reviewers. The timer-stop record establishes a timer stop after the last validation result in every judged A, C and D batch (8 batches, 6 with `TaskStop` loaded before the terminal validation), and a still-running reviewer stopped at expiry, at `72f6a8f`, with stub reviewers, Claude Code 2.1.322.
-**Missing evidence:** Dated host runs covering conditional fallback (check 3) and `cost_saver` model routing (check 5). The Claude live edit-path run also leaves failed-CI conversion unverified.
+**Evidence:** The dated multi-iteration Codex run and Claude Code edit-path run above establish checks 1, 2, and 4 at their pinned revisions; the Claude dry run establishes checks 1 and 4 at its pin. The edit-path record separately reports its receipt, budget, summary and isolation failures; its follow-up Step 5 replay shows the summary failure fixed at `e16e794`. The reviewer-response record establishes original-byte validation, resend, per-batch launch receipts and budget expiration with late-output discard at `e37d8e2`, with stub reviewers. The timer-stop record establishes a timer stop after the last validation result in every judged A, C and D batch (8 batches, 6 with `TaskStop` loaded before the terminal validation), and a still-running reviewer stopped at expiry, at `72f6a8f`, with stub reviewers, Claude Code 2.1.322. The failed-CI conversion record establishes conversion of a real failed check through repair, re-review and green CI at `4d2d334`, from a prepared §4d.1 start.
+**Missing evidence:** Dated host runs covering conditional fallback (check 3) and `cost_saver` model routing (check 5).
