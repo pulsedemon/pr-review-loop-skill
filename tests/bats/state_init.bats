@@ -3,9 +3,8 @@
 load test_helper
 
 setup() {
-  # Resolve the real `jq` path BEFORE any stub prepends $BATS_TEST_TMPDIR/stubs
-  # to PATH. The jq-mismatch test below stubs `jq` itself; without a captured
-  # absolute path, the stub's pass-through fallback would recurse into the stub.
+  # capture jq before installing stubs so their pass-through fallback
+  # cannot resolve back to the stub itself.
   REAL_JQ=$(command -v jq)
   export REAL_JQ
   make_tmp_repo
@@ -53,9 +52,7 @@ JSON'
 }
 
 @test "resume same PR exits 0 even when gh pr view fails" {
-  # Pins the reorder: the existing-state short-circuit runs BEFORE any gh pr
-  # view call, so a transient gh/auth failure on resume cannot mask valid
-  # resumable state by exiting 7.
+  # a transient gh/auth failure must not mask valid resumable state.
   run bash "${SCRIPTS}/state_init.sh" o r 42
   [[ "$status" -eq 0 ]]
   stub_cmd gh 'echo "gh: could not connect to github.com" >&2; exit 1'
@@ -134,11 +131,6 @@ JSON'
 }
 
 @test "ADVERSARY_CAP vs schema mismatch exits 6" {
-  # Stub jq so any schema-maximum read returns a value that disagrees with
-  # ADVERSARY_CAP=2 from scripts/_adversary_caps.sh. The rest of state_init's
-  # jq calls (which take --argjson / --arg flags) pass through to real jq via
-  # the absolute path captured in setup(): `command -v jq` at stub run-time
-  # would resolve back to the stub itself.
   stub_cmd jq "
     if [[ \"\$*\" == *.maximum* ]]; then
       echo 999
@@ -152,18 +144,14 @@ JSON'
 }
 
 @test "ADVERSARY_CAP vs schema mismatch on second field exits 6 and names that field" {
-  # Pins that scripts/state_init.sh iterates BOTH schema fields. A refactor
-  # that collapsed the `for FIELD in …` loop to a single field would still
-  # pass the symmetric-stub mismatch test above (because the stub returns a
-  # uniform value), so this asymmetric stub returns 2 for the first field
-  # (matching ADVERSARY_CAP) and 3 for the second to force the second
-  # iteration's branch.
+  # let the first field match so a skipped second field cannot pass through
+  # the symmetric stub's first-field failure.
   stub_cmd jq "
     if [[ \"\$*\" == *shallow_approval_adversary_runs.maximum* ]]; then
-      echo 3
+      echo 999
       exit 0
     elif [[ \"\$*\" == *shallow_adversary_runs.maximum* ]]; then
-      echo 2
+      echo $(python3 -c 'import sys, yaml; print(yaml.safe_load(open(sys.argv[1]))["cap"])' "${REPO_ROOT}/manifests/adversary-caps.yaml")
       exit 0
     fi
     exec \"${REAL_JQ}\" \"\$@\"
@@ -181,18 +169,12 @@ JSON'
 }
 
 @test "missing _adversary_caps.sh helper exits 6" {
-  # Copy state_init.sh into an isolated dir WITHOUT the _adversary_caps.sh
-  # helper alongside it. state_init.sh resolves HERE via `dirname "$0"`, so
-  # the helper lookup at "${HERE}/_adversary_caps.sh" will fail. Without the
-  # readability guard added to state_init.sh, `set -euo pipefail` would trip
-  # on the `.` builtin and exit 1: silently bypassing the documented exit-6
-  # ladder. This test pins the guard so a future refactor can't regress it.
+  # sourcing a missing helper under set -e would exit 1, losing the
+  # documented exit 6 and its diagnostic.
   local fake_scripts="${BATS_TEST_TMPDIR}/fake_scripts"
   mkdir -p "$fake_scripts"
   cp "${SCRIPTS}/state_init.sh" "${fake_scripts}/state_init.sh"
-  # state_init.sh also reads templates/state.schema.json via "${HERE}/../templates".
-  # The guard runs BEFORE that read, so the missing templates dir doesn't matter
-  # here: but the test fails fast if the guard regresses and we fall through.
+  # the helper guard precedes the schema read, so no templates are needed.
   run bash "${fake_scripts}/state_init.sh" o r 42
   [[ "$status" -eq 6 ]] || {
     echo "expected exit 6, got $status"
@@ -206,10 +188,7 @@ JSON'
 }
 
 @test "schema cap unreadable (jq returns null) exits 6 with field-name error" {
-  # When jq -r prints "null" (the path was renamed or removed), the guard at
-  # scripts/state_init.sh's `[[ ! "$SCHEMA_CAP" =~ ^[0-9]+$ ]]` must trip and
-  # surface the field-name in stderr: distinct from the value-mismatch path
-  # which says "disagrees with schema maximum".
+  # an unreadable maximum must name its field, separately from a value mismatch.
   stub_cmd jq "
     if [[ \"\$*\" == *.maximum* ]]; then
       echo null
@@ -252,9 +231,8 @@ JSON'
 @test "persists default knob values so Step 5 terminal metric reflects real state" {
   run bash "${SCRIPTS}/state_init.sh" o r 42
   [[ "$status" -eq 0 ]]
-  # SKILL.md Step 5 reads these fields for the terminal metric `knobs` block.
-  # If state_init does not write them, every record logs the same default and
-  # scenario 21 check 3 trivially passes.
+  # absent fields make terminal metrics report fallback values instead of
+  # the configuration used by this loop.
   jq -e '
     .pr_scope_mode == "auto" and
     .max_new_loc == 1000 and
@@ -283,7 +261,7 @@ JSON'
 }
 
 @test "a non-literal dry_run value is rejected rather than treated as false" {
-  # This argument gates the no-write path, so a typo must fail setup instead of
+  # this argument gates the no-write path, so a typo must fail setup instead of
   # silently enabling commit/push.
   for bad in True tru yes 1; do
     run bash "${SCRIPTS}/state_init.sh" o r 42 15 "$bad"
