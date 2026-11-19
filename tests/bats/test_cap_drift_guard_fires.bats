@@ -167,3 +167,14 @@ setup() {
   run bash "${TMP_REPO}/tests/run.sh"
   assert_guard_fires "sibling-fixture.md"
 }
+
+@test "run.sh drops the parallel flags on a one-core machine" {
+  stub_cmd nproc 'echo 1'
+  stub_cmd bats '[[ "$1" == --version ]] && { echo "Bats 1.13.0"; exit 0; }; echo "bats args: $*"'
+  run bash "${TMP_REPO}/tests/run.sh"
+  assert_clean_exit
+  [[ "$output" == "bats args: ${TMP_REPO}/tests/bats" ]] || {
+    echo "expected bats to get only the test directory, got: $output"
+    return 1
+  }
+}
