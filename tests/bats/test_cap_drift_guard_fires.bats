@@ -21,6 +21,14 @@ assert_guard_fires() {
   }
 }
 
+assert_clean_exit() {
+  [[ "$status" -eq 0 ]] || {
+    echo "expected exit 0, got $status"
+    echo "output: $output"
+    return 1
+  }
+}
+
 setup() {
   TMP_REPO="${BATS_TEST_TMPDIR}/repo"
   mkdir -p "${TMP_REPO}/tests" "${TMP_REPO}/docs"
@@ -50,15 +58,7 @@ setup() {
 
 @test "cap-drift guard does not flag the allow-listed canonical paths" {
   run bash "${TMP_REPO}/tests/run.sh"
-  [[ "$status" -eq 0 ]] || {
-    echo "expected exit 0 on clean tree, got $status"
-    echo "output: $output"
-    return 1
-  }
-  [[ "$output" != *"adversary cap literal (2) appears next to cap field name"* ]] || {
-    echo "guard fired unexpectedly on clean tree: $output"
-    return 1
-  }
+  assert_clean_exit
 }
 
 @test "cap-drift guard fires on shallow_approval_adversary_runs == 2 (second alternation, == operator)" {
@@ -94,45 +94,21 @@ setup() {
   printf '%s\n' 'frozen spec quote: shallow_adversary_runs < 2' \
     > "${TMP_REPO}/docs/superpowers/sp-fixture.md"
   run bash "${TMP_REPO}/tests/run.sh"
-  [[ "$status" -ne 3 ]] || {
-    echo "guard exited 3 on docs/superpowers/ fixture; exclusion regressed"
-    echo "output: $output"
-    return 1
-  }
-  [[ "$output" != *"adversary cap literal (2) appears next to cap field name"* ]] || {
-    echo "guard fired on docs/superpowers/ fixture; exclusion regressed: $output"
-    return 1
-  }
+  assert_clean_exit
 }
 
 @test "cap-drift guard does NOT fire on violation under tests/scenarios/" {
   printf '%s\n' 'scenario expectation: shallow_approval_adversary_runs == 2' \
     > "${TMP_REPO}/tests/scenarios/sc-fixture.md"
   run bash "${TMP_REPO}/tests/run.sh"
-  [[ "$status" -ne 3 ]] || {
-    echo "guard exited 3 on tests/scenarios/ fixture; exclusion regressed"
-    echo "output: $output"
-    return 1
-  }
-  [[ "$output" != *"adversary cap literal (2) appears next to cap field name"* ]] || {
-    echo "guard fired on tests/scenarios/ fixture; exclusion regressed: $output"
-    return 1
-  }
+  assert_clean_exit
 }
 
 @test "cap-drift guard does NOT fire on violation under tools/recall-harness/" {
   printf '%s\n' 'real-miss quote: shallow_adversary_runs <= 2' \
     > "${TMP_REPO}/tools/recall-harness/rh-fixture.md"
   run bash "${TMP_REPO}/tests/run.sh"
-  [[ "$status" -ne 3 ]] || {
-    echo "guard exited 3 on tools/recall-harness/ fixture; exclusion regressed"
-    echo "output: $output"
-    return 1
-  }
-  [[ "$output" != *"adversary cap literal (2) appears next to cap field name"* ]] || {
-    echo "guard fired on tools/recall-harness/ fixture; exclusion regressed: $output"
-    return 1
-  }
+  assert_clean_exit
 }
 
 @test "cap-drift guard does NOT scan local .worktrees/" {
@@ -141,16 +117,7 @@ setup() {
     > "${TMP_REPO}/.worktrees/manual-scenario-validation/tests/run.sh"
 
   run bash "${TMP_REPO}/tests/run.sh"
-
-  [[ "$status" -eq 0 ]] || {
-    echo "expected exit 0 with ignored .worktrees fixture, got $status"
-    echo "output: $output"
-    return 1
-  }
-  [[ "$output" != *"adversary cap literal (2) appears next to cap field name"* ]] || {
-    echo "guard fired on .worktrees fixture; exclusion regressed: $output"
-    return 1
-  }
+  assert_clean_exit
 }
 
 @test "cap-drift guard fires on shallow_adversary_runs<2 (zero-space, single-char operator)" {
