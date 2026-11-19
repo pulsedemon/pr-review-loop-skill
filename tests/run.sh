@@ -185,4 +185,7 @@ fi
 
 # one GNU parallel job per file avoids process startup for every test.
 jobs=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
-exec bats --jobs "$jobs" --no-parallelize-within-files "${HERE}/bats"
+if ((jobs > 1)); then
+  exec bats --jobs "$jobs" --no-parallelize-within-files "${HERE}/bats"
+fi
+exec bats "${HERE}/bats"
