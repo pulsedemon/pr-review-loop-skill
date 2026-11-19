@@ -59,6 +59,12 @@ setup() {
   assert_guard_fires "note.md"
 }
 
+@test "cap-drift guard scans comparisons inside tests/run.sh" {
+  printf '\n%s\n' '# shallow_adversary_runs < 2' >>"${TMP_REPO}/tests/run.sh"
+  run bash "${TMP_REPO}/tests/run.sh"
+  assert_guard_fires "./tests/run.sh:"
+}
+
 @test "cap-drift guard does not flag the allow-listed canonical paths" {
   rm "${TMP_REPO}/docs/adversary.md" "${TMP_REPO}/templates"
   mkdir "${TMP_REPO}/templates"
