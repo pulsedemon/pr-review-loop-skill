@@ -21,25 +21,11 @@ load test_helper
   }
 }
 
-# Behavioral guards on the cap regex (CAP_REGEX in tests/run.sh) and the
-# SKILL.md forced-counter proximity canary. Cap-value mirror sync is owned by
-# `scripts/regen_adversary_caps.py`.
+# operator coverage runs end to end in test_cap_drift_guard_fires.bats; the
+# test below keeps the boundary that stops the cap matching a longer number.
 
-# The cap-drift regex (CAP_REGEX in tests/run.sh) must catch the common
-# paraphrases of "<cap_field> compared to 2" — including end-of-line and the
-# >/>= operators that aren't in the docs/adversary.md canonical sentence.
-# Without these fixtures, a regex regression could silently make the guard a
-# no-op for the very paraphrases we expect maintainers to write.
-#
-# The regex is grep-extracted from tests/run.sh so the fixtures track the
-# canonical pattern; a regex change in tests/run.sh that breaks these matches
-# will fail these tests, not silently drift.
-#
-# Contract: CAP_REGEX must remain a single-line top-level assignment in
-# tests/run.sh of the form `CAP_REGEX='...'`. If the regex is ever split into
-# named sub-patterns, indented under a function, or moved to another file, the
-# `_cap_regex` extractor will return empty and the non-empty guard below fires
-# loudly rather than letting `grep -qE ""` silently match everything.
+# CAP_REGEX must stay a single-line top-level assignment in tests/run.sh.
+# an empty extraction fails here instead of matching everything.
 _cap_regex() {
   local extracted
   extracted=$(grep -E "^CAP_REGEX=" "${REPO_ROOT}/tests/run.sh" \
@@ -50,16 +36,6 @@ _cap_regex() {
     return 1
   fi
   printf '%s' "$extracted"
-}
-
-@test "CAP_REGEX matches 'shallow_adversary_runs < 2' at end of line" {
-  local cap_regex; cap_regex=$(_cap_regex) || return 1
-  printf 'shallow_adversary_runs < 2\n' | grep -qE "$cap_regex"
-}
-
-@test "CAP_REGEX matches 'shallow_approval_adversary_runs >= 2'" {
-  local cap_regex; cap_regex=$(_cap_regex) || return 1
-  printf 'shallow_approval_adversary_runs >= 2 stop\n' | grep -qE "$cap_regex"
 }
 
 @test "CAP_REGEX does not match 'shallow_adversary_runs < 20'" {
