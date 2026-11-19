@@ -3,24 +3,20 @@
 load test_helper
 
 @test "scripts/_adversary_caps.sh sources cleanly and exports ADVERSARY_CAP" {
-  # End-to-end behavioral guard: if regen_adversary_caps._regen_helper ever
-  # writes a syntactically broken cog body (missing `fi`, stray quoting,
-  # set -u violation, etc.), regen-check.sh --check still passes vacuously
-  # (before == after — the broken body is what the generator emits) and
-  # the cog/marker canaries still pass (markers present). Sourcing the
-  # real on-disk helper in a subshell and asserting ADVERSARY_CAP is set
-  # to the manifest value catches that class of breakage at the runtime
-  # contract layer, mirroring the deleted test_adversary_cap_drift.bats
-  # sourceability check.
+  # regen-check.sh compares the generator's output with itself, so a
+  # syntactically broken helper body passes it. sourcing the real helper and
+  # comparing ADVERSARY_CAP with the manifest catches that.
   run bash -c "source '${REPO_ROOT}/scripts/_adversary_caps.sh' && echo \"\${ADVERSARY_CAP}\""
   [[ "$status" -eq 0 ]] || {
     echo "scripts/_adversary_caps.sh failed to source (exit $status). Output:"
     echo "$output"
     return 1
   }
-  [[ "$output" == "2" ]] || {
-    echo "ADVERSARY_CAP exported value is '$output', expected '2'."
-    echo "If the manifest cap intentionally changed, also update this assertion."
+  local cap
+  cap=$(python3 -c 'import sys, yaml; print(yaml.safe_load(open(sys.argv[1]))["cap"])' \
+    "${REPO_ROOT}/manifests/adversary-caps.yaml")
+  [[ "$output" == "$cap" ]] || {
+    echo "ADVERSARY_CAP exported value is '$output'; manifests/adversary-caps.yaml says '$cap'."
     return 1
   }
 }
