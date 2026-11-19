@@ -60,6 +60,11 @@ setup() {
 }
 
 @test "cap-drift guard does not flag the allow-listed canonical paths" {
+  rm "${TMP_REPO}/docs/adversary.md" "${TMP_REPO}/templates"
+  mkdir "${TMP_REPO}/templates"
+  printf '%s\n' 'shallow_adversary_runs < 2' >"${TMP_REPO}/docs/adversary.md"
+  printf '%s\n' '{"description": "shallow_approval_adversary_runs == 2"}' \
+    >"${TMP_REPO}/templates/state.schema.json"
   run bash "${TMP_REPO}/tests/run.sh"
   assert_clean_exit
 }
