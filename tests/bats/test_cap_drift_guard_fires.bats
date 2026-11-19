@@ -31,7 +31,10 @@ assert_clean_exit() {
 
 setup() {
   TMP_REPO="${BATS_TEST_TMPDIR}/repo"
-  mkdir -p "${TMP_REPO}/tests" "${TMP_REPO}/docs"
+  mkdir -p "${TMP_REPO}/tests" "${TMP_REPO}/docs" "${TMP_REPO}/manifests"
+  # a fixture cap keeps operator and boundary coverage independent of the
+  # cap currently shipped in the real manifest.
+  printf 'cap: 2\n' >"${TMP_REPO}/manifests/adversary-caps.yaml"
   # symlink the dirs the guard scans so allow-listed paths resolve identically
   ln -s "${REPO_ROOT}/docs/adversary.md" "${TMP_REPO}/docs/adversary.md"
   ln -s "${REPO_ROOT}/templates"          "${TMP_REPO}/templates"
@@ -128,9 +131,9 @@ setup() {
   assert_guard_fires "zerospace-note.md"
 }
 
-@test "positive control fires when CAP_REGEX is mutated so the example block no longer matches" {
+@test "positive control fires when CAP_REGEX_FORMAT is mutated so the examples no longer match" {
   # pin the count diagnostic separately from ordinary violation detection.
-  sed -i.bak -E "s|^CAP_REGEX='.*'|CAP_REGEX='__never_matches_anything_xyz__'|" \
+  sed -i.bak -E "s|^CAP_REGEX_FORMAT='.*'|CAP_REGEX_FORMAT='__never_matches_%s__'|" \
     "${TMP_REPO}/tests/run.sh"
   run bash "${TMP_REPO}/tests/run.sh"
   [[ "$status" -eq 3 ]] || {
@@ -138,8 +141,20 @@ setup() {
     echo "output: $output"
     return 1
   }
-  [[ "$output" == *"CAP_REGEX matches; expected"* ]] || {
+  [[ "$output" == *"CAP_REGEX_FORMAT example matches; expected"* ]] || {
     echo "expected count-pin error string in output, got: $output"
+    return 1
+  }
+}
+
+@test "cap-drift guard flags the cap value the manifest sets" {
+  printf 'cap: 3\n' >"${TMP_REPO}/manifests/adversary-caps.yaml"
+  printf '%s\n' 'doc note: shallow_adversary_runs < 3' \
+    >"${TMP_REPO}/cap3-note.md"
+  run bash "${TMP_REPO}/tests/run.sh"
+  assert_guard_fires "cap3-note.md"
+  [[ "$output" == *"adversary cap literal (3)"* ]] || {
+    echo "expected the guard message to name cap 3, got: $output"
     return 1
   }
 }

@@ -24,22 +24,22 @@ load test_helper
 # operator coverage runs end to end in test_cap_drift_guard_fires.bats; the
 # test below keeps the boundary that stops the cap matching a longer number.
 
-# CAP_REGEX must stay a single-line top-level assignment in tests/run.sh.
+# CAP_REGEX_FORMAT must stay a single-line top-level assignment in tests/run.sh.
 # an empty extraction fails here instead of matching everything.
 _cap_regex() {
-  local extracted
-  extracted=$(grep -E "^CAP_REGEX=" "${REPO_ROOT}/tests/run.sh" \
-    | head -1 | sed -E "s/^CAP_REGEX='(.*)'\$/\\1/")
-  if [[ -z "$extracted" ]]; then
-    echo "ERROR: could not extract CAP_REGEX from tests/run.sh." >&2
-    echo "       Expected a top-level line of the form: CAP_REGEX='...'." >&2
+  local format
+  format=$(grep -E "^CAP_REGEX_FORMAT=" "${REPO_ROOT}/tests/run.sh" \
+    | sed -E "s/^CAP_REGEX_FORMAT='(.*)'\$/\\1/")
+  if [[ -z "$format" ]]; then
+    echo "ERROR: could not extract CAP_REGEX_FORMAT from tests/run.sh." >&2
+    echo "       Expected a top-level line of the form: CAP_REGEX_FORMAT='...'." >&2
     return 1
   fi
-  printf '%s' "$extracted"
+  printf "$format" "$1"
 }
 
-@test "CAP_REGEX does not match 'shallow_adversary_runs < 20'" {
-  local cap_regex; cap_regex=$(_cap_regex) || return 1
+@test "the cap regex for 2 does not match 'shallow_adversary_runs < 20'" {
+  local cap_regex; cap_regex=$(_cap_regex 2) || return 1
   ! printf 'shallow_adversary_runs < 20\n' | grep -qE "$cap_regex"
 }
 
