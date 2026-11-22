@@ -90,6 +90,7 @@ An item raised in iteration `i` stays open unless some later iteration settled i
 | --- | --- |
 | Re-raised it (matched per [the §4c rule](synthesis.md#matcher)) | Stays open with the newer file/line, still dated `first_seen_iteration: i` |
 | Re-raised it as a blocker, promoted it, or deferred it | Dropped: that section owns it now |
+| Fixed it: `addressed[]` holds its `fixed_from` record, which the raising iteration can also carry | Dropped; a later re-raise opens it again |
 | Ran its owning persona and did not re-raise it | Dropped: the owner looked again and let it go |
 | Skipped its owning persona | Settles nothing; the item carries |
 
@@ -101,7 +102,7 @@ State written before the §4d.1 approval entry recorded its findings carries `fi
 
 ### What this does not accumulate
 
-`deferred[]` is still rendered from the last iteration's partition. An item a later iteration re-raised as `out_of_scope` therefore leaves the open sets (its owner did look again and re-tiered it) and appears under **Deferred** only if that happened in the final iteration. Out-of-scope findings are the deferral section's to accumulate, and #116 scoped the fix to the two partitions that had no venue at all; carrying deferrals is the same shape of work on a third partition.
+`deferred[]` is still rendered from the last iteration's partition. An item a later iteration re-raised as `out_of_scope` therefore leaves the open sets (its owner did look again and re-tiered it) and appears under **Deferred** only if that happened in the final iteration. Out-of-scope findings are the deferral section's to accumulate, and #116 scoped the fix to the two partitions that had no venue at all; carrying deferrals is the same shape of work on a third partition. Omit a deferred item whose `fixed_from` record its iteration's `history[]` entry carries: it was fixed, not deferred.
 
 ### Rendering the open sets
 
@@ -111,7 +112,7 @@ Bullets keep the `<file:line> — <summary>` shape. The script drops `reviewer` 
 
 Body lives in `templates/summary_ready.md`. Render verbatim, substituting `<N>`, the per-iteration `<...>` bullets, and the suggestion and nit bullets from the open sets above.
 
-Each iteration bullet describes that iteration's merged review result from its `history[]` entry: blockers, suggestions, nits and deferrals from every reviewer that ran, and what was addressed. Deferrals are the items in `deferred[]`, including out-of-scope findings whatever their severity. Count an in-scope finding as a blocker when its severity is `blocker` or `addressed[]` holds its promotion record; a promoted suggestion keeps `severity: "suggestion"` in `findings`. State the blocker count separately from the other findings, and describe findings by severity, never by the reviewer that raised them. Write "no findings" only when the iteration's complete result is known to be empty. For the final iteration, use the partitions passed to `collect_open_findings.py`; they equal its recorded findings when those exist. An earlier approval entry with `findings: []` comes from older state: say it had no blockers and that its non-blocking result was not recorded.
+Each iteration bullet describes that iteration's merged review result from its `history[]` entry: blockers, suggestions, nits and deferrals from every reviewer that ran, and what was addressed. Deferrals are the items in `deferred[]`, including out-of-scope findings whatever their severity. Count an in-scope finding as a blocker when its severity is `blocker` or `addressed[]` holds its promotion record; a promoted suggestion keeps `severity: "suggestion"` in `findings`. A `fixed_from` record is a suggestion or nit fixed that iteration: describe it as addressed, not as a blocker or a deferral. State the blocker count separately from the other findings, and describe findings by severity, never by the reviewer that raised them. Write "no findings" only when the iteration's complete result is known to be empty. For the final iteration, use the partitions passed to `collect_open_findings.py`; they equal its recorded findings when those exist. An earlier approval entry with `findings: []` comes from older state: say it had no blockers and that its non-blocking result was not recorded.
 
 Pick the CI sentence from this iteration's `ci_status`: `"success"` renders `CI is green.`; `"skipped"` renders `No CI checks were found on this PR.` `SUCCESS` is reachable with `ci_status: "skipped"` when `ci_wait.sh` exits 4 (no checks ever registered), so claiming green there would assert a check that never ran.
 

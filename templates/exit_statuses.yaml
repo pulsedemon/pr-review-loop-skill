@@ -10,7 +10,7 @@
 
 statuses:
   running: "Loop is mid-iteration; not a terminal exit."
-  success: "required reviews complete on the unchanged head, zero blockers, CI green or no checks registered, and required comment handling complete."
+  success: "required reviews complete on the unchanged head, zero blockers, no required fixes pending (SKILL.md §4e), CI green or no checks registered, and required comment handling complete."
   max_iterations: "reached the configured iteration cap."
   no_progress: "Same blockers came back within the last two iterations."
   tests_regressed: "Local tests regressed after an edit."

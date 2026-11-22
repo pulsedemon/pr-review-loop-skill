@@ -12,11 +12,11 @@ reviewer panel approves. Map its exit code as follows:
 
 | Exit | Meaning | §4d.1 action |
 | --- | --- | --- |
-| 0 | all checks passed (or only skipped) | append the §4i approval history entry (`ci_status: "success"`), then run the [comment completion gate](comment-handling.md#success-gate-4d1); only its complete result permits `SUCCESS` → Step 5 |
+| 0 | all checks passed (or only skipped) | when §4e has required fixes pending (`SKILL.md` §4d.1), continue through §4e's budget check; otherwise append the §4i approval history entry (`ci_status: "success"`), then run the [comment completion gate](comment-handling.md#success-gate-4d1); only its complete result permits `SUCCESS` → Step 5 |
 | 1 | at least one check failed/cancelled | convert each failed check to a blocker (see below), merge into the blocker list, record the failed check names in this iteration's `ci_failed_checks`, continue to §4e |
 | 2 | timed out waiting for checks to conclude | exit `CI_STUCK` → Step 5 |
 | 3 | usage error / not a git repo and no `--repo` | exit `SETUP_ERROR` → Step 5 (orchestrator invoked the helper wrong) |
-| 4 | no checks ever registered (5 empty polls) | nothing gates the merge and reviewers already approved: append the §4i approval history entry with `ci_status: "skipped"`, then run the [comment completion gate](comment-handling.md#success-gate-4d1); only its complete result permits `SUCCESS` → Step 5 |
+| 4 | no checks ever registered (5 empty polls) | when §4e has required fixes pending (`SKILL.md` §4d.1), continue through §4e's budget check; otherwise nothing gates the merge and reviewers already approved: append the §4i approval history entry with `ci_status: "skipped"`, then run the [comment completion gate](comment-handling.md#success-gate-4d1); only its complete result permits `SUCCESS` → Step 5 |
 | 5 | `gh` call failed (non-empty stderr) | exit `CI_STUCK` → Step 5 (CI status indeterminate) |
 
 This is distinct from the helper-exit convention below, which governs

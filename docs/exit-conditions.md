@@ -88,7 +88,9 @@ Compares the current blocker set against `history[-1]` and `history[-2]`, each *
   adversary-blocker-over-nit override, lands with `severity: "blocker"` and matches the filter), so a `severity == "blocker"` filter alone
   drops every promoted blocker from the lookback and an unchanged one would never fire. The
   effective set is reconstructed from `addressed[]`, which records each promotion by file, line and
-  summary.
+  summary. Its `fixed_from` records are suggestions and nits §4e fixed, not promotions, and do not
+  count. `NO_PROGRESS` never fires on an empty blocker set, so iterations that only apply required
+  fixes are bounded by `max_iterations`.
 - **Deferred blockers do not count.** `promote_findings.py` routes every `out_of_scope` finding to
   `deferred[]` whatever its severity, so one persisted with `severity: "blocker"` was never in the
   set the loop tried to fix. Counting it adds an entry the current set never has, so an unchanged
