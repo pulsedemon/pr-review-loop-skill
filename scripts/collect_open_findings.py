@@ -71,6 +71,7 @@ if str(SCRIPT_DIR) not in sys.path:
 
 from finding_contract import (  # noqa: E402
     base_summary,
+    located_fields_ok,
     owners,
     well_formed,
     well_formed_promotion,
@@ -86,14 +87,23 @@ def _key(record: dict) -> tuple:
     return (record.get("file"), record.get("line"), record.get("summary"))
 
 
+def _settles(record: dict) -> bool:
+    if record.get("promoted_from") == "suggestion":
+        return well_formed_promotion(record)
+    if record.get("fixed_from") in OPEN_SEVERITIES:
+        return isinstance(record.get("summary"), str) and located_fields_ok(record)
+    return False
+
+
 def _settled(entry: dict) -> set[tuple]:
-    """Provenance records for findings this entry promoted or deferred.
+    """Provenance records for findings this entry promoted, deferred or fixed.
 
     promote_findings.py appends a promoted suggestion to blockers[] without
     rewriting `severity`, and routes a failed evidence check to deferred[] the
     same way, so severity alone cannot tell an open suggestion from one that
     already has a home elsewhere in the summary. addressed[]/deferred[] carry
-    the provenance record for exactly those.
+    the provenance record for exactly those. A `fixed_from` record is a
+    suggestion or nit §4e fixed; its finding keeps its severity the same way.
 
     Keys, not the matcher: `_provenance` copies `file`/`line`/`summary` off the
     finding verbatim, so exact equality is exhaustive here, and the §4c window
@@ -114,9 +124,7 @@ def _settled(entry: dict) -> set[tuple]:
     keys = set()
     for field in ("addressed", "deferred"):
         for record in entry.get(field) or []:
-            if not isinstance(record, dict) or record.get("promoted_from") != "suggestion":
-                continue
-            if not well_formed_promotion(record):
+            if not isinstance(record, dict) or not _settles(record):
                 continue
             keys.add((record.get("file"), record.get("line"), base_summary(record["summary"])))
     return keys

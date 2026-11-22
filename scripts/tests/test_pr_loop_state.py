@@ -1717,6 +1717,36 @@ def test_schema_requires_non_empty_head_shas(field: str, value: object, valid: b
     assert (not errors) is valid, [error.message for error in errors]
 
 
+@pytest.mark.parametrize(
+    "record",
+    [
+        {"file": "src/a.py", "line": 10, "summary": "typo in a comment", "fixed_from": "nit"},
+        {"summary": "unused import in an untouched file", "fixed_from": "suggestion"},
+    ],
+)
+def test_schema_admits_fixed_suggestion_and_nit_records(record: dict) -> None:
+    """A located and an unlocated fix record must each match exactly one
+    addressed[] branch; a oneOf overlap with the promotion branch rejects them."""
+    schema = json.loads((_REPO_ROOT / "templates" / "state.schema.json").read_text())
+    entry = {**make_history_entry(), "iteration": 1, "addressed": [record]}
+    document = {
+        "pr_url": "https://github.com/o/r/pull/1",
+        "pr_number": 1,
+        "owner": "o",
+        "repo": "r",
+        "base_branch": "main",
+        "head_branch": "f",
+        "iteration": 1,
+        "max_iterations": 15,
+        "status": "running",
+        "history": [entry],
+    }
+
+    errors = list(Draft202012Validator(schema).iter_errors(document))
+
+    assert not errors, [error.message for error in errors]
+
+
 def test_allowed_state_statuses_matches_schema_enum():
     """The helper keeps its own status allowlist independent of
     templates/state.schema.json. They drifted once: dry_run_complete was added to
