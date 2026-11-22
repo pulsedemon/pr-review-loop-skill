@@ -15,7 +15,7 @@
         },
         "model": {
           "type": "string",
-          "description": "Concrete host model the phase spawned with (e.g. 'sonnet', 'opus', 'gpt-6.1-sol'). Omitted when tier resolved to 'inherit' and the host did not name the parent-session model."
+          "description": "Concrete host model the phase spawned with (e.g. 'sonnet', 'opus', 'gpt-6.1-sol'). When a phase ran on several routes, the models joined by `, ` in route order. Omitted when tier resolved to 'inherit' and the host did not name the parent-session model."
         }
       }
     }
@@ -139,7 +139,12 @@
         },
         "user_decision": {
           "type": "string",
-          "enum": ["not_prompted", "declined_agent", "continue", "abort"]
+          "enum": ["not_prompted", "declined_agent", "agent_failed", "continue", "abort"]
+        },
+        "agent_errors": {
+          "type": "array",
+          "description": "Errors of scope agents that failed to return a valid recommendation, recorded beside any valid one. See docs/pr-scope.md.",
+          "items": { "type": "string", "pattern": "\\S" }
         }
       }
     },
@@ -209,7 +214,7 @@
                 "source_reviewers": {
                   "type": "array",
                   "items": { "type": "string" },
-                  "description": "Every persona that raised this finding: §4c unions the list when two surface the same issue, and the §4d.0.5 adversary merge adds \"adversary\" to a matched panel finding. Persist it whenever synthesis produced one. Optional only for backward compatibility with states written before it existed — scripts/collect_open_findings.py reads it as the finding's owner set, and with the singular `reviewer` alone a finding two personas raised looks like one persona's, so either of them going quiet retires it from the Step 5 open sets."
+                  "description": "Every persona that raised this finding: §4c unions the list when two surface the same issue, and the §4d.0.5 adversary merge adds \"adversary\" to a matched panel finding. Persist it whenever synthesis produced one. Optional only for backward compatibility with states written before it existed: scripts/collect_open_findings.py reads it as the finding's owner set, and with the singular `reviewer` alone a finding two personas raised looks like one persona's, so either of them going quiet retires it from the Step 5 open sets."
                 },
                 "severity": {
                   "type": "string",
@@ -311,7 +316,7 @@
           "ci_failed_checks": {
             "type": "array",
             "description": "Failed check names from this iteration's ci_wait.sh visit. Required and non-empty when ci_status is \"failure\": §4d.1's CI_STUCK rule compares this iteration's names against the most recent earlier failure entry, so a failure entry that records none lets a permanently-red check keep looping. Optional on every other status.",
-            "items": { "type": "string", "minLength": 1 }
+            "items": { "type": "string", "pattern": "\\S" }
           },
           "reviewer_errors": {
             "type": "array",
@@ -328,7 +333,7 @@
           "reviewers_completed": {
             "type": "array",
             "uniqueItems": true,
-            "items": { "type": "string", "minLength": 1 },
+            "items": { "type": "string", "pattern": "\\S" },
             "description": "personas whose response passed schema and dispatched-identity validation for this iteration. absent legacy receipts cannot establish completion."
           },
           "shallow_review": {
@@ -413,7 +418,7 @@
           },
           "model_routing": {
             "type": "object",
-            "description": "Resolved subagent model routing for the fan-out phases that ran this iteration. Recorded by the host after it resolves each phase's tier per docs/model-overrides.md and spawns it; only phases that actually ran appear. Local/observability only — never posted to the PR. Optional; absence (of the object or of any phase key) means 'not recorded' and must never block the loop. See docs/model-overrides.md#observability-and-recording.",
+            "description": "Resolved subagent model routing for the fan-out phases that ran this iteration. Recorded by the host after it resolves each phase's tier per docs/model-overrides.md and spawns it; only phases that actually ran appear. Local/observability only, never posted to the PR. Optional; absence (of the object or of any phase key) means 'not recorded' and must never block the loop. See docs/model-overrides.md#observability-and-recording.",
             "additionalProperties": false,
             "properties": {
               "delta_gate": { "$ref": "#/$defs/phase_model" },

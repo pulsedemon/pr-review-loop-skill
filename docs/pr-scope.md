@@ -1,4 +1,4 @@
-# PR-scope check (SKILL.md §3.5) — Mechanics
+# PR-scope check mechanics (SKILL.md §3.5)
 
 This document owns the four-substep mechanics, the verdict-branch table, the non-interactive defaults, and the resume contract for `SKILL.md` §3.5. `SKILL.md` keeps only the user-visible automation contract (when prompts are allowed; the abort path → `SCOPE_SPLIT_RECOMMENDED`); everything below moved here from the original SKILL.
 
@@ -7,7 +7,7 @@ This document owns the four-substep mechanics, the verdict-branch table, the non
 Skip entirely if `pr_scope=false`. Otherwise:
 
 - On a **fresh** start, run substeps 1–4 below.
-- On **resume**, skip substeps when `pr_scope.user_decision` in state is `not_prompted`, `declined_agent`, or `continue` (honor it and proceed to Step 4 even if `<git-dir>/pr-loop/pr-scope.json` is missing after a state-first persist crash). If `user_decision` is missing or empty, re-run substep 2: `plan` with `--existing-pr-scope-json` from the persisted `pr_scope` record (state first, sidecar fallback), `--pr-scope-file-exists` from the sidecar probe, and reuse those counts (not `count_new_loc.sh`). If `user_decision` is `abort`, re-emit `SCOPE_SPLIT_RECOMMENDED` → Step 5.
+- On **resume**, skip substeps when `pr_scope.user_decision` in state is `not_prompted`, `declined_agent`, `agent_failed`, or `continue` (honor it and proceed to Step 4 even if `<git-dir>/pr-loop/pr-scope.json` is missing after a state-first persist crash). If `user_decision` is missing or empty, re-run substep 2: `plan` with `--existing-pr-scope-json` from the persisted `pr_scope` record (state first, sidecar fallback), `--pr-scope-file-exists` from the sidecar probe, and reuse those counts (not `count_new_loc.sh`). If `user_decision` is `abort`, re-emit `SCOPE_SPLIT_RECOMMENDED` → Step 5.
 
 ## "Non-interactive" definition
 
@@ -23,7 +23,7 @@ Skip entirely if `pr_scope=false`. Otherwise:
 
 3. **Prompt the user.** Ask once: "This PR has \<N\> new LOC (threshold \<T\>). Run the PR-scope agent to suggest how it could be split into smaller PRs?"
    - **No** → `finalize` with `user_decision: "declined_agent"`, then `persist` (infers `action: "continue"` from finalize output); continue to Step 4.
-   - **Yes** → spawn one subagent with the prompt from `gates/pr-scope.md`, passing PR metadata + body + linked tickets, the full diff against base, the per-file breakdown from step 1, `new_loc_total`, `max_new_loc`, and `excluded_paths`. The agent returns strict JSON matching `gates/pr-scope.md`; validate any `request_split` payload with [`scripts/validate_pr_scope_output.py`](../scripts/validate_pr_scope_output.py), then `finalize` + `persist` with the gate result.
+   - **Yes** → spawn one subagent with the prompt from `gates/pr-scope.md`, passing PR metadata + body + linked tickets, the full diff against base, the per-file breakdown from step 1, `new_loc_total`, `max_new_loc`, and `excluded_paths`. The agent returns strict JSON matching `gates/pr-scope.md`; validate any `request_split` payload with [`scripts/validate_pr_scope_output.py`](../scripts/validate_pr_scope_output.py), then `finalize` + `persist` with the gate result. An agent that errors, times out or returns invalid output is reported to the user and recorded with `finalize --agent-error <error>`, once per failed agent, beside any valid result; with no valid result, `finalize` with `user_decision: "agent_failed"`, then `persist`, and continue to Step 4.
    - **Non-interactive default:** skip and continue (record `user_decision: "declined_agent"`, proceed to Step 4).
 
 4. **Act on the agent's verdict.** The agent's `verdict` enum is exactly `{under_threshold, atomic, request_split}` (per `templates/state.schema.json` `pr_scope.verdict.enum`); `declined_agent` is a `pr_scope.user_decision` value recorded when the user opts out at substep 3 and is **not** a verdict. The branches:
@@ -35,6 +35,7 @@ Skip entirely if `pr_scope=false`. Otherwise:
    | `verdict: request_split` (continue anyway) | Present `summary`, each split (name, rationale, file count, estimated_new_loc, depends_on if any), and the `remaining_in_original` list; `finalize` + `persist`. | `continue` | Step 4 |
    | `verdict: request_split` (abort to split) | Same presentation as above; `finalize` + `persist` with `action: "terminal"` / `status: "scope_split_recommended"`. | `abort` | Exit `SCOPE_SPLIT_RECOMMENDED` → Step 5 (needs-attention comment with split recommendation; **move** files, do not duplicate). |
    | No verdict (substep 3 No path) | Set when user opts out of running the agent; no `verdict` is recorded. | `declined_agent` | Step 4 |
+   | No valid agent output | The agent errored, timed out or returned invalid output; report the error; no `verdict` is recorded; `finalize` + `persist`. | `agent_failed` | Step 4 |
 
    **Non-interactive default for `request_split`:** abort with terminal status `SCOPE_SPLIT_RECOMMENDED` (the **Abort to split** path).
 
