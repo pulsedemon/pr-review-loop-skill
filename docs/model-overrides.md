@@ -60,13 +60,13 @@ Map portable tiers to Claude aliases, not dated model IDs:
 
 Codex's `spawn_agent` uses the parent model when no `model` is passed. Pass `model` for phases whose resolved tier is not `inherit`, and omit it for phases that resolve to `inherit`.
 
-Current Codex tier mapping, from the active `spawn_agent` tool metadata:
+Map portable tiers to Codex model families, not dated model IDs, and pass the newest model of that family that the active `spawn_agent` tool metadata lists. The families follow the metadata's own descriptions: `luna` is fast and affordable for easier tasks, `sol` is for coding and everyday work, and `astra` is for complex coding and professional work.
 
-| Tier | `spawn_agent.model` |
-| --- | --- |
-| `cheap` | `gpt-5.4-mini` |
-| `standard` | `gpt-5.4` |
-| `strong` | `gpt-5.5` |
+| Tier | Codex family | Listed on 2026-11-22 |
+| --- | --- | --- |
+| `cheap` | `luna` | `gpt-6-luna` |
+| `standard` | `sol` | `gpt-6.1-sol` |
+| `strong` | `astra` | `gpt-6-astra` |
 
 If the active Codex tool metadata changes or a listed model is unavailable, use another supported model that clearly fits the same portable tier. Otherwise fall back to `inherit`: omit `spawn_agent.model` and continue the loop.
 
