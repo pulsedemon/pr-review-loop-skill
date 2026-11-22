@@ -140,7 +140,7 @@ def plan_pr_scope_step(
             raise PrScopeStepError("existing pr_scope must be an object")
         pr_scope = _copy_pr_scope_record(existing_pr_scope)
         user_decision = pr_scope.get("user_decision")
-        if user_decision in {"not_prompted", "declined_agent", "continue"}:
+        if user_decision in {"not_prompted", "declined_agent", "agent_failed", "continue"}:
             return _with_reused_existing_count(
                 {"action": "continue", "pr_scope": pr_scope},
                 reused_existing_count=True,
@@ -192,18 +192,31 @@ def finalize_pr_scope_decision(
     pr_scope: dict[str, Any],
     user_decision: str,
     gate_result: dict[str, Any] | None = None,
+    agent_errors: list[str] | None = None,
 ) -> dict[str, Any]:
-    """Merge the prompted decision and optional gate result into the PR-scope record."""
+    """Merge the prompted decision, optional gate result and scope-agent errors into the
+    PR-scope record."""
 
-    if user_decision not in {"declined_agent", "continue", "abort"}:
+    if user_decision not in {"declined_agent", "agent_failed", "continue", "abort"}:
         raise PrScopeStepError(
-            f"user_decision must be one of declined_agent/continue/abort (got '{user_decision}')"
+            "user_decision must be one of declined_agent/agent_failed/continue/abort "
+            f"(got '{user_decision}')"
         )
+    if agent_errors is not None and (
+        not isinstance(agent_errors, list)
+        or any(not isinstance(error, str) or not error.strip() for error in agent_errors)
+    ):
+        raise PrScopeStepError("agent_errors must be a list of non-empty strings")
 
     updated = _copy_pr_scope_record(pr_scope)
+    if agent_errors:
+        updated["agent_errors"] = list(agent_errors)
 
-    if user_decision == "declined_agent":
-        updated["user_decision"] = "declined_agent"
+    if user_decision in {"declined_agent", "agent_failed"}:
+        # a resumed record replanned with pr_scope_mode=true reaches here with its old verdict
+        for field in ("verdict", "summary", "splits", "remaining_in_original"):
+            updated.pop(field, None)
+        updated["user_decision"] = user_decision
         return {"status": None, "pr_scope": updated}
 
     if gate_result is None:
@@ -374,6 +387,7 @@ def _main(argv: list[str] | None = None) -> int:
     finalize_parser.add_argument("--user-decision", required=True)
     finalize_parser.add_argument("--gate-result-json")
     finalize_parser.add_argument("--gate-result-json-file")
+    finalize_parser.add_argument("--agent-error", action="append")
 
     persist_parser = subparsers.add_parser("persist")
     persist_parser.add_argument("--state", required=True)
@@ -444,6 +458,7 @@ def _main(argv: list[str] | None = None) -> int:
                     pr_scope=pr_scope,
                     user_decision=args.user_decision,
                     gate_result=gate_result,
+                    agent_errors=args.agent_error,
                 )
             )
 

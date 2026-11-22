@@ -49,7 +49,13 @@ ALLOWED_STATE_STATUSES = {
 ALLOWED_CI_STATUSES = {"success", "failure", "timeout", "skipped", "pending"}
 ALLOWED_PANEL_SELECTION_MODES = {"full", "delta_gated"}
 ALLOWED_PR_SCOPE_VERDICTS = {"under_threshold", "atomic", "request_split"}
-ALLOWED_PR_SCOPE_USER_DECISIONS = {"not_prompted", "declined_agent", "continue", "abort"}
+ALLOWED_PR_SCOPE_USER_DECISIONS = {
+    "not_prompted",
+    "declined_agent",
+    "agent_failed",
+    "continue",
+    "abort",
+}
 REQUIRED_PANEL_SELECTION_KEYS = (
     "mode",
     "ran",
@@ -298,6 +304,12 @@ def _validate_pr_scope_update(pr_scope: dict[str, Any]) -> None:
             not isinstance(item, str) or not item.strip() for item in excluded_paths
         ):
             raise StateValidationError("pr_scope.excluded_paths must be a list of strings")
+    if "agent_errors" in pr_scope:
+        agent_errors = pr_scope["agent_errors"]
+        if not isinstance(agent_errors, list) or any(
+            not isinstance(item, str) or not item.strip() for item in agent_errors
+        ):
+            raise StateValidationError("pr_scope.agent_errors must be a list of non-empty strings")
     if "verdict" in pr_scope and pr_scope["verdict"] not in ALLOWED_PR_SCOPE_VERDICTS:
         allowed = ", ".join(sorted(ALLOWED_PR_SCOPE_VERDICTS))
         raise StateValidationError(f"pr_scope.verdict must be one of: {allowed}")

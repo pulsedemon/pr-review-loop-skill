@@ -299,7 +299,7 @@ dependent surfaces and caveats. Edits not listed here are routed by the
   pointing here); `gates/pr-scope.md` (the agent prompt itself);
   `scripts/pr_scope_step.py` (state and sidecar persistence)
 - **Validate:** `bash tests/run.sh`. `test_pr_scope_doc_canaries.bats`
-  pins the four `user_decision` values, the three verdicts, and both
+  pins the five `user_decision` values, the three verdicts, and both
   non-interactive defaults
 - *Caveat:* the user-visible automation contract (when prompts are
   allowed; abort path → `SCOPE_SPLIT_RECOMMENDED`) stays in `SKILL.md`.
