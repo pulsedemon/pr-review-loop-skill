@@ -215,6 +215,7 @@ _pin() {
     'persist the first valid `request_split` in route order' \
     'Scope errors are recorded beside a valid recommendation' \
     'takes the failed-agent row of [`pr-scope.md`](pr-scope.md#substeps)' \
+    'route with the phase'"'"'s work kind and `--named <that runtime>:<that model>`' \
     'a valid relaunch recovers the assignment and records no error'
 }
 
