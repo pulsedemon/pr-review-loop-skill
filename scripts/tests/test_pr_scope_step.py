@@ -376,12 +376,18 @@ def test_finalize_records_agent_errors_beside_recommendation() -> None:
 
 
 @pytest.mark.parametrize("errors", [[" "], [""], "launch refused", [3]])
-def test_finalize_rejects_blank_agent_error(errors: object) -> None:
+def test_persist_rejects_blank_agent_error(tmp_path, errors: object) -> None:
+    state_path = tmp_path / "state.json"
+    state_path.write_text('{"status":"running","history":[]}\n', encoding="utf-8")
+
     with pytest.raises(PrScopeStepError, match="agent_errors"):
-        finalize_pr_scope_decision(
-            pr_scope=make_pr_scope_record(),
-            user_decision="agent_failed",
-            agent_errors=errors,  # type: ignore[arg-type]
+        persist_pr_scope_outcome(
+            state_path=state_path,
+            pr_scope_path=tmp_path / "pr-scope.json",
+            outcome={
+                "status": None,
+                "pr_scope": make_pr_scope_record(user_decision="agent_failed", agent_errors=errors),
+            },
         )
 
 

@@ -202,15 +202,10 @@ def finalize_pr_scope_decision(
             "user_decision must be one of declined_agent/agent_failed/continue/abort "
             f"(got '{user_decision}')"
         )
-    if agent_errors is not None and (
-        not isinstance(agent_errors, list)
-        or any(not isinstance(error, str) or not error.strip() for error in agent_errors)
-    ):
-        raise PrScopeStepError("agent_errors must be a list of non-empty strings")
 
     updated = _copy_pr_scope_record(pr_scope)
     if agent_errors:
-        updated["agent_errors"] = list(agent_errors)
+        updated["agent_errors"] = agent_errors
 
     if user_decision in {"declined_agent", "agent_failed"}:
         # a resumed record replanned with pr_scope_mode=true reaches here with its old verdict
