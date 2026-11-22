@@ -128,3 +128,29 @@ _require() {
   _require "$body" 'the stop cannot be enforced there' \
     'the doc would imply a bound opencode cannot keep'
 }
+
+@test "reviewer-orchestration.md says how a Witch parent keeps the budget" {
+  local body
+  body=$(_md_section docs/reviewer-orchestration.md 'Reviewer budget' | grep '^- Witch:') || {
+    echo "Reviewer budget has no '- Witch:' bullet"
+    return 1
+  }
+  _require "$body" "launch a batch's familiars in one message" \
+    'familiars launched across messages run one after another'
+  _require "$body" 'every panel familiar still running at the budget is stopped and records its own timeout' \
+    'a second familiar for an answered persona would keep running and go unrecorded'
+  _require "$body" 'launch each familiar as a background Bash command with `timeout: 1860000`' \
+    "the host's default background limit would end a familiar inside the budget"
+  _require "$body" "with each familiar's Bash task in place of a reviewer" \
+    'a Claude parent would have no timer or stop for familiars'
+  _require "$body" '`TaskStop` ends the familiar and the commands it started' \
+    'the doc would not say what a Claude parent'"'"'s stop reaches'
+  _require "$body" 'using `sandbox_permissions: "require_escalated"` and `tty: true`' \
+    'without a tty the Ctrl-C has nothing to interrupt'
+  _require "$body" 'poll every session with an empty `write_stdin`' \
+    'a Codex parent would have no way to wait for familiars'
+  _require "$body" 'then send `\u0003` with `write_stdin` to each one still running' \
+    'a Codex parent would leave overrun familiars running'
+  _require "$body" 'a command a Codex familiar started can outlive it' \
+    'a Codex parent would assume the stop also ends the familiar'"'"'s commands'
+}
