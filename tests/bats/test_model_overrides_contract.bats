@@ -2,7 +2,8 @@
 
 # Model override cross-surface drift guard. Pins the portable contract:
 #   1. SKILL.md exposes the user inputs and points to canonical mechanics;
-#   2. docs/model-overrides.md owns phase keys, precedence, and fallback;
+#   2. docs/model-overrides.md owns phase keys, precedence, fallback and the
+#      Codex tier-to-family mapping;
 #   3. AGENTS.md includes the Codex spawn_agent.model note;
 #   4. README.md shows the cost_saver and inherit invocations.
 
@@ -79,6 +80,12 @@ PY
   assert_patterns "${REPO_ROOT}/docs/model-overrides.md" \
     'Codex.*unavailable.*same portable tier.*otherwise.*fall back to [`"]?inherit[`"]?.*omit.*spawn_agent\.model.*continue' \
     "missing Codex same-tier then inherit fallback rule"
+}
+
+@test "docs/model-overrides.md maps Codex tiers to model families" {
+  assert_patterns "${REPO_ROOT}/docs/model-overrides.md" \
+    '### Codex.*\| `cheap` \| `luna` \|.*\| `standard` \| `sol` \|.*\| `strong` \| `astra` \|.*### opencode' \
+    "missing Codex tier to family mapping"
 }
 
 @test "docs/model-overrides.md defines opencode tier-agent mapping and fallbacks" {

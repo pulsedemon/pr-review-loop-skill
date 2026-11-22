@@ -8,8 +8,8 @@
 load test_helper
 
 doc_agents() {
-  # Second cell of each mapping-table row, prl-* only, so the Codex model
-  # rows (`gpt-...`) and the inherit row (`general`) drop out.
+  # Second cell of each two-column mapping-table row, prl-* only, so the
+  # Claude alias rows and the inherit row (`general`) drop out.
   sed -nE 's/^\| `[^`]*` \| `([a-z0-9._-]+)` \|[[:space:]]*$/\1/p' \
     "${REPO_ROOT}/docs/model-overrides.md" | grep '^prl-' | sort
 }

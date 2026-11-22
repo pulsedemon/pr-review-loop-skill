@@ -15,7 +15,7 @@
         },
         "model": {
           "type": "string",
-          "description": "Concrete host model the phase spawned with (e.g. 'sonnet', 'opus', 'gpt-5.4'). Omitted when tier resolved to 'inherit' and the host did not name the parent-session model."
+          "description": "Concrete host model the phase spawned with (e.g. 'sonnet', 'opus', 'gpt-6.1-sol'). Omitted when tier resolved to 'inherit' and the host did not name the parent-session model."
         }
       }
     }
