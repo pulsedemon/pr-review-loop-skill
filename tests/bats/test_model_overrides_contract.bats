@@ -5,7 +5,9 @@
 #   2. docs/model-overrides.md owns phase keys, precedence, fallback and the
 #      Codex tier-to-family mapping;
 #   3. AGENTS.md includes the Codex spawn_agent.model note;
-#   4. README.md shows the cost_saver and inherit invocations.
+#   4. README.md shows the cost_saver and inherit invocations;
+#   5. the Witch section of docs/model-overrides.md owns routing, effort,
+#      lean launches and several-route dispatch under Witch.
 
 load test_helper
 
@@ -105,7 +107,122 @@ PY
 @test "AGENTS.md includes Codex spawn_agent.model routing note" {
   assert_patterns "${REPO_ROOT}/AGENTS.md" \
     'non-inherited.*tiers map to [`"]?spawn_agent\.model[`"]?' \
-    "missing Codex spawn_agent.model mapping note"
+    "missing Codex spawn_agent.model mapping note" \
+    'model-overrides\.md#witch' \
+    "missing pointer to the Witch section"
+}
+
+# Print the `### Witch` section of docs/model-overrides.md; fail when it is missing.
+_witch_section() {
+  awk '
+    $0 == "### Witch" { found = 1; next }
+    found && /^##/ { exit }
+    found { print }
+    END { exit !found }
+  ' "${REPO_ROOT}/docs/model-overrides.md" || {
+    echo "docs/model-overrides.md has no '### Witch' section" >&2
+    return 1
+  }
+}
+
+# Each pin occurs once in the section, so deleting its sentence fails the test.
+_pin() {
+  local body="$1" phrase
+  shift
+  for phrase in "$@"; do
+    grep -qiF -- "$phrase" <<<"$body" || {
+      echo "Witch section missing: $phrase"
+      return 1
+    }
+  done
+}
+
+@test "Witch section routes each phase by work kind" {
+  local body
+  body=$(_witch_section) || return 1
+  _pin "$body" \
+    "every phase delegates through Witch's familiar wrappers after \`--route\`" \
+    "replaces the Claude Code and Codex sections' spawn and tier mappings" \
+    '| `delta_gate` | `investigation` |' \
+    '| `reviewer` | `review` |' \
+    '| `adversary` | `investigation` |' \
+    '| `pr_scope` | `investigation` |' \
+    "starts on the parent's runtime unless Witch's capacity balancing moves it" \
+    'A panel route passes `--of <producer runtime>:<producer model>`' \
+    'Tier routing waits on Witch'"'"'s tier option (pulsedemon/witch#918); until then, route with no model named' \
+    'replaces the inherit fallback above'
+}
+
+@test "Witch section keeps inherit and refusals single-route" {
+  local body
+  body=$(_witch_section) || return 1
+  _pin "$body" \
+    'An `inherit` phase routes with `--named <parent runtime>:<parent model>`' \
+    'never routed twice for coverage' \
+    'A refused route goes to the user' \
+    'is not retried without the tier' \
+    'for `inherit` the echo says the tier was not honoured'
+}
+
+@test "Witch section maps tiers to effort on both runtimes" {
+  local body
+  body=$(_witch_section) || return 1
+  _pin "$body" \
+    'passed as `-c model_reasoning_effort="<level>"` on Codex and `--effort <level>` on Claude' \
+    '| Tier | Codex | Claude |' \
+    '| `cheap` | `low` | `low` |' \
+    '| `standard` | `medium` | `medium` |' \
+    '| `strong` | `high` | `high` |' \
+    '`inherit` passes no effort flag'
+}
+
+@test "Witch section launches familiars lean" {
+  local body
+  body=$(_witch_section) || return 1
+  _pin "$body" \
+    "Codex with Witch's \`--without-mcp\`" \
+    'Claude with `--strict-mcp-config` and `--disable-slash-commands`' \
+    'pulsedemon/witch#919'
+}
+
+@test "Witch section dispatches and records every route" {
+  local body
+  body=$(_witch_section) || return 1
+  _pin "$body" \
+    'launch `max(N, R)` familiars' \
+    'familiar `k` runs persona `k mod N` on route `k mod R`' \
+    '`folded` placements already run on an existing route and get no familiar' \
+    'A batch with no selected persona is not routed' \
+    "The panel's [reviewer budget](reviewer-orchestration.md#reviewer-budget) applies per familiar" \
+    '[`scripts/familiar_response.py`](../scripts/familiar_response.py)' \
+    'A fenced object is malformed' \
+    'relaunched once per phase per iteration' \
+    'keep only returned routes on another runtime' \
+    'record `model_routing.<phase>.model` as the route models joined by `, ` in route order'
+}
+
+@test "Witch section reduces several results per persona" {
+  local body
+  body=$(_witch_section) || return 1
+  _pin "$body" \
+    'every valid panel output goes to synthesis under its persona name' \
+    'the persona gets one receipt if any output validates' \
+    'records its own `reviewer_errors` entry, even beside another route'"'"'s valid output' \
+    'a persona with any failed or invalid gate familiar gets no gate result' \
+    '`relevant: true` if any familiar says so' \
+    'a missing or invalid response records `adversary_error` naming each failure' \
+    'into `history[].findings`' \
+    'persist the first valid `request_split` in route order' \
+    'Scope errors are recorded beside a valid recommendation' \
+    'takes the failed-agent row of [`pr-scope.md`](pr-scope.md#substeps)' \
+    'a valid relaunch recovers the assignment and records no error'
+}
+
+@test "state schema documents multi-route model recording" {
+  run jq -r '."$defs".phase_model.properties.model.description' \
+    "${REPO_ROOT}/templates/state.schema.json"
+  [ "$status" -eq 0 ]
+  grep -qF 'joined by `, ` in route order' <<<"$output"
 }
 
 @test "README.md shows cost_saver and inherit model profile invocations" {
