@@ -196,3 +196,8 @@ scenarios:
     reason: a dated seven-case comparison records actual baseline and revised tests reviewer
       responses, removing unsupported blockers on an unreached trivial function while
       retaining blockers for untested contracts, weak assertions, and reached or published code.
+  - number: 31
+    file: 31-required-small-fixes.md
+    title: Required small fixes under higher-priority instructions
+    tier: design_only
+    reason: see the scenario's missing evidence for the host runs of both variants.
