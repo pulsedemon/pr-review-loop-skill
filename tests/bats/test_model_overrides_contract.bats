@@ -149,7 +149,7 @@ _pin() {
     '| `pr_scope` | `investigation` |' \
     "starts on the parent's runtime unless Witch's capacity balancing moves it" \
     'A panel route passes `--of <producer runtime>:<producer model>`' \
-    'Tier routing waits on Witch'"'"'s tier option (pulsedemon/witch#918); until then, route with no model named' \
+    'A tiered phase routes with `--tier <tier>`' \
     'replaces the inherit fallback above'
 }
 
