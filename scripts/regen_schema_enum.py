@@ -23,10 +23,8 @@ import re
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-
-import generator_io  # noqa: E402
-from personas_manifest import ManifestError, load_manifest  # noqa: E402
+import generator_io
+from personas_manifest import ManifestError, load_manifest
 
 # Locates the `reviewer.enum` slice for in-place replacement. Anchored on
 # the property key + type so we never grab a sibling property's enum by

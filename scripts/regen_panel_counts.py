@@ -85,10 +85,8 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-
-import generator_io  # noqa: E402
-from personas_manifest import ManifestError, load_manifest  # noqa: E402
+import generator_io
+from personas_manifest import ManifestError, load_manifest
 
 _KIND_TOTAL = "total"
 

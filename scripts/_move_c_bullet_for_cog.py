@@ -6,17 +6,12 @@ keep all moves in one cog block to stay within the skill's line limit.
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
-_SCRIPTS = Path(__file__).resolve().parent
-if str(_SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(_SCRIPTS))
+from personas_manifest import load_manifest
+from regen_move_a1_enum import load_values, render_value_list
 
-from personas_manifest import load_manifest  # noqa: E402
-from regen_move_a1_enum import load_values, render_value_list  # noqa: E402
-
-_REPO_ROOT = _SCRIPTS.parent
+_REPO_ROOT = Path(__file__).resolve().parent.parent
 _DEFAULT_MANIFEST = _REPO_ROOT / "reviewers" / "personas.yaml"
 _A1_ENUM_MANIFEST = _REPO_ROOT / "manifests" / "move-a1-enum.yaml"
 
