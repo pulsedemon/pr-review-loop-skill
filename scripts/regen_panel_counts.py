@@ -66,9 +66,9 @@ adjacent. Round-trip is byte-stable.
   match a maintained allowlist pattern. Exit 5 after reporting every
   unhandled phrase.
 
-Exit codes: 0 ok, 3 manifest error or unreadable corpus file, 5 drift
-detected (or unbalanced markers under ``--validate-markers`` / unhandled
-phrase under ``--validate-coverage``).
+Exit codes: 0 ok, 3 manifest error or a corpus file ``--check`` or
+``--write`` cannot read, 5 drift detected. The validate modes exit 5 on any
+failure, an unreadable corpus file included.
 
 ## Corpus
 

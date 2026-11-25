@@ -46,9 +46,9 @@ def fail(message: str) -> NoReturn:
 
 
 def sub_region(region: re.Pattern[str], text: str, body: str, error: str) -> str:
-    """replace the middle of ``region``'s three groups with ``body``.
+    """replace the middle of the first match of ``region``'s three groups with ``body``.
 
-    exits with ``error`` unless the region matches exactly once.
+    exits with ``error`` when the region does not match.
     """
     new, n = region.subn(lambda m: m.group(1) + body + m.group(3), text, count=1)
     if n != 1:
