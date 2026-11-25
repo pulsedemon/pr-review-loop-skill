@@ -57,7 +57,7 @@ def _seed(tmp_path: Path, cap: int = 2) -> dict[str, Path]:
     doc_path.write_text(
         "# Adversary\n\n"
         "<!-- regen:adversary-caps:start -->\n"
-        f"The cap is {cap} (see ADVERSARY_CAP in templates/state.schema.json).\n"
+        f"The cap is {cap}.\n"
         "<!-- regen:adversary-caps:end -->\n"
     )
 
