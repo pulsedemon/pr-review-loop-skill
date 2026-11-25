@@ -165,3 +165,20 @@ setup() {
 
   grep -q "# excluded: deps/new/package-lock.json" "${BATS_TEST_TMPDIR}/err"
 }
+
+@test "*.lock excludes a lockfile at any depth" {
+  mkdir -p sub/dir
+  printf 'lock\n' > sub/dir/yarn.lock
+  printf 'counted\n' > sub/dir/app.ts
+  git add sub/dir/yarn.lock sub/dir/app.ts
+  git commit -q -m "add nested lockfile"
+
+  run bash -c "${SCRIPTS}/count_new_loc.sh main 2>${BATS_TEST_TMPDIR}/err"
+  [[ "$status" -eq 0 ]]
+  rows=$(echo "$output" | tail -n +2)
+
+  echo "$rows" | grep -qE $'^1\t0\tsub/dir/app\\.ts$'
+  run grep -q "sub/dir/yarn.lock" <<<"$rows"
+  [[ "$status" -ne 0 ]]
+  grep -q "# excluded: sub/dir/yarn.lock" "${BATS_TEST_TMPDIR}/err"
+}
