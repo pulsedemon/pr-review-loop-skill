@@ -68,8 +68,13 @@ _OUT_ENUM_SLICE = re.compile(
 
 def load_values(path: Path) -> list[str]:
     """return the manifest's enum values; raise on a missing key or malformed list."""
-    values = list(yaml.safe_load(path.read_text())["move_a1_pattern"])
-    if not values or not all(isinstance(v, str) and v for v in values):
+    values = yaml.safe_load(path.read_text())["move_a1_pattern"]
+    # check the type first: a bare string would iterate as its characters.
+    if (
+        not isinstance(values, list)
+        or not values
+        or not all(isinstance(v, str) and v for v in values)
+    ):
         raise ValueError("move_a1_pattern must be a non-empty list of strings")
     return values
 
