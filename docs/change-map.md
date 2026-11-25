@@ -164,22 +164,17 @@ dependent surfaces and caveats. Edits not listed here are routed by the
 ## Change adversary caps
 
 - **Source of truth:** `manifests/adversary-caps.yaml`, the single `cap:`
-  value, propagated by `scripts/regen_adversary_caps.py` to all three
-  mirrors (both schema maxima in `templates/state.schema.json`, the
-  preset-guard + `readonly` in `scripts/_adversary_caps.sh`, and the cap
-  sentence inside the `<!-- regen:adversary-caps:start/end -->` region
-  in `docs/adversary.md`).
-- **Dependent surfaces:** never edit the mirrors directly; edit `cap` in
-  `manifests/adversary-caps.yaml`, then run `scripts/regen.sh` to
-  propagate. The next `scripts/regen.sh` run will revert any direct edit
-  to a mirror back to the manifest value.
-- **Validate:** `scripts/regen-check.sh` (CI gate; exits non-zero on
-  drift) plus `bash tests/run.sh` (which also runs `state_init.sh`'s
+  value. `scripts/regen_adversary_caps.py` writes it to every mirror; its
+  docstring lists them.
+- **Dependent surfaces:** never edit a mirror directly; the next
+  `scripts/regen.sh` run reverts it to the manifest value.
+- **Validate:** `scripts/regen-check.sh` (CI gate; exits 5 on drift)
+  plus `bash tests/run.sh` (which also runs `state_init.sh`'s
   runtime cross-check of `ADVERSARY_CAP` against both schema maxima, and
   the prose-home drift guard).
-- *Caveat:* Markdown surfaces (`SKILL.md`, `CLAUDE.md`) say "the cap",
-  never the literal; only the manifest and the three mirror surfaces
-  above carry the value.
+- *Caveat:* nothing validates `state.json` against the schema; the host
+  enforces the cap at the §4d gate in `SKILL.md`. Where the literal may
+  appear is listed in [`docs/adversary.md`](adversary.md#cap-source-of-truth).
 - **See:** [`docs/adversary.md`](adversary.md), [`docs/generators.md`](generators.md)
 
 ## Add a CI integration

@@ -66,7 +66,7 @@ if [[ ! -r "$HELPER" ]]; then
   exit 6
 fi
 # Map any helper-sourcing failure (e.g., the preset-value guard at
-# _adversary_caps.sh:20-24 returning 1 because ADVERSARY_CAP is preset to a
+# _adversary_caps.sh:14-18 returning 1 because ADVERSARY_CAP is preset to a
 # conflicting value) onto exit 6 — without this wrapper, `set -e` would
 # propagate the helper's exit 1 and bypass the documented exit-6 ladder,
 # losing the remediation hint at the failure site.
