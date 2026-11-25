@@ -221,13 +221,15 @@ RESOLVED_MAP=$(printf '%s' "$THREADS_RAW" | jq '[
 
 SUMMARY_MARKER='<!-- pr-review-loop-summary -->'
 REPLY_MARKER='<!-- pr-review-loop-reply -->'
+# callers bind $sm and $rm to the two markers.
+LOOP_MARKER_DEF='def loop_marker: (.body // "") | startswith($sm) or startswith($rm);'
 
 # input shape is `[[page1...], [page2...]]` from gh api --paginate --slurp;
 # .[][] flattens across pages.
 normalize_issue() {
-  jq --arg author "$AUTHOR" --arg sm "$SUMMARY_MARKER" --arg rm "$REPLY_MARKER" '
+  jq --arg author "$AUTHOR" --arg sm "$SUMMARY_MARKER" --arg rm "$REPLY_MARKER" "$LOOP_MARKER_DEF"'
     [ .[][]
-      | select((((.body // "") | startswith($sm)) or ((.body // "") | startswith($rm))) | not)
+      | select(loop_marker | not)
       | { id: (.id|tostring), author: .user.login, is_pr_author: (.user.login == $author),
           body: .body, created_at: .created_at, source: "issue_comment" }
     ] | sort_by(.created_at)
@@ -264,11 +266,10 @@ if ! ISSUE=$(echo "$ISSUE_RAW" | normalize_issue) ||
   empty_payload "comments normalization failed"
   exit 0
 fi
-RCMT=$(printf '%s\n' "$ALL_RCMT" "$RESOLVED_MAP" | jq -s --arg sm "$SUMMARY_MARKER" --arg rm "$REPLY_MARKER" '
+RCMT=$(printf '%s\n' "$ALL_RCMT" "$RESOLVED_MAP" | jq -s --arg sm "$SUMMARY_MARKER" --arg rm "$REPLY_MARKER" "$LOOP_MARKER_DEF"'
   .[0] as $comments |
   .[1] as $resolved |
-  [$comments[] | select(($resolved[.id] // false) | not)
-   | select((((.body // "") | startswith($sm)) or ((.body // "") | startswith($rm))) | not)]
+  [$comments[] | select(($resolved[.id] // false) | not) | select(loop_marker | not)]
 ')
 if ! printf '%s\n' "$THREADS_RAW" "$ALL_RCMT" | jq -se '
   .[0] as $threads |
@@ -279,15 +280,14 @@ if ! printf '%s\n' "$THREADS_RAW" "$ALL_RCMT" | jq -se '
   empty_payload "review_threads missing REST comment content"
   exit 0
 fi
-THREADS=$(printf '%s\n' "$THREADS_RAW" "$ALL_RCMT" | jq -s --arg sm "$SUMMARY_MARKER" --arg rm "$REPLY_MARKER" '
+THREADS=$(printf '%s\n' "$THREADS_RAW" "$ALL_RCMT" | jq -s --arg sm "$SUMMARY_MARKER" --arg rm "$REPLY_MARKER" "$LOOP_MARKER_DEF"'
   .[0] as $threads |
   .[1] as $comments |
   ($comments | map({key: .id, value: .}) | from_entries) as $by_id |
   [$threads[] |
     (.comments.nodes[0].databaseId | tostring) as $root |
     ([.comments.nodes[1:][] | .databaseId | tostring] |
-      map($by_id[.] | select((((.body // "") | startswith($sm)) or
-        ((.body // "") | startswith($rm))) | not))) as $replies |
+      map($by_id[.] | select(loop_marker | not))) as $replies |
     {thread_id: .id, is_resolved: .isResolved,
      comment_ids: [.comments.nodes[].databaseId | tostring],
      root_comment_id: $root, root_comment: $by_id[$root],
@@ -309,9 +309,8 @@ if ! printf '%s\n' "$ALL_RCMT" "$THREADS" | jq -se '
   empty_payload "review_threads missing REST comment or root"
   exit 0
 fi
-THREADS=$(printf '%s' "$THREADS" | jq --arg sm "$SUMMARY_MARKER" --arg rm "$REPLY_MARKER" '
-  [.[] | select((((.root_comment.body // "") | startswith($sm)) or
-    ((.root_comment.body // "") | startswith($rm))) | not)]
+THREADS=$(printf '%s' "$THREADS" | jq --arg sm "$SUMMARY_MARKER" --arg rm "$REPLY_MARKER" "$LOOP_MARKER_DEF"'
+  [.[] | select(.root_comment | loop_marker | not)]
 ')
 
 CURRENT_USER=''
