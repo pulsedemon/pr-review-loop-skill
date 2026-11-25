@@ -92,7 +92,7 @@ def _regen_helper(text: str, cap: int) -> str:
 
 
 def _regen_doc(text: str, cap: int) -> str:
-    body = f"The cap is {cap} (see ADVERSARY_CAP in templates/state.schema.json).\n"
+    body = f"The cap is {cap}.\n"
     return generator_io.sub_region(
         _DOC_REGION,
         text,

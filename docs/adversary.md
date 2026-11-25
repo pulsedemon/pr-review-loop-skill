@@ -35,7 +35,7 @@ a fresh valid final adversary response.
 ## Cap source of truth
 
 <!-- regen:adversary-caps:start -->
-The cap is 2 (see ADVERSARY_CAP in templates/state.schema.json).
+The cap is 2.
 <!-- regen:adversary-caps:end -->
 
 The cap value is generator-managed: edit `cap` in `manifests/adversary-caps.yaml`, then run `scripts/regen.sh` to propagate to all three mirrors (the schema maxima on `shallow_adversary_runs` and `shallow_approval_adversary_runs`, the `scripts/_adversary_caps.sh` preset-guard + `readonly`, and the cap sentence above). The schema remains the machine-enforced contract; shell scripts refer to `ADVERSARY_CAP`, and Markdown surfaces (`SKILL.md`, `CLAUDE.md`) refer to "the cap" or "its cap." Frozen historical specs under `docs/superpowers/` and the recall-harness report at `tools/recall-harness/REPORT.md` may still name the literal: they are excluded from the drift guard by design. Manual test fixtures under `tests/scenarios/` may name the literal directly because they encode specific cap-boundary expectations. At runtime, `state_init.sh` cross-checks `ADVERSARY_CAP` against the schema `maximum` for both counter fields and prints both values to stderr on mismatch (exit 6). The drift guard in `tests/run.sh` enforces the canonical-home rule for contract prose.
