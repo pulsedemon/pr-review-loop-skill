@@ -1,7 +1,4 @@
 #!/usr/bin/env bash
-# Back-compat shim — see docs/generators.md.
-# Removed in the Tier 3 PR; any caller hard-coding `personas-regen.sh` will
-# break then. Future generators that introspect $0 must reach
-# scripts/regen.sh directly, not via this shim.
+# Compatibility entrypoint for scripts/regen.sh; see docs/generators.md.
 set -euo pipefail
 exec "$(dirname -- "$0")/regen.sh" "$@"
