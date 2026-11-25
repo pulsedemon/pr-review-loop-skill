@@ -17,26 +17,10 @@ reviewer panel approves. Map its exit code as follows:
 | 4 | no checks ever registered (5 empty polls) | when §4e has required fixes pending (`SKILL.md` §4d.1), continue through §4e's budget check; otherwise nothing gates the merge and reviewers already approved: append the §4i approval history entry with `ci_status: "skipped"`, then run the [comment completion gate](comment-handling.md#success-gate-4d1); only its complete result permits `SUCCESS` → Step 5 |
 | 5 | `gh` call failed (non-empty stderr) | exit `CI_STUCK` → Step 5 (CI status indeterminate) |
 
-This is distinct from the fetch helper exit convention below, which governs
-the §4d.2 blocker conversion.
-
-## `CI_STUCK` on a repeatedly-failing check
-
-§4d.1 exits `CI_STUCK` when two consecutive visits see the same check **name**
-fail. The comparison is a non-empty intersection of this visit's failed check
-names with those of the **most recent earlier entry that recorded any**, not
-`history[-1]`: §4d.1 runs only when the panel has nothing left to flag, so any
-iteration in between persists `ci_status: "skipped"` with no `ci_failed_checks`,
-and comparing against it would intersect with nothing and never fire. One name in
-common is enough. Not set equality: `{build, lint}` followed by `{build}` is a
-stuck `build`, and equality would read the departed `lint` as progress and keep
-looping. Do not ask whether the commits in between addressed the failure: the
-loop commits once per iteration by construction, so that question always answers
-"yes" and the exit never fires.
-
-`ci_failed_checks` is the persisted record because
-`<git-dir>/pr-loop/last_ci_status.json` is overwritten on every `ci_wait.sh` call and
-cannot describe the previous visit.
+A check that fails on consecutive visits exits `CI_STUCK` by the rule in
+[`exit-conditions.md`](exit-conditions.md#ci_stuck). This mapping is distinct
+from the fetch helper exit convention below, which governs the §4d.2 blocker
+conversion.
 
 ## Conversion procedure
 
