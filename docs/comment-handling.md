@@ -17,7 +17,8 @@ the result is `{fetched_at, fetch_error, issue_comments, review_comments,
 reviews, review_threads}`. `fetch_error` must be null. a missing page, malformed
 REST response, incomplete GraphQL connection, or disagreement between the REST
 comments and GraphQL threads makes the envelope incomplete and exits
-`REVIEW_INCOMPLETE` before reviewers run.
+`REVIEW_INCOMPLETE` before reviewers run. fetcher exit 2 for invalid usage and
+exit 7 for missing `gh` map to `SETUP_ERROR`.
 
 the fetcher applies these rules:
 

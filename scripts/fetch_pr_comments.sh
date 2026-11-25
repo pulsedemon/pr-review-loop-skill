@@ -28,13 +28,18 @@
 #
 # exit codes:
 #   0 - success (including the "gh failed, emit empty payload" path)
+#   2 - usage error: owner, repo, or pr_number missing or empty (SETUP_ERROR)
 #   7 - gh missing (SETUP_ERROR, same as fetch_pr.sh)
 
 set -euo pipefail
 
-OWNER="${1:?usage: fetch_pr_comments.sh <owner> <repo> <pr_number> <pr_author_login>}"
-REPO="${2:?usage}"
-PR="${3:?usage}"
+if [[ $# -lt 3 || -z "$1" || -z "$2" || -z "$3" ]]; then
+  echo "usage: fetch_pr_comments.sh <owner> <repo> <pr_number> <pr_author_login>" >&2
+  exit 2
+fi
+OWNER="$1"
+REPO="$2"
+PR="$3"
 AUTHOR="${4:-}"
 
 if ! command -v gh >/dev/null 2>&1; then
@@ -49,10 +54,9 @@ empty_payload() {
   jq -n --arg err "$err" --arg at "$FETCHED_AT" '{fetched_at:$at,fetch_error:$err,issue_comments:[],review_comments:[],reviews:[],review_threads:[]}'
 }
 
-# pr_author is required: scripts/state_init.sh persists it on init. if a
-# caller omits it (or it failed to populate), tag every comment is_pr_author:false
-# is the wrong default — surface the missing input loudly and let the panel see
-# the fetch_error instead.
+# pr_author is required: scripts/state_init.sh persists it on init. tagging
+# every comment is_pr_author:false would hide a missing author, so surface it as
+# fetch_error for the panel instead.
 if [[ -z "$AUTHOR" ]]; then
   empty_payload "pr_author_missing"
   exit 0
@@ -64,7 +68,7 @@ trap 'rm -f "$ERR_FILE"' EXIT
 # emit empty_payload with the captured gh stderr (truncated to 200 chars)
 # included in fetch_error so a sustained auth/rate-limit failure leaves a
 # triage breadcrumb rather than a silent empty array. callers `exit 0` after
-# this — emit_failure stays out of a subshell so exit propagates.
+# this; emit_failure stays out of a subshell so exit propagates.
 emit_failure() {
   local label="$1" err_excerpt
   err_excerpt=$(head -c 200 "$ERR_FILE")
