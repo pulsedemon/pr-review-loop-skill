@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import _move_c_bullet_for_cog  # type: ignore[import-not-found]
 import pytest
 from _move_c_bullet_for_cog import render  # type: ignore[import-not-found]
 from personas_manifest import ManifestError  # type: ignore[import-not-found]
@@ -176,13 +177,17 @@ def test_multiple_carriers_render_a_sorted_comma_list(tmp_path: Path) -> None:
     assert "only" not in out
 
 
-def test_move_a1_sub_mechanic_count_is_derived_not_written(tmp_path: Path) -> None:
+def test_move_a1_sub_mechanic_count_is_derived_not_written(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """The count word tracks the enum length, so prose cannot drift from it."""
-    from _move_c_bullet_for_cog import _spell  # type: ignore[import-not-found]
-
+    enum_manifest = tmp_path / "move-a1-enum.yaml"
+    enum_manifest.write_text("move_a1_pattern:\n  - first\n  - second\n  - third\n")
+    monkeypatch.setattr(_move_c_bullet_for_cog, "_A1_ENUM_MANIFEST", enum_manifest)
     yaml_path = _write_manifest(tmp_path, [("alpha", True)], flag="move_a1")
     out = render(yaml_path)
-    start = out.index("<!-- regen:move-a1-enum:start -->")
-    end = out.index("<!-- regen:move-a1-enum:end -->")
-    rendered_values = out[start:end].count("`") // 2
-    assert f"{_spell(rendered_values)} sub-mechanics" in out
+    assert "via one of three sub-mechanics" in out
+    assert (
+        "<!-- regen:move-a1-enum:start -->`first`, `second`, `third`<!-- regen:move-a1-enum:end -->"
+        in out
+    )
