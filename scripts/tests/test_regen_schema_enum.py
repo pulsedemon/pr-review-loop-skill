@@ -147,25 +147,33 @@ def test_returns_3_when_schema_is_unreadable(
     assert "failed to read" in err
 
 
-def test_systemexit_when_schema_is_not_valid_json(tmp_path: Path) -> None:
+def test_exits_3_when_schema_is_not_valid_json(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     manifest = _write_manifest(tmp_path, ["alpha"])
     schema = tmp_path / "output.schema.json"
     schema.write_text("{ this is not valid json")
     with pytest.raises(SystemExit) as exc_info:
         _run(["--check", "--manifest", str(manifest), "--schema", str(schema)])
-    assert "not valid JSON" in str(exc_info.value)
+    assert exc_info.value.code == generator_io.MANIFEST_ERROR_EXIT
+    assert "not valid JSON" in capsys.readouterr().err
 
 
-def test_systemexit_when_reviewer_enum_path_is_missing(tmp_path: Path) -> None:
+def test_exits_3_when_reviewer_enum_path_is_missing(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     manifest = _write_manifest(tmp_path, ["alpha"])
     schema = tmp_path / "output.schema.json"
     schema.write_text(json.dumps({"properties": {"other": {}}}, indent=2))
     with pytest.raises(SystemExit) as exc_info:
         _run(["--check", "--manifest", str(manifest), "--schema", str(schema)])
-    assert "properties.reviewer.enum" in str(exc_info.value)
+    assert exc_info.value.code == generator_io.MANIFEST_ERROR_EXIT
+    assert "properties.reviewer.enum" in capsys.readouterr().err
 
 
-def test_systemexit_when_slice_regex_cannot_match_despite_valid_path(tmp_path: Path) -> None:
+def test_exits_3_when_slice_regex_cannot_match_despite_valid_path(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     # Valid JSON, valid path, but inline single-line enum that the multi-line
     # slice locator cannot match (no whitespace around the colons/braces).
     manifest = _write_manifest(tmp_path, ["alpha"])
@@ -175,4 +183,5 @@ def test_systemexit_when_slice_regex_cannot_match_despite_valid_path(tmp_path: P
     schema.write_text('{"properties":{"reviewer":{"enum":["alpha"],"type":"string"}}}')
     with pytest.raises(SystemExit) as exc_info:
         _run(["--check", "--manifest", str(manifest), "--schema", str(schema)])
-    assert "slice locator regex did not match" in str(exc_info.value)
+    assert exc_info.value.code == generator_io.MANIFEST_ERROR_EXIT
+    assert "slice locator regex did not match" in capsys.readouterr().err

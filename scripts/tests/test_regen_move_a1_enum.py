@@ -417,7 +417,11 @@ def test_missing_skill_region_is_allowed_when_optional(tmp_path: Path) -> None:
     assert regen._regen_prose(text, tmp_path / "SKILL.md", VALUES, optional=True) == text
 
 
-def test_missing_region_still_fatal_for_the_hand_written_mirrors(tmp_path: Path) -> None:
+def test_missing_region_still_fatal_for_the_hand_written_mirrors(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     """reviewers/tests.md and adversary.md always carry the region."""
-    with pytest.raises(SystemExit, match="no regen:move-a1-enum region found"):
+    with pytest.raises(SystemExit) as exc_info:
         regen._regen_prose("no region here\n", tmp_path / "tests.md", VALUES)
+    assert exc_info.value.code == 3
+    assert "no regen:move-a1-enum region found" in capsys.readouterr().err
