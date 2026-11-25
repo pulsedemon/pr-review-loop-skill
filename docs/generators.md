@@ -37,9 +37,11 @@ These rules apply equally to cog-managed regions and standalone scripts.
    entrypoint for `regen.sh --check`.
 2. **Exit codes.** `0` ok, `3` manifest error or a target the generator
    cannot read or find its region in, `5` drift detected
-   (`generator_io.MANIFEST_ERROR_EXIT`, `generator_io.DRIFT_EXIT`). cog also
-   exits `5` on drift, so `regen.sh --check` passes every status through
-   unchanged.
+   (`generator_io.MANIFEST_ERROR_EXIT`, `generator_io.DRIFT_EXIT`).
+   `regen_panel_counts.py` exits `5` for malformed region markers, and its
+   `--validate-markers` and `--validate-coverage` modes exit `5` for any
+   failure, an unreadable file included. cog also exits `5` on drift, so
+   `regen.sh --check` passes every status through unchanged.
 3. **Drift output.** On drift, emit a unified diff to stderr and a literal
    fix hint: `Run scripts/regen.sh to regenerate ...`. The literal
    string is asserted by
