@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 import pytest
+from jsonschema import Draft202012Validator
 from pr_scope_step import (  # type: ignore[import-not-found]
     PrScopeStepError,
     _main,
@@ -203,7 +204,7 @@ def test_plan_pr_scope_step_resume_honors_state_decision_without_pr_scope_file()
     }
 
 
-@pytest.mark.parametrize("decision", ["not_prompted", "declined_agent", "continue"])
+@pytest.mark.parametrize("decision", ["not_prompted", "declined_agent", "agent_failed", "continue"])
 def test_plan_pr_scope_step_resume_honors_recorded_decision(decision: str) -> None:
     outcome = plan_pr_scope_step(
         pr_scope_mode="auto",
@@ -345,6 +346,90 @@ def test_persist_pr_scope_outcome_infers_action_from_finalize_output(tmp_path) -
 
     assert updated_state["pr_scope"]["user_decision"] == "declined_agent"
     assert pr_scope_path.exists()
+
+
+def test_finalize_pr_scope_decision_records_agent_failed() -> None:
+    decision = finalize_pr_scope_decision(
+        pr_scope=make_pr_scope_record(),
+        user_decision="agent_failed",
+        agent_errors=["launch refused"],
+    )
+
+    assert decision == {
+        "status": None,
+        "pr_scope": make_pr_scope_record(
+            user_decision="agent_failed", agent_errors=["launch refused"]
+        ),
+    }
+
+
+def test_finalize_records_agent_errors_beside_recommendation() -> None:
+    decision = finalize_pr_scope_decision(
+        pr_scope=make_pr_scope_record(),
+        user_decision="continue",
+        gate_result={"gate": "pr-scope", "verdict": "atomic", "summary": "one change"},
+        agent_errors=["codex familiar: invalid json"],
+    )
+
+    assert decision["pr_scope"]["verdict"] == "atomic"
+    assert decision["pr_scope"]["agent_errors"] == ["codex familiar: invalid json"]
+
+
+@pytest.mark.parametrize("errors", [[" "], [""], "launch refused", [3]])
+def test_persist_rejects_blank_agent_error(tmp_path, errors: object) -> None:
+    state_path = tmp_path / "state.json"
+    state_path.write_text('{"status":"running","history":[]}\n', encoding="utf-8")
+
+    with pytest.raises(PrScopeStepError, match="agent_errors"):
+        persist_pr_scope_outcome(
+            state_path=state_path,
+            pr_scope_path=tmp_path / "pr-scope.json",
+            outcome={
+                "status": None,
+                "pr_scope": make_pr_scope_record(user_decision="agent_failed", agent_errors=errors),
+            },
+        )
+
+
+@pytest.mark.parametrize("decision", ["declined_agent", "agent_failed"])
+def test_finalize_drops_resumed_verdict(decision: str) -> None:
+    planned = plan_pr_scope_step(
+        pr_scope_mode="true",
+        threshold=1000,
+        existing_pr_scope=make_pr_scope_record(
+            new_loc_total=282, verdict="under_threshold", summary="old"
+        ),
+        pr_scope_file_exists=True,
+    )
+    assert planned["action"] == "prompt"
+    assert planned["pr_scope"]["verdict"] == "under_threshold"
+
+    decision_record = finalize_pr_scope_decision(
+        pr_scope=planned["pr_scope"], user_decision=decision
+    )["pr_scope"]
+
+    assert "verdict" not in decision_record
+    assert "summary" not in decision_record
+    assert decision_record["user_decision"] == decision
+
+
+def test_persist_agent_failed_record_matches_state_schema(tmp_path) -> None:
+    state_path = tmp_path / "state.json"
+    state_path.write_text('{"status":"running","history":[]}\n', encoding="utf-8")
+    outcome = finalize_pr_scope_decision(
+        pr_scope=make_pr_scope_record(),
+        user_decision="agent_failed",
+        agent_errors=["launch refused"],
+    )
+
+    updated_state = persist_pr_scope_outcome(
+        state_path=state_path, pr_scope_path=tmp_path / "pr-scope.json", outcome=outcome
+    )
+
+    schema_path = Path(__file__).resolve().parents[2] / "templates" / "state.schema.json"
+    pr_scope_schema = json.loads(schema_path.read_text())["properties"]["pr_scope"]
+    errors = list(Draft202012Validator(pr_scope_schema).iter_errors(updated_state["pr_scope"]))
+    assert not errors, [error.message for error in errors]
 
 
 def test_finalize_pr_scope_decision_records_declined_agent() -> None:

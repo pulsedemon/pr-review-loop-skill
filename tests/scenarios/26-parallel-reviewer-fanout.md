@@ -637,11 +637,50 @@ request, launch settings, traces, judge with its controls and per-response
 classification are retained locally under ignored
 `docs/superpowers/reviews/2026-11-18-reviewer-output-shape/`.
 
+## Reviewer budget under Witch, 2026-11-22
+
+A stop check for the Witch bullet of the
+[reviewer budget](../../docs/reviewer-orchestration.md#reviewer-budget), at
+`5c1b03e`, for [issue #93](https://github.com/pulsedemon/pr-review-loop-skill/issues/93).
+The familiars ran on a Witch build of `df815d88`, Claude Code 2.1.322 and Codex
+0.162.1. Each run launched one stalled Claude familiar on `claude-opus-5-5` and
+one stalled Codex familiar on `gpt-6.1-sol`, the two routes `--route review`
+returned, at low effort and with the Witch section's lean flags. Each familiar
+ran one 600 s `python3` sleep with a distinct duration so the process stayed
+findable after reparenting, and replied only after it exited. The budget was a
+60 s stand-in. A logger sampled the process table every 2 s, and the parent
+wrote `launched`, `stopping` and `stopped` epoch markers.
+
+| Parent | Stop | `stopping` after launch | Wrapper and native process | The familiar's command |
+| --- | --- | --- | --- | --- |
+| Claude Code (this session) | `TaskStop` on each familiar's background Bash task, after a background `sleep 60` finished on its own | 64 s | gone within 2 s for both familiars | gone within 5 s for both |
+| Codex familiar | `write_stdin` with `\u0003` to each `exec_command` session, launched with `require_escalated` and `tty: true` | 69 s | gone by the 10 s sample for both familiars; both sessions exited 130 | the Claude familiar's was gone by 10 s; the Codex familiar's survived, reparented to PID 1, and was killed by PID after the 90 s sample |
+
+Every wrapper, native process and command was alive in the last sample before
+`stopping`. The Codex parent kept polling until 102 s after `stopped`, so it
+outlived the 90 s sample. The logger's filter missed the Claude native process
+in the Codex-parent run; it counts as gone at 10 s because the Claude wrapper
+exits only after its child closes (Witch `src/cli/cli-familiar.ts:138-158`),
+and that wrapper was gone. Witch leaves a familiar's command descendants to
+native cleanup (`src/cli/cli-familiar.ts:141`), so the surviving Codex command
+is a Codex behavior, recorded in the bullet. Both familiars stopped by
+`TaskStop` ended their reports with `Familiar reporting failed: The familiar run
+has already ended.`, filed as
+[pulsedemon/witch#922](https://github.com/pulsedemon/witch/issues/922); the
+`\u0003` stops reported normally.
+
+The limits are one run per parent runtime, a stalled command in place of a
+reviewer, and a Codex parent that was itself a familiar given the launch
+commands, not a Codex host running the skill. The prompts, markers, process
+logs and reports are retained locally under ignored
+`docs/superpowers/reviews/2026-11-22-witch-budget-stop/`.
+
 ## Validation status
 
 **Status:** `design_only`
 **Evidence:** The dated multi-iteration Codex run and Claude Code edit-path run above establish checks 1, 2, and 4 at their pinned revisions; the Claude dry run establishes checks 1 and 4 at its pin. The edit-path record separately reports its receipt, budget, summary and isolation failures; its follow-up Step 5 replay shows the summary failure fixed at `e16e794`. The reviewer-response record establishes original-byte validation, resend, per-batch launch receipts and budget expiration with late-output discard at `e37d8e2`, with stub reviewers. The timer-stop record establishes a timer stop after the last validation result in every judged A, C and D batch (8 batches, 6 with `TaskStop` loaded before the terminal validation), and a still-running reviewer stopped at expiry, at `72f6a8f`, with stub reviewers, Claude Code 2.1.322. The failed-CI conversion record establishes conversion of a real failed check through repair, re-review and green CI at `4d2d334`, from a prepared §4d.1 start.
 The integrated live run above additionally observes the repaired timer ordering with real reviewers and accurate adversary-suggestion reporting on `dac0089`, with its recorded permission and snapshot-recovery limits.
 The reviewer output shape run above observes eleven valid first responses on `2be61f8` with the output addendum delivered through each persona.
+The Witch budget record establishes the `TaskStop` stop for a Claude parent and the `\u0003` stop for a Codex parent on `5c1b03e`, with stalled familiars.
 
 **Missing evidence:** Dated host runs covering conditional fallback (check 3) and `cost_saver` model routing (check 5).
