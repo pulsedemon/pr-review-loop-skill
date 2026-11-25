@@ -24,6 +24,17 @@ setup_remote() {
   [[ "$output" == *"protected"* ]]
 }
 
+@test "SKILL.md Step 1 protected list matches safe_push.sh PROTECTED" {
+  local skill script
+  skill=$(grep -F '`headRefName` is in the protected list' "${REPO_ROOT}/SKILL.md" |
+    grep -oE '`[^`]+`' | tr -d '`' | grep -vx headRefName | sort)
+  script=$(sed -n 's/^PROTECTED=(\(.*\))$/\1/p' "${SCRIPTS}/safe_push.sh" | tr -d '"' | tr ' ' '\n' | sort)
+  [[ -n "$script" && "$skill" == "$script" ]] || {
+    echo "protected branches differ: SKILL.md Step 1 has [${skill//$'\n'/ }], scripts/safe_push.sh PROTECTED has [${script//$'\n'/ }]"
+    return 1
+  }
+}
+
 @test "refuses when currently on a different branch" {
   git checkout -q -b feature
   run bash "${SCRIPTS}/safe_push.sh" other-branch deadbeef
