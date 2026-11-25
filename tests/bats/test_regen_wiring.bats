@@ -17,10 +17,12 @@ load test_helper
 }
 
 # Records each python3 call instead of running it, so these tests see what
-# regen.sh runs and change nothing.
+# regen.sh runs and change nothing. The cog call prints to stdout, as
+# cog --diff does.
 record_python3() {
   CALLS="${BATS_TEST_TMPDIR}/python3-calls"
-  stub_cmd python3 "printf '%s\n' \"\$*\" >>'${CALLS}'"
+  stub_cmd python3 "printf '%s\n' \"\$*\" >>'${CALLS}'
+if [[ \"\$1 \$2\" == '-m cogapp' ]]; then echo 'cog output'; fi"
 }
 
 # Fails unless every scripts/regen_*.py ran with the given mode flag.
@@ -36,14 +38,18 @@ assert_every_generator_ran() {
 }
 
 @test "regen.sh --check runs cog and every generator in check mode" {
+  bats_require_minimum_version 1.5.0
   record_python3
   cd "$REPO_ROOT"
-  run bash scripts/regen.sh --check
+  run --separate-stderr bash scripts/regen.sh --check
   [[ "$status" -eq 0 ]]
   grep -qE '^-m cogapp --check --diff .*/scripts/cogfiles\.txt$' "$CALLS"
   assert_every_generator_ran --check
   grep -qE '/scripts/regen_panel_counts\.py --validate-markers$' "$CALLS"
   grep -qE '/scripts/regen_panel_counts\.py --validate-coverage$' "$CALLS"
+  # docs/generators.md promises drift output on stderr.
+  [[ -z "$output" ]]
+  [[ "$stderr" == *"cog output"* ]]
 }
 
 @test "regen.sh runs cog and every generator in write mode" {
