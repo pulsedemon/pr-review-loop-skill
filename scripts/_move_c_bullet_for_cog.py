@@ -9,14 +9,12 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-import yaml
-
 _SCRIPTS = Path(__file__).resolve().parent
 if str(_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS))
 
 from personas_manifest import load_manifest  # noqa: E402
-from regen_move_a1_enum import _render_value_list  # noqa: E402
+from regen_move_a1_enum import load_values, render_value_list  # noqa: E402
 
 _REPO_ROOT = _SCRIPTS.parent
 _DEFAULT_MANIFEST = _REPO_ROOT / "reviewers" / "personas.yaml"
@@ -43,11 +41,6 @@ def _spell(n: int) -> str:
     return _NUMBER_WORDS[n] if n < len(_NUMBER_WORDS) else str(n)
 
 
-def _a1_enum() -> list[str]:
-    data = yaml.safe_load(_A1_ENUM_MANIFEST.read_text())
-    return list(data["move_a1_pattern"])
-
-
 def _move_a(names: str) -> str:
     return (
         f"- **Move A (test-intent audit)**, {names}: for each new/modified test, "
@@ -58,12 +51,12 @@ def _move_a(names: str) -> str:
 def _move_a1(names: str) -> str:
     # the count is derived, not written: the enum is closed but not frozen,
     # and prose saying "five" would rot the next time a value is added.
-    values = _a1_enum()
+    values = load_values(_A1_ENUM_MANIFEST)
     return (
         f"- **Move A.1 (assertion-vacuity audit)**, {names}: for each assertion, "
         f"check whether it's syntactically determinable to be vacuous via one of "
         f"{_spell(len(values))} sub-mechanics "
-        f"({_A1_REGION_START}{_render_value_list(values)}{_A1_REGION_END}); set "
+        f"({_A1_REGION_START}{render_value_list(values)}{_A1_REGION_END}); set "
         f"`move_a1_pattern` on each finding. See `reviewers/tests.md`."
     )
 

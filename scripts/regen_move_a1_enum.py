@@ -66,7 +66,15 @@ _OUT_ENUM_SLICE = re.compile(
 )
 
 
-def _render_value_list(values: list[str]) -> str:
+def load_values(path: Path) -> list[str]:
+    """return the manifest's enum values; raise on a missing key or malformed list."""
+    values = list(yaml.safe_load(path.read_text())["move_a1_pattern"])
+    if not values or not all(isinstance(v, str) and v for v in values):
+        raise ValueError("move_a1_pattern must be a non-empty list of strings")
+    return values
+
+
+def render_value_list(values: list[str]) -> str:
     return ", ".join(f"`{v}`" for v in values)
 
 
@@ -152,7 +160,7 @@ def _regen_prose(text: str, path: Path, values: list[str], *, optional: bool = F
     region is narrow enough that exactly one such list is present per
     region, so there is no ambiguity to resolve.
     """
-    rendered_list = _render_value_list(values)
+    rendered_list = render_value_list(values)
     regions = list(_REGION.finditer(text))
     if not regions and optional:
         # SKILL.md's region lives inside the generated §4b Move A.1 bullet,
@@ -338,10 +346,7 @@ def main(argv: list[str]) -> int:
         args.check = True
 
     try:
-        manifest_data = yaml.safe_load(args.manifest.read_text())
-        values = list(manifest_data["move_a1_pattern"])
-        if not values or not all(isinstance(v, str) and v for v in values):
-            raise ValueError("move_a1_pattern must be a non-empty list of strings")
+        values = load_values(args.manifest)
     except (FileNotFoundError, KeyError, TypeError, ValueError, yaml.YAMLError) as e:
         print(f"regen_move_a1_enum: manifest error: {e}", file=sys.stderr)
         return generator_io.MANIFEST_ERROR_EXIT
