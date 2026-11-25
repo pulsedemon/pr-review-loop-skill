@@ -147,7 +147,7 @@ for status, description in E.statuses():
 | Status | Meaning |
 | --- | --- |
 | `running` | Loop is mid-iteration; not a terminal exit. |
-| `success` | required reviews complete on the unchanged head, zero blockers, CI green or no checks registered, and required comment handling complete. |
+| `success` | required reviews complete on the unchanged head, zero blockers, no required fixes pending (SKILL.md §4e), CI green or no checks registered, and required comment handling complete. |
 | `max_iterations` | reached the configured iteration cap. |
 | `no_progress` | Same blockers came back within the last two iterations. |
 | `tests_regressed` | Local tests regressed after an edit. |
@@ -169,7 +169,7 @@ The hard-coded, non-overridable rails (no force-push, no amend, no `--no-verify`
 
 ## Scope discipline
 
-Reviewer personas are prompted with a strict scope rule: only flag as `blocker` things that are objectively wrong (correctness, security, test coverage) or that violate an explicit requirement in the PR body or linked ticket. Style preferences, "consistency with the pattern elsewhere", and inferred requirements are recorded as deferred questions for humans, not fixed automatically.
+Reviewer personas are prompted with a strict scope rule: only flag as `blocker` things that are objectively wrong (correctness, security, test coverage) or that violate an explicit requirement in the PR body or linked ticket. Style preferences, "consistency with the pattern elsewhere", and inferred requirements are recorded as deferred questions for humans, not fixed automatically, unless higher-priority instructions require small flaws a review reveals to be fixed ([§4e](SKILL.md#4e-apply-changes)).
 
 ## Layout
 

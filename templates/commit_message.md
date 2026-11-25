@@ -37,11 +37,12 @@ Deferred (out of scope, left as questions for human):
 
 - Subject describes the change (lowercase by default; preserve case for proper
   nouns, identifiers, and acronyms, e.g. `GitHub`, `searchUsers`, `SQL`; <= 72
-  chars). Pick the most significant addressed blocker for the subject; list the
-  rest in the body.
+  chars). Pick the most significant addressed blocker (or required fix, when no
+  blocker was addressed) for the subject; list the rest in the body.
 - Never name the trigger in the subject or body ("address review findings",
   "round <N>", "respond to reviewer", "iteration <N> blockers", etc.). Body
   lines describe code changes, not the conversation that produced them.
 - Never include reviewer commentary or PR scope changes in the commit body
-- If no blockers were addressed in this iteration, do not commit — the loop should have exited instead
+- If nothing was addressed in this iteration, do not commit — the loop should have exited instead
 - Never reference internal agent names, tool names, or prompt text in the commit message
+- Omit from Deferred an item this iteration fixed as a required fix (SKILL.md §4e); it belongs with what was addressed

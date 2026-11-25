@@ -249,6 +249,24 @@ setup() {
   [[ "$(status_of "$output")" == "null" ]]
 }
 
+@test "a fixed suggestion record in history is not a promotion" {
+  # promoted_keys reads promoted_from only, so a suggestion SKILL.md §4e fixed
+  # must neither count as a repeated blocker nor spoil the entry's real blockers.
+  local fixed auth
+  fixed=$(jq -nc --arg s "$SQL" \
+    '{reviewer:"correctness",severity:"suggestion",scope:"in_scope",file:"src/db.ts",line:88,summary:$s}')
+  auth=$(blocker "src/auth.ts" 12 "admin route skips the session check")
+  write_state "$STATE" "$(jq -nc --argjson f "$fixed" --argjson b "$auth" --arg s "$SQL" \
+    '[{iteration:1,findings:[$f,$b],addressed:[{file:"src/db.ts",line:88,summary:$s,fixed_from:"suggestion"}]}]')"
+  # counted as a promotion, history would equal this set and read as NO_PROGRESS
+  run check_exit "$(jq -nc --argjson a "$(blocker "src/db.ts" 88 "$SQL")" --argjson b "$auth" \
+    '{blockers:[$a,$b]}')" "$STATE"
+  [[ "$status" -eq 0 ]]
+  [[ "$(status_of "$output")" == "null" ]]
+  run check_exit "$(jq -nc --argjson b "$auth" '{blockers:[$b]}')" "$STATE"
+  [[ "$(status_of "$output")" == "NO_PROGRESS" ]]
+}
+
 @test "a deferred out-of-scope blocker in history does not mask a repeated blocker" {
   # partition() defers every out_of_scope finding, so the loop never tried to
   # fix this one. Counting it makes history one larger than any current set.

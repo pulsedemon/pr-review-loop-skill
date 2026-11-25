@@ -135,7 +135,8 @@ dependent surfaces and caveats. Edits not listed here are routed by the
   `SKILL.md`.
 - **Dependent surfaces:** `docs/synthesis.md` (which partition a severity lands
   in), `templates/state.schema.json` (`promotion_reason`, whose values the
-  provenance suffix keys on).
+  provenance suffix keys on, and the `addressed[]` `fixed_from` record
+  `collect_open_findings.py` settles on).
 - **Validate:** `bash tests/run.sh` for
   `tests/bats/test_open_findings_contract.bats`,
   `tests/bats/test_nit_tier_contract.bats` and

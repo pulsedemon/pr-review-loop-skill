@@ -71,6 +71,7 @@ if str(SCRIPT_DIR) not in sys.path:
 
 from finding_contract import (  # noqa: E402
     base_summary,
+    located_fields_ok,
     owners,
     well_formed,
     well_formed_promotion,
@@ -86,20 +87,30 @@ def _key(record: dict) -> tuple:
     return (record.get("file"), record.get("line"), record.get("summary"))
 
 
+def _settles(record: dict, field: str) -> bool:
+    if record.get("promoted_from") == "suggestion":
+        return well_formed_promotion(record)
+    if field == "addressed" and record.get("fixed_from") in OPEN_SEVERITIES:
+        return isinstance(record.get("summary"), str) and located_fields_ok(record)
+    return False
+
+
 def _settled(entry: dict) -> set[tuple]:
-    """Provenance records for findings this entry promoted or deferred.
+    """Provenance records for findings this entry promoted, deferred or fixed.
 
     promote_findings.py appends a promoted suggestion to blockers[] without
     rewriting `severity`, and routes a failed evidence check to deferred[] the
     same way, so severity alone cannot tell an open suggestion from one that
     already has a home elsewhere in the summary. addressed[]/deferred[] carry
-    the provenance record for exactly those.
+    the provenance record for exactly those. A `fixed_from` record in
+    addressed[] is a suggestion or nit §4e fixed; its finding keeps its severity
+    the same way.
 
-    Keys, not the matcher: `_provenance` copies `file`/`line`/`summary` off the
-    finding verbatim, so exact equality is exhaustive here, and the §4c window
-    is not an equivalence relation, so a fuzzy check would let one promotion
-    retire a *different* finding within five lines of it, which would then
-    render in no section at all.
+    Keys, not the matcher: `_provenance` and §4e's `fixed_from` record copy
+    `file`/`line`/`summary` off the finding verbatim, so exact equality is
+    exhaustive here, and the §4c window is not an equivalence relation, so a
+    fuzzy check would let one promotion retire a *different* finding within
+    five lines of it, which would then render in no section at all.
 
     The deferred record's summary is annotated with the verification failure
     before it is parked, so the key is built from the summary the finding itself
@@ -114,15 +125,13 @@ def _settled(entry: dict) -> set[tuple]:
     keys = set()
     for field in ("addressed", "deferred"):
         for record in entry.get(field) or []:
-            if not isinstance(record, dict) or record.get("promoted_from") != "suggestion":
-                continue
-            if not well_formed_promotion(record):
+            if not isinstance(record, dict) or not _settles(record, field):
                 continue
             keys.add((record.get("file"), record.get("line"), base_summary(record["summary"])))
     return keys
 
 
-def _candidates(entry: dict) -> list[dict]:
+def _candidates(entry: dict, settled: set[tuple]) -> list[dict]:
     """In-scope suggestions and nits this entry left open.
 
     out_of_scope findings are dropped: partition() routes them to deferred[],
@@ -131,7 +140,6 @@ def _candidates(entry: dict) -> list[dict]:
     findings = entry.get("findings")
     if not isinstance(findings, list):
         return []
-    settled = _settled(entry)
     out = []
     for f in findings:
         if not isinstance(f, dict) or not well_formed(f, owner_required=False):
@@ -251,7 +259,8 @@ def _rounds(history: list, current: dict) -> list[dict]:
     """History entries oldest-first, with the current iteration folded in.
 
     The current iteration reaches Step 5 in one of two states: not yet in
-    history[] (every exit before §4i), or in it from the §4d.1 SUCCESS path.
+    history[] (every exit before §4i), or in it once §4i appended it, as on the
+    §4d.1 SUCCESS path.
     Folding on the iteration number covers both. Older state records that
     SUCCESS entry with `findings: []`, which leaves the stdin partitions as the
     only record that iteration's panel produced anything at all.
@@ -269,11 +278,13 @@ def _rounds(history: list, current: dict) -> list[dict]:
             # entry without one was not written by this loop.
             continue
         ran, full_panel = _ran(entry)
+        settled = _settled(entry)
         rounds.append(
             {
                 "iteration": iteration,
                 "findings": _all_findings(entry),
-                "candidates": _candidates(entry),
+                "candidates": _candidates(entry, settled),
+                "settled": settled,
                 "ran": ran,
                 "full_panel": full_panel,
                 "no_verdict": _no_verdict(entry),
@@ -296,7 +307,11 @@ def _rounds(history: list, current: dict) -> list[dict]:
     #
     # maximum matching keeps restatement order from duplicating a finding whose
     # only match a greedy pass gave to another item with alternatives.
-    kept = _unmatched(current["candidates"], existing["candidates"], current)
+    #
+    # the stdin partitions still hold what §4i recorded as fixed. drop it before
+    # matching, or it can take an open neighbor's match and duplicate that item.
+    fresh = [f for f in current["candidates"] if _key(f) not in existing["settled"]]
+    kept = _unmatched(fresh, existing["candidates"], current)
     current_candidates = {id(f) for f in current["candidates"]}
     existing_candidates = {id(f) for f in existing["candidates"]}
     settlers = _unmatched(

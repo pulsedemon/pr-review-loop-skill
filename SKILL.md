@@ -216,7 +216,7 @@ Runs only when §4d.0 returned findings. Inputs: panel findings, adversary findi
 bash "$SKILL_ROOT/scripts/ci_wait.sh" <pr_number>
 ```
 
-- **Exit code 0 (CI green) or 4 (no checks):** invoke §4i on its no-commit path with `ci_status: "success"` or `"skipped"`, respectively. Then run the [completion gate](docs/comment-handling.md#success-gate-4d1) with fresh comments and head observations. Only its complete result permits `SUCCESS`; changed feedback starts a full-panel iteration within budget.
+- **Exit code 0 (CI green) or 4 (no checks):** when §4e has required fixes pending, continue through its budget check. Otherwise invoke §4i on its no-commit path with `ci_status: "success"` or `"skipped"`, respectively. Then run the [completion gate](docs/comment-handling.md#success-gate-4d1) with fresh comments and head observations. Only its complete result permits `SUCCESS`; changed feedback starts a full-panel iteration within budget.
 - **Exit code 1 (CI failed):** convert failed checks into synthetic blockers, then continue through §4e's budget check.
 - **Exit codes 2 or 5:** exit `CI_STUCK`. **Exit code 3:** exit `SETUP_ERROR`. Mapping: [`docs/ci-conversion.md`](docs/ci-conversion.md).
 
@@ -232,10 +232,10 @@ Before editing, send `{"phase":"edit","iteration":N}` to `scripts/check_exit_con
 
 - Record the pre-edit SHA: `PRE_EDIT_SHA=$(git rev-parse HEAD)`. This is the rollback target if local validation regresses in 4f.
 
-Implement each blocker in the plan. Rules:
+Implement each blocker in the plan. When higher-priority instructions require fixing small flaws a review reveals, also implement the required fixes: the suggestions and nits those instructions require you to fix, within their own scope and exceptions, from this iteration's partitions, in or out of scope, whose flaw you confirm in the current tree and that a small, verifiable change in any repository file fixes without a product decision. Record each as a `fixed_from` record in `addressed[]` (`templates/state.schema.json`). Rules:
 
-- Stay within PR scope: do not touch files unrelated to blockers
-- Do not restructure code beyond what the blocker requires
+- Stay within PR scope, except for required fixes: do not touch files unrelated to blockers or required fixes
+- Do not restructure code beyond what the blocker or fix requires
 - Preserve existing tests; add/update tests when a blocker requires it
 
 #### 4f. Run local validation
@@ -255,7 +255,7 @@ Exit-code handling:
 
 #### 4g. Commit
 
-Use the format in `templates/commit_message.md`. One commit per iteration summarizing addressed blockers.
+Use the format in `templates/commit_message.md`. One commit per iteration summarizing what it addressed.
 
 #### 4h. Push
 

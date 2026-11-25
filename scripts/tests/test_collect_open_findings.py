@@ -395,6 +395,88 @@ def test_unlocated_findings_match_on_exact_summary():
     assert "file" not in result["nits"][0]
 
 
+def fixed(f):
+    return {
+        "file": f["file"],
+        "line": f["line"],
+        "summary": f["summary"],
+        "fixed_from": f["severity"],
+    }
+
+
+def test_a_fixed_nit_settles_and_its_unfixed_neighbor_carries():
+    # the neighbor sits within the matcher's window and overlaps its summary, so
+    # a fuzzy settlement would retire it too
+    done = finding(severity="nit", line=10, summary="typo in the retry budget comment")
+    left = finding(severity="nit", line=13, summary="typo in the retry budget comment header")
+    e = entry(1, findings=[done, left], ran=["tests"], addressed=[fixed(done)])
+    result = collect(current(2, ran=["correctness"]), [e])
+    assert summaries(result["nits"]) == [left["summary"]]
+
+
+def test_a_fixed_nit_stays_settled_when_its_iteration_is_folded_in():
+    # the Step 5 caller passes an appended iteration's partitions verbatim, fixed nit included
+    f = finding(severity="nit")
+    e = entry(1, findings=[f], ran=["tests"], addressed=[fixed(f)])
+    assert collect(current(1, nits=[dict(f)], ran=["tests"]), [e])["nits"] == []
+
+
+def test_a_folded_fixed_nit_does_not_duplicate_its_open_neighbor():
+    # listed first, the fixed nit would take the neighbor's fuzzy match
+    done = finding(severity="nit", line=10, summary="typo in the retry budget comment")
+    left = finding(severity="nit", line=13, summary="typo in the retry budget comment header")
+    e = entry(1, findings=[done, left], ran=["tests"], addressed=[fixed(done)])
+    payload = current(1, nits=[dict(done), dict(left)], ran=["tests"])
+    assert summaries(collect(payload, [e])["nits"]) == [left["summary"]]
+
+
+def test_a_fixed_record_in_deferred_settles_nothing():
+    # the schema admits a fixed_from record in addressed[] only
+    f = finding(severity="nit")
+    e = entry(1, findings=[f], ran=["tests"], deferred=[fixed(f)])
+    assert summaries(collect(current(2, ran=[]), [e])["nits"]) == [f["summary"]]
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [{"fixed_from": "blocker"}, {"summary": ["typo"]}, {"line": True}],
+    ids=["not-an-open-severity", "list-summary", "bool-line"],
+)
+def test_a_malformed_fixed_record_settles_nothing(bad):
+    # line 1, so a bool line would key-equal the finding without the type check
+    f = finding(severity="nit", line=1)
+    e = entry(1, findings=[f], ran=["tests"], addressed=[{**fixed(f), **bad}])
+    assert summaries(collect(current(2, ran=[]), [e])["nits"]) == [f["summary"]]
+
+
+def test_an_unlocated_fixed_record_settles_an_unlocated_nit():
+    f = {"reviewer": "tests", "severity": "nit", "scope": "in_scope", "summary": "flaky sleep"}
+    e = entry(
+        1, findings=[f], ran=["tests"], addressed=[{"summary": f["summary"], "fixed_from": "nit"}]
+    )
+    assert collect(current(2, ran=[]), [e])["nits"] == []
+
+
+def test_a_fix_settles_the_earlier_sighting_it_re_raised():
+    # iteration 2 re-raises it from another persona, so the owner `tests` never
+    # runs again and only pairing with the fixed instance can retire iteration 1's
+    f = finding()
+    g = dict(f, reviewer="correctness", source_reviewers=["correctness"])
+    history = [
+        entry(1, findings=[f], ran=["tests"]),
+        entry(2, findings=[g], ran=["correctness"], addressed=[fixed(g)]),
+    ]
+    assert collect(current(3, ran=["correctness"]), history)["suggestions"] == []
+
+
+def test_a_nit_re_raised_after_its_fix_is_open_again():
+    f = finding(severity="nit")
+    history = [entry(1, findings=[f], ran=["tests"], addressed=[fixed(f)])]
+    result = collect(current(2, nits=[f], ran=["tests"]), history)
+    assert summaries(result["nits"]) == [f["summary"]]
+    assert result["nits"][0]["first_seen_iteration"] == 2
+
+
 def run_cli(payload, state, extra_args=()):
     return subprocess.run(
         [sys.executable, str(SCRIPT), "--state", str(state), *extra_args],

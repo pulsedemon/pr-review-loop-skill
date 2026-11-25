@@ -275,6 +275,18 @@
                       "description": "Personas whose findings matched and triggered the promotion. For adversary-endorsed promotion this is the adversary plus any panel personas whose suggestion was endorsed."
                     }
                   }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["summary", "fixed_from"],
+                  "description": "A suggestion or nit SKILL.md §4e fixed as a required fix. Not a promotion. Copy file, line and summary verbatim from the finding: scripts/collect_open_findings.py settles it by exact key.",
+                  "properties": {
+                    "file": { "type": "string" },
+                    "line": { "type": "integer", "minimum": 1 },
+                    "summary": { "type": "string" },
+                    "fixed_from": { "type": "string", "enum": ["suggestion", "nit"] }
+                  }
                 }
               ]
             }
