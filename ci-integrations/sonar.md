@@ -105,7 +105,7 @@ For any Sonar data not covered above:
 sonar api get "/api/<endpoint>"
 ```
 
-Example — duplications for a specific file in a PR:
+Example: duplications for a specific file in a PR:
 
 ```bash
 sonar api get "/api/duplications/show?key=<project_key>:<path>&pullRequest=<pr_number>"
@@ -113,10 +113,10 @@ sonar api get "/api/duplications/show?key=<project_key>:<path>&pullRequest=<pr_n
 
 ## Exit-code fallbacks
 
-The universal exit-1 rule from [README.md](README.md) applies: any helper exiting `1` is `SETUP_ERROR`, terminate. Beyond that, for `fetch_sonar.sh` / `fetch_sonar_gate.sh`:
+Exit 1 follows the [fetch helper exit convention](../docs/ci-conversion.md#fetch-helper-exit-convention). For the other exits of `fetch_sonar.sh` / `fetch_sonar_gate.sh`:
 
 - **Exit 2** (CLI missing): emit a single coarse blocker summarizing the CI failure from `bash "$SKILL_ROOT/scripts/fetch_ci_log.sh" <pr_number> <check_name>` and continue.
-- **Exit 3** (not authenticated): same — emit coarse blocker, continue. Note the auth issue in `detail`.
+- **Exit 3** (not authenticated): same, emit coarse blocker, continue. Note the auth issue in `detail`.
 - **Exit 4** (project key ambiguous): re-run passing the project key explicitly. Discover candidates via `sonar list projects --query <repo_name>`.
 - **Exit 5** (API error): retry once, then fall back to coarse blocker.
 

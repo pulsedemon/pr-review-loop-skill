@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# tests/bats/test_fetch_pr_comments.bats — verify filter and shape contracts.
+# tests/bats/test_fetch_pr_comments.bats: verify filter and shape contracts.
 # uses a fake `gh` on PATH so tests are hermetic and don't hit the network.
 
 load test_helper
@@ -261,7 +261,7 @@ GHEOF
 }
 
 @test "GraphQL FORBIDDEN errors envelope (auth scope) is treated as a fetch failure" {
-  # distinct from rate-limit by error type — exercises the same has("errors") path.
+  # distinct from rate-limit by error type; exercises the same has("errors") path.
   echo '{"errors":[{"type":"FORBIDDEN","message":"resource not accessible"}]}' > "$GH_FIXTURES_DIR/threads.json"
   run bash "$SCRIPT" owner repo 1 author
   [ "$status" -eq 0 ]
@@ -292,6 +292,14 @@ GHEOF
   rm "$FAKEBIN/gh"
   PATH="$FAKEBIN" run /bin/bash "$SCRIPT" owner repo 1 author
   [ "$status" -eq 7 ]
+}
+
+@test "missing or empty owner, repo, or pr_number is a usage error" {
+  run bash "$SCRIPT" owner repo
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"usage:"* ]]
+  run bash "$SCRIPT" owner "" 1 author
+  [ "$status" -eq 2 ]
 }
 
 @test "missing pr_author surfaces fetch_error: pr_author_missing" {

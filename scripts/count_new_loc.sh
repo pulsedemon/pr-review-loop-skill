@@ -41,7 +41,7 @@ if ! git rev-parse --verify "$BASE_REF" >/dev/null 2>&1; then
   fi
 fi
 
-# is_excluded — return 0 if path should be excluded from the count.
+# is_excluded: return 0 if path should be excluded from the count.
 is_excluded() {
   local path="$1"
   # depth-independent directory excludes (monorepo-safe)
@@ -49,16 +49,10 @@ is_excluded() {
     return 0
   fi
   case "$path" in
-    # lock files
+    # lock files. a case pattern's * also matches /, so *.lock covers every depth.
     package-lock.json | */package-lock.json) return 0 ;;
-    yarn.lock | */yarn.lock) return 0 ;;
     pnpm-lock.yaml | */pnpm-lock.yaml) return 0 ;;
-    Cargo.lock | */Cargo.lock) return 0 ;;
-    Gemfile.lock | */Gemfile.lock) return 0 ;;
-    poetry.lock | */poetry.lock) return 0 ;;
-    composer.lock | */composer.lock) return 0 ;;
     go.sum | */go.sum) return 0 ;;
-    Pipfile.lock | */Pipfile.lock) return 0 ;;
     *.lock) return 0 ;;
     # generated markers
     *.generated.*) return 0 ;;

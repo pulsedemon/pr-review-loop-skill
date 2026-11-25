@@ -220,11 +220,11 @@ bash "$SKILL_ROOT/scripts/ci_wait.sh" <pr_number>
 - **Exit code 1 (CI failed):** convert failed checks into synthetic blockers, then continue through §4e's budget check.
 - **Exit codes 2 or 5:** exit `CI_STUCK`. **Exit code 3:** exit `SETUP_ERROR`. Mapping: [`docs/ci-conversion.md`](docs/ci-conversion.md).
 
-Pass this visit's failed check names to `scripts/check_exit_conditions.py`; exit `CI_STUCK` → Step 5 when it returns that `terminal_status`. One check name in common with the most recent visit that recorded failures is enough. Do not ask whether the commits in between "addressed" the failure: the loop always commits between two 4d.1 visits, so that question always answers "yes" and the exit would never fire. The loop does **not** wait for CI on every iteration, only here, when the reviewer panel has nothing left to flag. Mechanics: [`docs/exit-conditions.md`](docs/exit-conditions.md); the `ci_wait.sh` exit-code mapping is in [`docs/ci-conversion.md`](docs/ci-conversion.md).
+Pass this visit's failed check names to `scripts/check_exit_conditions.py`; exit `CI_STUCK` → Step 5 when it returns that `terminal_status`. The loop does **not** wait for CI on every iteration, only here, when the reviewer panel has nothing left to flag. Mechanics: [`docs/exit-conditions.md`](docs/exit-conditions.md#ci_stuck).
 
 ##### 4d.2 Converting failed CI checks to blockers
 
-Convert each failed check per [`docs/ci-conversion.md`](docs/ci-conversion.md). Match a file in `ci-integrations/` first (existing: `ci-integrations/sonar.md`); fall back to a generic CI blocker if nothing matches. The `scripts/` helper exit convention (helper exits `1` → `SETUP_ERROR` → Step 5) and per-exit fallback rules for `fetch_ci_log.sh` live in the conversion doc. **The scope rule does not apply to CI blockers**: even a CI failure that looks `out_of_scope` for a reviewer persona is in-scope here, because CI gates the merge.
+Convert each failed check per [`docs/ci-conversion.md`](docs/ci-conversion.md). Match a file in `ci-integrations/` first (existing: `ci-integrations/sonar.md`); fall back to a generic CI blocker if nothing matches. Fetch-helper exit handling lives in the conversion doc and the matched integration. **The scope rule does not apply to CI blockers**: even a CI failure that looks `out_of_scope` for a reviewer persona is in-scope here, because CI gates the merge.
 
 #### 4e. Apply changes
 
@@ -251,7 +251,7 @@ Exit-code handling:
 - **0**: all detected validators passed (or nothing to run). Continue to 4g.
 - **1**: harness/setup error: not in a git repo, or a stack was detected but the required toolchain is missing. Treat as `SETUP_ERROR` → Step 5. The stderr `# setup-error:` line identifies which case fired (see `scripts/run_local_validation.sh` for the full enumeration).
 - **2**: no recognized stack. Soft pass: log a note in state's history entry under `addressed` (e.g., `"local validation skipped: no recognized stack"`) and continue to 4g.
-- **3+**: a validator failed. Revert this iteration's edits (`git reset --hard "$PRE_EDIT_SHA"`), record `tests_regressed: true` in state, exit with `TESTS_REGRESSED` → Step 5.
+- **3**: a validator failed. Revert this iteration's edits (`git reset --hard "$PRE_EDIT_SHA"`), record `tests_regressed: true` in state, exit with `TESTS_REGRESSED` → Step 5.
 
 #### 4g. Commit
 
@@ -265,18 +265,18 @@ bash "$SKILL_ROOT/scripts/safe_push.sh" <head_branch> <expected_remote_sha>
 
 `<expected_remote_sha>` is the remote head this iteration started from (`initial_head_sha`, or `history[-1].head_sha_after` on later iterations). It is required: without it a force-push that rewound the remote to an ancestor of local HEAD reads as fast-forwardable and the loop silently re-pushes over it.
 
-`safe_push.sh` refuses to:
+Exits 2 (usage), 10, and 11 of `safe_push.sh` map to `SETUP_ERROR`; exit 12, which also covers a remote it cannot fetch, maps to `EXTERNAL_PUSH`. It refuses to:
 
 - Push to a protected branch
 - Make a non-fast-forward update
-- Push when the remote head SHA differs from what we started from (external push detected → abort with `EXTERNAL_PUSH`)
+- Push when the remote head SHA differs from what we started from (external push detected)
 - Use `--no-verify`
 
 #### 4i. Append to state
 
 Use [`scripts/pr_loop_state.py`](scripts/pr_loop_state.py) to append this iteration's history entry to `<git-dir>/pr-loop/state.json` and advance the top-level iteration counter. §4i is the unified end-of-iteration record point: it runs after §4h on the normal commit/push path, is invoked from §4d.1 before the `SUCCESS` exit on the approval-without-changes path, and is invoked from §4c before the `DRY_RUN_COMPLETE` exit. The full per-iteration record shape is canonical in [`templates/state.schema.json`](templates/state.schema.json). Notable operational rules:
 
-- `ci_status` is required on every entry; record `"skipped"` when §4d.1 didn't run, otherwise the actual `success`/`failure`/`timeout`. On a `failure`, you must record the failed check names in `ci_failed_checks`: §4d.1's `CI_STUCK` rule compares this iteration's names against the most recent earlier entry that recorded any, and `<git-dir>/pr-loop/last_ci_status.json` is overwritten on every `ci_wait.sh` call so it cannot answer that.
+- `ci_status` is required on every entry; record `"skipped"` when §4d.1 didn't run, otherwise the actual `success`/`failure`/`timeout`. On a `failure`, you must record the failed check names in `ci_failed_checks`.
 - On the §4d.1 SUCCESS path no commit was produced: `head_sha_before == head_sha_after`. Record this iteration's merged `findings` and `deferred` as on other paths; `addressed` may be omitted.
 - On the §4c `DRY_RUN_COMPLETE` path no commit was produced either, but the synthesized `findings` are recorded (not `[]`) so the terminal metric reports what the panel found; skip the comment disposition/reply step.
 - `adversary` and `adversary_error` are mutually exclusive.
@@ -341,7 +341,7 @@ The **PR-scope gate** lives in `gates/pr-scope.md`, not `reviewers/`. It runs at
 
 - Operates in-place in the user's current repo; refuses if `origin` doesn't match the PR's `owner/repo`
 - Refuses to run with any uncommitted or staged changes in the working tree
-- Never push to `main`/`master`/`develop`/`release`/`prod`/`production`
+- Never push to a protected branch (the Step 1 list; `scripts/safe_push.sh` refuses it)
 - Never force-push, amend, or use `--no-verify`
 - Abort if remote head changed externally between fetch and push
 - Loop state lives in `<git-dir>/pr-loop/` (never tracked)

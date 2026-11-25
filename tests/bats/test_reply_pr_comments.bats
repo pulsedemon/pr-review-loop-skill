@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# tests/bats/test_reply_pr_comments.bats — idempotent, marker-tagged reply poster.
+# tests/bats/test_reply_pr_comments.bats: idempotent, marker-tagged reply poster.
 # hermetic fake gh on PATH; persists remote comments and records mutations.
 
 load test_helper
@@ -372,6 +372,17 @@ JSON
   [ "$status" -eq 2 ]
 }
 
+@test "missing or empty arguments are usage errors" {
+  run bash "$SCRIPT" owner repo 1 10
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"usage:"* ]]
+  run bash "$SCRIPT" owner "" 1 10 "$BODY"
+  [ "$status" -eq 2 ]
+  run bash "$SCRIPT" --print-existing owner repo 1
+  [ "$status" -eq 2 ]
+  [ ! -s "$MUTATION_LOG" ]
+}
+
 @test "usage error and no mutation when body first line is not the reply marker" {
   printf 'no marker on this line\nsome reply text\n' > "$TMP/nomarker.md"
   run bash "$SCRIPT" owner repo 1 10 "$TMP/nomarker.md"
@@ -405,6 +416,39 @@ JSON
   echo '[]' > "$REMOTE_COMMENTS"
   run bash "$SCRIPT" owner repo 1 10 "$BODY"
   [ "$status" -eq 1 ]
+  [ ! -s "$MUTATION_LOG" ]
+}
+
+@test "print-existing returns the owned marker reply without writing" {
+  cat > "$REMOTE_COMMENTS" <<'JSON'
+[
+  [{"id":10,"user":{"login":"reviewer"},"body":"root"}],
+  [{"id":55,"user":{"login":"loop-author"},"body":"<!-- pr-review-loop-reply -->\nprior body","in_reply_to_id":10,"html_url":"https://github.com/owner/repo/pull/1#discussion_r55"}]
+]
+JSON
+  run bash "$SCRIPT" --print-existing owner repo 1 10
+  [ "$status" -eq 0 ]
+  [ "$output" = '{"id":55,"body":"<!-- pr-review-loop-reply -->\nprior body","html_url":"https://github.com/owner/repo/pull/1#discussion_r55"}' ]
+  [ ! -s "$MUTATION_LOG" ]
+}
+
+@test "print-existing prints null when the thread has no marker reply" {
+  cat > "$REMOTE_COMMENTS" <<'JSON'
+[[{"id":10,"user":{"login":"loop-author"},"body":"<!-- pr-review-loop-reply -->\nroot text"},{"id":56,"user":{"login":"loop-author"},"body":"thanks","in_reply_to_id":10}]]
+JSON
+  run bash "$SCRIPT" --print-existing owner repo 1 10
+  [ "$status" -eq 0 ]
+  [ "$output" = "null" ]
+  [ ! -s "$MUTATION_LOG" ]
+}
+
+@test "print-existing rejects a foreign marker reply" {
+  cat > "$REMOTE_COMMENTS" <<'JSON'
+[[{"id":10,"body":"root"},{"id":55,"user":{"login":"someone-else"},"body":"<!-- pr-review-loop-reply -->\nforeign","in_reply_to_id":10}]]
+JSON
+  run bash "$SCRIPT" --print-existing owner repo 1 10
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"foreign or duplicate marker replies"* ]]
   [ ! -s "$MUTATION_LOG" ]
 }
 

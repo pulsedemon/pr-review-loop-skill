@@ -17,7 +17,8 @@ the result is `{fetched_at, fetch_error, issue_comments, review_comments,
 reviews, review_threads}`. `fetch_error` must be null. a missing page, malformed
 REST response, incomplete GraphQL connection, or disagreement between the REST
 comments and GraphQL threads makes the envelope incomplete and exits
-`REVIEW_INCOMPLETE` before reviewers run.
+`REVIEW_INCOMPLETE` before reviewers run. fetcher exit 2 for invalid usage and
+exit 7 for missing `gh` map to `SETUP_ERROR`.
 
 the fetcher applies these rules:
 
@@ -120,29 +121,22 @@ that a concern is unaddressed. inspect the cited code and current behavior.
 unchanged code is not a fix. after a code-changing iteration, call a thread
 addressed only after its fix is committed and pushed, then cite that commit SHA.
 
-before composing a reply, read any existing marker reply owned by the current
-GitHub user from the full paginated REST collection. this read is separate from
-the filtered panel context:
+before composing a reply, read the existing marker reply with the helper's
+read mode. this read is separate from the filtered panel context and from the
+helper's own rescan before it writes:
 
 ```bash
-set -euo pipefail
-CURRENT_USER=$(gh api user --jq .login)
-EXISTING_REPLY=$(
-  gh api "repos/$OWNER/$REPO/pulls/$PR_NUMBER/comments" --paginate --slurp |
-    jq --arg root "$ROOT_ID" --arg user "$CURRENT_USER" \
-      --arg marker '<!-- pr-review-loop-reply -->' \
-      '[.[][] | select((.in_reply_to_id|tostring)==$root) |
-        select(.user.login==$user) |
-        select((.body//"")|startswith($marker)) |
-        {id,body,html_url}]'
-)
+EXISTING_REPLY=$(bash "$SKILL_ROOT/scripts/reply_pr_comments.sh" --print-existing \
+  "$OWNER" "$REPO" "$PR_NUMBER" "$ROOT_ID")
 ```
 
-a failed authentication, fetch, or parse exits `REVIEW_INCOMPLETE`. on a fresh
-run, inspect the commit cited by an existing reply and current behavior. when
-the reply remains valid, reuse its exact body and SHA. do not replace a
-supported reply with an invented deferral when verification fails. exit
-`REVIEW_INCOMPLETE` instead.
+it prints the current user's marker reply as `{id, body, html_url}`, or `null`
+when there is none, and writes nothing. exit 1 (failed authentication, fetch,
+or parse, or a foreign or duplicate marker reply) maps to `REVIEW_INCOMPLETE`;
+exits 2 and 7 map to `SETUP_ERROR`. on a fresh run, inspect the commit cited by
+an existing reply and current behavior. when the reply remains valid, reuse its
+exact body and SHA. do not replace a supported reply with an invented deferral
+when verification fails. exit `REVIEW_INCOMPLETE` instead.
 
 every body starts with `<!-- pr-review-loop-reply -->` and follows
 `templates/comment_reply.md`. call the helper with the thread root id:
