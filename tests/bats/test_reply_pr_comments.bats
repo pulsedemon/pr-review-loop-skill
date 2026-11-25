@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# tests/bats/test_reply_pr_comments.bats — idempotent, marker-tagged reply poster.
+# tests/bats/test_reply_pr_comments.bats: idempotent, marker-tagged reply poster.
 # hermetic fake gh on PATH; persists remote comments and records mutations.
 
 load test_helper
@@ -370,6 +370,15 @@ JSON
 @test "usage error when body file missing" {
   run bash "$SCRIPT" owner repo 1 10 "$TMP/nope.md"
   [ "$status" -eq 2 ]
+}
+
+@test "missing or empty arguments are usage errors" {
+  run bash "$SCRIPT" owner repo 1 10
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"usage:"* ]]
+  run bash "$SCRIPT" owner "" 1 10 "$BODY"
+  [ "$status" -eq 2 ]
+  [ ! -s "$MUTATION_LOG" ]
 }
 
 @test "usage error and no mutation when body first line is not the reply marker" {
