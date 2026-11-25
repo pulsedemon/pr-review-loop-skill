@@ -19,16 +19,21 @@
 # exit codes:
 #   0 - posted, updated, or no-op (reply body is unchanged)
 #   1 - authentication, reply scan, POST, or PATCH failed
-#   2 - usage error (missing body file, or body first line is not the reply marker)
+#   2 - usage error (missing or empty argument, missing body file, or body
+#       first line is not the reply marker)
 #   7 - gh missing (SETUP_ERROR)
 
 set -euo pipefail
 
-OWNER="${1:?usage: reply_pr_comments.sh <owner> <repo> <pr> <comment_id> <body_file>}"
-REPO="${2:?usage}"
-PR="${3:?usage}"
-COMMENT_ID="${4:?usage}"
-BODY_FILE="${5:?usage}"
+if [[ $# -lt 5 || -z "$1" || -z "$2" || -z "$3" || -z "$4" || -z "$5" ]]; then
+  echo "usage: reply_pr_comments.sh <owner> <repo> <pr_number> <comment_id> <body_file>" >&2
+  exit 2
+fi
+OWNER="$1"
+REPO="$2"
+PR="$3"
+COMMENT_ID="$4"
+BODY_FILE="$5"
 
 REPLY_MARKER='<!-- pr-review-loop-reply -->'
 
