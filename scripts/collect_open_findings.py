@@ -105,11 +105,11 @@ def _settled(entry: dict) -> set[tuple]:
     the provenance record for exactly those. A `fixed_from` record is a
     suggestion or nit §4e fixed; its finding keeps its severity the same way.
 
-    Keys, not the matcher: `_provenance` copies `file`/`line`/`summary` off the
-    finding verbatim, so exact equality is exhaustive here, and the §4c window
-    is not an equivalence relation, so a fuzzy check would let one promotion
-    retire a *different* finding within five lines of it, which would then
-    render in no section at all.
+    Keys, not the matcher: `_provenance` and §4e's `fixed_from` record copy
+    `file`/`line`/`summary` off the finding verbatim, so exact equality is
+    exhaustive here, and the §4c window is not an equivalence relation, so a
+    fuzzy check would let one promotion retire a *different* finding within
+    five lines of it, which would then render in no section at all.
 
     The deferred record's summary is annotated with the verification failure
     before it is parked, so the key is built from the summary the finding itself
@@ -130,7 +130,7 @@ def _settled(entry: dict) -> set[tuple]:
     return keys
 
 
-def _candidates(entry: dict) -> list[dict]:
+def _candidates(entry: dict, settled: set[tuple]) -> list[dict]:
     """In-scope suggestions and nits this entry left open.
 
     out_of_scope findings are dropped: partition() routes them to deferred[],
@@ -139,7 +139,6 @@ def _candidates(entry: dict) -> list[dict]:
     findings = entry.get("findings")
     if not isinstance(findings, list):
         return []
-    settled = _settled(entry)
     out = []
     for f in findings:
         if not isinstance(f, dict) or not well_formed(f, owner_required=False):
@@ -259,7 +258,8 @@ def _rounds(history: list, current: dict) -> list[dict]:
     """History entries oldest-first, with the current iteration folded in.
 
     The current iteration reaches Step 5 in one of two states: not yet in
-    history[] (every exit before §4i), or in it from the §4d.1 SUCCESS path.
+    history[] (every exit before §4i), or in it once §4i appended it, as on the
+    §4d.1 SUCCESS path.
     Folding on the iteration number covers both. Older state records that
     SUCCESS entry with `findings: []`, which leaves the stdin partitions as the
     only record that iteration's panel produced anything at all.
@@ -277,11 +277,13 @@ def _rounds(history: list, current: dict) -> list[dict]:
             # entry without one was not written by this loop.
             continue
         ran, full_panel = _ran(entry)
+        settled = _settled(entry)
         rounds.append(
             {
                 "iteration": iteration,
                 "findings": _all_findings(entry),
-                "candidates": _candidates(entry),
+                "candidates": _candidates(entry, settled),
+                "settled": settled,
                 "ran": ran,
                 "full_panel": full_panel,
                 "no_verdict": _no_verdict(entry),
@@ -304,7 +306,12 @@ def _rounds(history: list, current: dict) -> list[dict]:
     #
     # maximum matching keeps restatement order from duplicating a finding whose
     # only match a greedy pass gave to another item with alternatives.
-    kept = _unmatched(current["candidates"], existing["candidates"], current)
+    # the stdin partitions still hold what §4i recorded as fixed.
+    kept = [
+        f
+        for f in _unmatched(current["candidates"], existing["candidates"], current)
+        if _key(f) not in existing["settled"]
+    ]
     current_candidates = {id(f) for f in current["candidates"]}
     existing_candidates = {id(f) for f in existing["candidates"]}
     settlers = _unmatched(

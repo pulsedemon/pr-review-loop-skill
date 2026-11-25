@@ -258,7 +258,9 @@ setup() {
   auth=$(blocker "src/auth.ts" 12 "admin route skips the session check")
   write_state "$STATE" "$(jq -nc --argjson f "$fixed" --argjson b "$auth" --arg s "$SQL" \
     '[{iteration:1,findings:[$f,$b],addressed:[{file:"src/db.ts",line:88,summary:$s,fixed_from:"suggestion"}]}]')"
-  run check_exit "$(jq -nc --argjson b "$(blocker "src/db.ts" 88 "$SQL")" '{blockers:[$b]}')" "$STATE"
+  # counted as a promotion, history would equal this set and read as NO_PROGRESS
+  run check_exit "$(jq -nc --argjson a "$(blocker "src/db.ts" 88 "$SQL")" --argjson b "$auth" \
+    '{blockers:[$a,$b]}')" "$STATE"
   [[ "$status" -eq 0 ]]
   [[ "$(status_of "$output")" == "null" ]]
   run check_exit "$(jq -nc --argjson b "$auth" '{blockers:[$b]}')" "$STATE"

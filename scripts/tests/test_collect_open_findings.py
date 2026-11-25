@@ -414,6 +414,33 @@ def test_a_fixed_nit_settles_and_its_unfixed_neighbor_carries():
     assert summaries(result["nits"]) == [left["summary"]]
 
 
+def test_a_fixed_nit_stays_settled_when_its_iteration_is_folded_in():
+    # the Step 5 caller passes an appended iteration's partitions verbatim, fixed nit included
+    f = finding(severity="nit")
+    e = entry(1, findings=[f], ran=["tests"], addressed=[fixed(f)])
+    assert collect(current(1, nits=[dict(f)], ran=["tests"]), [e])["nits"] == []
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [{"fixed_from": "blocker"}, {"summary": ["typo"]}, {"line": True}],
+    ids=["not-an-open-severity", "list-summary", "bool-line"],
+)
+def test_a_malformed_fixed_record_settles_nothing(bad):
+    # line 1, so a bool line would key-equal the finding without the type check
+    f = finding(severity="nit", line=1)
+    e = entry(1, findings=[f], ran=["tests"], addressed=[{**fixed(f), **bad}])
+    assert summaries(collect(current(2, ran=[]), [e])["nits"]) == [f["summary"]]
+
+
+def test_an_unlocated_fixed_record_settles_an_unlocated_nit():
+    f = {"reviewer": "tests", "severity": "nit", "scope": "in_scope", "summary": "flaky sleep"}
+    e = entry(
+        1, findings=[f], ran=["tests"], addressed=[{"summary": f["summary"], "fixed_from": "nit"}]
+    )
+    assert collect(current(2, ran=[]), [e])["nits"] == []
+
+
 def test_a_fix_settles_the_earlier_sighting_it_re_raised():
     # iteration 2 re-raises it from another persona, so the owner `tests` never
     # runs again and only pairing with the fixed instance can retire iteration 1's
