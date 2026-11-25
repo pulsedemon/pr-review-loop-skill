@@ -2,7 +2,7 @@
 
 Source of truth is ``manifests/move-a1-enum.yaml``. Mirrors:
   - ``templates/state.schema.json``  (inline-array enum at
-    ``properties.history.items.properties.move_a1_pattern.enum``)
+    ``properties.history.items.properties.findings.items.properties.move_a1_pattern.enum``)
   - ``reviewers/output.schema.json``  (multi-line enum at
     ``properties.findings.items.properties.move_a1_pattern.enum``)
   - ``SKILL.md``  (sentence inside ``regen:move-a1-enum`` HTML-comment region)
@@ -15,10 +15,8 @@ place atomically. Manifest and target errors exit 3.
 
 Future-mirror discovery: ``--check`` scans the tree under
 ``--out-of-region-root`` (default repo root) for any enum value occurring
-outside a known region. Excludes the manifest itself, ``.git/``, ``.worktrees/``,
-``worktrees/``, ``tests/bats/``, ``docs/superpowers/``,
-``tools/recall-harness/``, and the five mirror files (occurrences inside those
-are policed inline by the per-surface checks).
+outside a known region. Excludes the manifest, the mirror files, and the trees
+in ``_GREP_EXCLUDES``.
 
 Spec: docs/generators.md
 """
@@ -161,8 +159,7 @@ def _regen_prose(text: str, path: Path, values: list[str], *, optional: bool = F
     Each region body must contain exactly one comma-separated list of
     backticked snake_case tokens (the value list); that list is replaced
     with the manifest-rendered list. Surrounding text inside the region
-    is preserved. After region tightening (commit fix), every mirror
-    region is narrow enough that exactly one such list is present per
+    is preserved. Every mirror region is narrow enough that exactly one such list is present per
     region, so there is no ambiguity to resolve.
     """
     rendered_list = render_value_list(values)
