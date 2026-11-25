@@ -57,7 +57,7 @@ def _seed(tmp_path: Path, cap: int = 2) -> dict[str, Path]:
     doc_path.write_text(
         "# Adversary\n\n"
         "<!-- regen:adversary-caps:start -->\n"
-        f"The cap is {cap} (see ADVERSARY_CAP in templates/state.schema.json).\n"
+        f"The cap is {cap}.\n"
         "<!-- regen:adversary-caps:end -->\n"
     )
 
@@ -140,6 +140,23 @@ def test_missing_manifest_exits_three(tmp_path: Path) -> None:
     paths["manifest"].unlink()
     result = _run(paths, "--check")
     assert result.returncode == 3
+
+
+def test_missing_target_exits_three_without_traceback(tmp_path: Path) -> None:
+    paths = _seed(tmp_path, cap=2)
+    paths["doc"].unlink()
+    result = _run(paths, "--check")
+    assert result.returncode == 3
+    assert f"failed to read {paths['doc']}" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+def test_missing_doc_region_exits_three(tmp_path: Path) -> None:
+    paths = _seed(tmp_path, cap=2)
+    paths["doc"].write_text("# Adversary\n\nThe cap is 2.\n")
+    result = _run(paths, "--write")
+    assert result.returncode == 3
+    assert "could not find regen:adversary-caps region" in result.stderr
 
 
 def test_write_propagates_cap_to_preset_guard(tmp_path: Path) -> None:

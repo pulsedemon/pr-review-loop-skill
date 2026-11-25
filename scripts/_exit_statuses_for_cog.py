@@ -8,25 +8,16 @@ tuples.
 
 Order is the YAML file's order — reordering the table is a one-file
 edit (the YAML), not a generator change.
-
-Mirrors the shape of scripts/_personas_for_cog.py: short module that
-adds scripts/ to sys.path on import so cog can find it from anywhere
-the orchestrator invokes cog from.
 """
 
 from __future__ import annotations
 
 import json
-import sys
 from pathlib import Path
 
 import yaml
 
-_SCRIPTS = Path(__file__).resolve().parent
-if str(_SCRIPTS) not in sys.path:
-    sys.path.insert(0, str(_SCRIPTS))
-
-_REPO_ROOT = _SCRIPTS.parent
+_REPO_ROOT = Path(__file__).resolve().parent.parent
 _SCHEMA = _REPO_ROOT / "templates" / "state.schema.json"
 _MANIFEST = _REPO_ROOT / "templates" / "exit_statuses.yaml"
 

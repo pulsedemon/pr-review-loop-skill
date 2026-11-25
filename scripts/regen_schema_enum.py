@@ -12,7 +12,7 @@ Modes:
             with a unified diff to stderr otherwise.
   --write   rewrite the file in place (atomic via .tmp + os.replace).
 
-Exit codes mirror cog's: 0 ok, 3 manifest error, 5 drift detected.
+Exit codes: 0 ok, 3 manifest or target error, 5 drift detected.
 """
 
 from __future__ import annotations
@@ -23,13 +23,8 @@ import re
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-
-import generator_io  # noqa: E402
-from personas_manifest import ManifestError, load_manifest  # noqa: E402
-
-_DRIFT_EXIT = 5
-_MANIFEST_ERROR_EXIT = 3
+import generator_io
+from personas_manifest import ManifestError, load_manifest
 
 # Locates the `reviewer.enum` slice for in-place replacement. Anchored on
 # the property key + type so we never grab a sibling property's enum by
@@ -62,21 +57,19 @@ def _regenerated(text: str, names: list[str]) -> str:
     try:
         data = json.loads(text)
     except json.JSONDecodeError as e:
-        raise SystemExit(
-            f"regen_schema_enum: reviewers/output.schema.json is not valid JSON: {e}"
-        ) from e
+        generator_io.fail(f"regen_schema_enum: reviewers/output.schema.json is not valid JSON: {e}")
     try:
         data["properties"]["reviewer"]["enum"]
-    except (KeyError, TypeError) as e:
-        raise SystemExit(
+    except (KeyError, TypeError):
+        generator_io.fail(
             "regen_schema_enum: could not find properties.reviewer.enum in "
             "reviewers/output.schema.json. Has the schema structure changed?"
-        ) from e
+        )
 
     body = _render_enum_body(names)
     match = _ENUM_SLICE.search(text)
     if match is None:
-        raise SystemExit(
+        generator_io.fail(
             "regen_schema_enum: properties.reviewer.enum exists in the parsed "
             "schema but the slice locator regex did not match. The schema's "
             "formatting around the reviewer.enum block may have changed."
@@ -107,14 +100,14 @@ def main(argv: list[str]) -> int:
         manifest = load_manifest(args.manifest)
     except ManifestError as e:
         print(f"regen_schema_enum: manifest error: {e}", file=sys.stderr)
-        return _MANIFEST_ERROR_EXIT
+        return generator_io.MANIFEST_ERROR_EXIT
 
     names = [p.name for p in manifest.panel] + [manifest.adversary.name]
     try:
         current = args.schema.read_text()
     except (OSError, UnicodeDecodeError) as e:
         print(f"regen_schema_enum: failed to read {args.schema}: {e}", file=sys.stderr)
-        return _MANIFEST_ERROR_EXIT
+        return generator_io.MANIFEST_ERROR_EXIT
     regenerated = _regenerated(current, names)
 
     if args.check:
@@ -126,7 +119,7 @@ def main(argv: list[str]) -> int:
             "Run scripts/regen.sh to regenerate.",
             file=sys.stderr,
         )
-        return _DRIFT_EXIT
+        return generator_io.DRIFT_EXIT
 
     if current != regenerated:
         generator_io.atomic_write(args.schema, regenerated)

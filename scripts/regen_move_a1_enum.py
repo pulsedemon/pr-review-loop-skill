@@ -2,7 +2,7 @@
 
 Source of truth is ``manifests/move-a1-enum.yaml``. Mirrors:
   - ``templates/state.schema.json``  (inline-array enum at
-    ``properties.history.items.properties.move_a1_pattern.enum``)
+    ``properties.history.items.properties.findings.items.properties.move_a1_pattern.enum``)
   - ``reviewers/output.schema.json``  (multi-line enum at
     ``properties.findings.items.properties.move_a1_pattern.enum``)
   - ``SKILL.md``  (sentence inside ``regen:move-a1-enum`` HTML-comment region)
@@ -11,14 +11,12 @@ Source of truth is ``manifests/move-a1-enum.yaml``. Mirrors:
 
 ``--check`` accumulates drift across all surfaces and exits 5 if any are
 dirty (so a single run shows the full picture). ``--write`` rewrites in
-place atomically. Manifest errors exit 3.
+place atomically. Manifest and target errors exit 3.
 
 Future-mirror discovery: ``--check`` scans the tree under
 ``--out-of-region-root`` (default repo root) for any enum value occurring
-outside a known region. Excludes the manifest itself, ``.git/``, ``.worktrees/``,
-``worktrees/``, ``tests/bats/``, ``docs/superpowers/``,
-``tools/recall-harness/``, and the five mirror files (occurrences inside those
-are policed inline by the per-surface checks).
+outside a known region. Excludes the manifest, the mirror files, and the trees
+in ``_GREP_EXCLUDES``.
 
 Spec: docs/generators.md
 """
@@ -34,9 +32,6 @@ from pathlib import Path
 
 import generator_io
 import yaml
-
-_DRIFT_EXIT = 5
-_MANIFEST_ERROR_EXIT = 3
 
 _REGION = re.compile(
     r"(<!-- regen:move-a1-enum:start -->)(.*?)(<!-- regen:move-a1-enum:end -->)",
@@ -69,7 +64,20 @@ _OUT_ENUM_SLICE = re.compile(
 )
 
 
-def _render_value_list(values: list[str]) -> str:
+def load_values(path: Path) -> list[str]:
+    """return the manifest's enum values; raise on a missing key or malformed list."""
+    values = yaml.safe_load(path.read_text())["move_a1_pattern"]
+    # check the type first: a bare string would iterate as its characters.
+    if (
+        not isinstance(values, list)
+        or not values
+        or not all(isinstance(v, str) and v for v in values)
+    ):
+        raise ValueError("move_a1_pattern must be a non-empty list of strings")
+    return values
+
+
+def render_value_list(values: list[str]) -> str:
     return ", ".join(f"`{v}`" for v in values)
 
 
@@ -87,30 +95,28 @@ def _render_out_enum_body(values: list[str], indent: int = 14) -> str:
 
 def _regen_state_schema(text: str, values: list[str]) -> str:
     try:
-        data = json.loads(text)
+        json.loads(text)
     except json.JSONDecodeError as e:
-        raise SystemExit(f"regen_move_a1_enum: state.schema.json is not valid JSON: {e}") from e
-    # Walk to confirm move_a1_pattern.enum exists somewhere; we don't pin
-    # the path exactly because the schema layout has nested items/properties
-    # branches and a structural sanity check is enough.
+        generator_io.fail(f"regen_move_a1_enum: state.schema.json is not valid JSON: {e}")
+    # a substring check is enough here; the slice regex below locates the enum.
     if "move_a1_pattern" not in text:
-        raise SystemExit("regen_move_a1_enum: move_a1_pattern key not found in state.schema.json")
+        generator_io.fail("regen_move_a1_enum: move_a1_pattern key not found in state.schema.json")
     body = _render_state_enum_body(values)
-    new, n = _STATE_ENUM_SLICE.subn(lambda m: m.group(1) + body + m.group(3), text, count=1)
-    if n != 1:
-        raise SystemExit(
-            "regen_move_a1_enum: could not locate move_a1_pattern.enum slice in "
-            "state.schema.json. The schema's formatting around the enum may have "
-            "changed."
-        )
+    new = generator_io.sub_region(
+        _STATE_ENUM_SLICE,
+        text,
+        body,
+        "regen_move_a1_enum: could not locate move_a1_pattern.enum slice in "
+        "state.schema.json. The schema's formatting around the enum may have "
+        "changed.",
+    )
     # Re-parse to confirm we produced valid JSON.
     try:
         json.loads(new)
     except json.JSONDecodeError as e:
-        raise SystemExit(
+        generator_io.fail(
             f"regen_move_a1_enum: regenerated state.schema.json is not valid JSON: {e}"
-        ) from e
-    _ = data  # parsed only as pre-flight
+        )
     return new
 
 
@@ -118,15 +124,15 @@ def _regen_out_schema(text: str, values: list[str]) -> str:
     try:
         json.loads(text)
     except json.JSONDecodeError as e:
-        raise SystemExit(f"regen_move_a1_enum: output.schema.json is not valid JSON: {e}") from e
+        generator_io.fail(f"regen_move_a1_enum: output.schema.json is not valid JSON: {e}")
     if "move_a1_pattern" not in text:
-        raise SystemExit("regen_move_a1_enum: move_a1_pattern key not found in output.schema.json")
+        generator_io.fail("regen_move_a1_enum: move_a1_pattern key not found in output.schema.json")
     # Detect indentation from the existing match so we render with the
     # same per-line pad. Falls back to 14 spaces (the real schema's
     # current indent) if detection fails.
     match = _OUT_ENUM_SLICE.search(text)
     if match is None:
-        raise SystemExit(
+        generator_io.fail(
             "regen_move_a1_enum: could not locate move_a1_pattern.enum slice in output.schema.json."
         )
     inner = match.group(2)
@@ -139,9 +145,9 @@ def _regen_out_schema(text: str, values: list[str]) -> str:
     try:
         json.loads(new)
     except json.JSONDecodeError as e:
-        raise SystemExit(
+        generator_io.fail(
             f"regen_move_a1_enum: regenerated output.schema.json is not valid JSON: {e}"
-        ) from e
+        )
     return new
 
 
@@ -151,11 +157,10 @@ def _regen_prose(text: str, path: Path, values: list[str], *, optional: bool = F
     Each region body must contain exactly one comma-separated list of
     backticked snake_case tokens (the value list); that list is replaced
     with the manifest-rendered list. Surrounding text inside the region
-    is preserved. After region tightening (commit fix), every mirror
-    region is narrow enough that exactly one such list is present per
+    is preserved. Every mirror region is narrow enough that exactly one such list is present per
     region, so there is no ambiguity to resolve.
     """
-    rendered_list = _render_value_list(values)
+    rendered_list = render_value_list(values)
     regions = list(_REGION.finditer(text))
     if not regions and optional:
         # SKILL.md's region lives inside the generated §4b Move A.1 bullet,
@@ -165,9 +170,9 @@ def _regen_prose(text: str, path: Path, values: list[str], *, optional: bool = F
         # re-emits the bullet and regen-check fails on the diff.
         return text
     if not regions:
-        raise SystemExit(
+        generator_io.fail(
             f"regen_move_a1_enum: {path}: no regen:move-a1-enum region found. "
-            "Wrap the sentence naming the five sub-mechanics with "
+            "Wrap the sentence naming the sub-mechanics with "
             "<!-- regen:move-a1-enum:start --> ... <!-- regen:move-a1-enum:end -->."
         )
     new = text
@@ -185,7 +190,7 @@ def _regen_prose(text: str, path: Path, values: list[str], *, optional: bool = F
         new = new[:body_start] + sub + new[body_end:]
 
     if not rewrote_any:
-        raise SystemExit(
+        generator_io.fail(
             f"regen_move_a1_enum: {path}: no backticked value list found in any "
             "regen:move-a1-enum region. The region must contain a list like "
             "`a`, `b`, `c`, ..."
@@ -341,13 +346,10 @@ def main(argv: list[str]) -> int:
         args.check = True
 
     try:
-        manifest_data = yaml.safe_load(args.manifest.read_text())
-        values = list(manifest_data["move_a1_pattern"])
-        if not values or not all(isinstance(v, str) and v for v in values):
-            raise ValueError("move_a1_pattern must be a non-empty list of strings")
+        values = load_values(args.manifest)
     except (FileNotFoundError, KeyError, TypeError, ValueError, yaml.YAMLError) as e:
         print(f"regen_move_a1_enum: manifest error: {e}", file=sys.stderr)
-        return _MANIFEST_ERROR_EXIT
+        return generator_io.MANIFEST_ERROR_EXIT
 
     mirror_paths = [
         args.state_schema,
@@ -357,25 +359,16 @@ def main(argv: list[str]) -> int:
         args.adv_md,
     ]
 
-    targets: list[tuple[str, Path, callable]] = [
-        ("state-schema", args.state_schema, _regen_state_schema),
-        ("out-schema", args.out_schema, _regen_out_schema),
-        ("skill", args.skill, lambda t, v: _regen_prose(t, args.skill, v, optional=True)),
-        ("tests-md", args.tests_md, lambda t, v: _regen_prose(t, args.tests_md, v)),
-        ("adv-md", args.adv_md, lambda t, v: _regen_prose(t, args.adv_md, v)),
-    ]
-
-    drifted = False
-    for _label, path, regen in targets:
-        before = path.read_text()
-        after = regen(before, values)
-        if before == after:
-            continue
-        if args.check:
-            generator_io.emit_drift_diff(path, before, after)
-            drifted = True
-        else:
-            generator_io.atomic_write(path, after)
+    drifted = generator_io.sync(
+        [
+            (args.state_schema, lambda text: _regen_state_schema(text, values)),
+            (args.out_schema, lambda text: _regen_out_schema(text, values)),
+            (args.skill, lambda text: _regen_prose(text, args.skill, values, optional=True)),
+            (args.tests_md, lambda text: _regen_prose(text, args.tests_md, values)),
+            (args.adv_md, lambda text: _regen_prose(text, args.adv_md, values)),
+        ],
+        check=args.check,
+    )
 
     if args.check:
         # Bullet-label drift in reviewers/tests.md: any "1. **<ident>**"
@@ -405,7 +398,7 @@ def main(argv: list[str]) -> int:
                 "have stray occurrences. Run scripts/regen.sh to regenerate.",
                 file=sys.stderr,
             )
-            return _DRIFT_EXIT
+            return generator_io.DRIFT_EXIT
     return 0
 
 

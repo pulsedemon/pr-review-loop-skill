@@ -61,9 +61,15 @@ def _seed(tmp_path: Path, values: list[str] | None = None) -> dict[str, Path]:
         '    "history": {\n'
         '      "items": {\n'
         '        "properties": {\n'
-        '          "move_a1_pattern": { "type": "string", "enum": ['
+        '          "findings": {\n'
+        '            "items": {\n'
+        '              "properties": {\n'
+        '                "move_a1_pattern": { "type": "string", "enum": ['
         + ", ".join(f'"{v}"' for v in vals)
         + "] }\n"
+        "              }\n"
+        "            }\n"
+        "          }\n"
         "        }\n"
         "      }\n"
         "    }\n"
@@ -276,7 +282,10 @@ def test_write_repairs_drift_across_all_surfaces(tmp_path: Path) -> None:
     assert paths["state_schema"].stat().st_mode & 0o7777 == 0o755
     state = json.loads(paths["state_schema"].read_text())
     assert (
-        state["properties"]["history"]["items"]["properties"]["move_a1_pattern"]["enum"] == VALUES
+        state["properties"]["history"]["items"]["properties"]["findings"]["items"]["properties"][
+            "move_a1_pattern"
+        ]["enum"]
+        == VALUES
     )
 
     check = _run(paths, "--check", "--out-of-region-root", str(tmp_path))
@@ -343,6 +352,14 @@ def test_missing_manifest_exits_three(tmp_path: Path) -> None:
     assert result.returncode == 3, result.stderr
 
 
+def test_bare_string_manifest_exits_three(tmp_path: Path) -> None:
+    paths = _seed(tmp_path)
+    paths["manifest"].write_text("move_a1_pattern: abc\n")
+    result = _run(paths, "--check", "--out-of-region-root", str(tmp_path))
+    assert result.returncode == 3
+    assert "must be a non-empty list of strings" in result.stderr
+
+
 def test_write_propagates_new_value_to_all_surfaces(tmp_path: Path) -> None:
     paths = _seed(tmp_path)
     new_values = [*VALUES[:-1], "renamed_pattern"]
@@ -365,7 +382,9 @@ def test_write_propagates_new_value_to_all_surfaces(tmp_path: Path) -> None:
     assert "describe_label_drift" not in out_text
 
     state_data = json.loads(state_text)
-    enum = state_data["properties"]["history"]["items"]["properties"]["move_a1_pattern"]["enum"]
+    enum = state_data["properties"]["history"]["items"]["properties"]["findings"]["items"][
+        "properties"
+    ]["move_a1_pattern"]["enum"]
     assert enum == new_values
     out_data = json.loads(out_text)
     out_enum = out_data["properties"]["findings"]["items"]["properties"]["move_a1_pattern"]["enum"]
@@ -417,7 +436,11 @@ def test_missing_skill_region_is_allowed_when_optional(tmp_path: Path) -> None:
     assert regen._regen_prose(text, tmp_path / "SKILL.md", VALUES, optional=True) == text
 
 
-def test_missing_region_still_fatal_for_the_hand_written_mirrors(tmp_path: Path) -> None:
+def test_missing_region_still_fatal_for_the_hand_written_mirrors(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     """reviewers/tests.md and adversary.md always carry the region."""
-    with pytest.raises(SystemExit, match="no regen:move-a1-enum region found"):
+    with pytest.raises(SystemExit) as exc_info:
         regen._regen_prose("no region here\n", tmp_path / "tests.md", VALUES)
+    assert exc_info.value.code == 3
+    assert "no regen:move-a1-enum region found" in capsys.readouterr().err

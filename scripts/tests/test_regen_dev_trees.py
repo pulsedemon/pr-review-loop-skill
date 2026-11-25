@@ -34,13 +34,6 @@ def test_rsync_pattern_slashes_only_directories(name: str, expected: str) -> Non
     assert _rsync_pattern(name) == expected
 
 
-def test_check_passes_on_the_checked_in_tree() -> None:
-    proc = subprocess.run(
-        [sys.executable, str(GENERATOR), "--check"], capture_output=True, text=True
-    )
-    assert proc.returncode == 0, proc.stderr
-
-
 def test_manifest_without_dev_trees_key_exits_3(tmp_path: Path) -> None:
     manifest = tmp_path / "dev-trees.yaml"
     manifest.write_text("other_key: [a]\n")
@@ -192,5 +185,5 @@ def test_write_fails_when_a_cog_region_is_missing(tmp_path: Path) -> None:
     # Only the install region exists in this fixture, so the other three
     # emitters must fail loudly rather than silently writing nothing.
     proc = subprocess.run([*args, "--write"], capture_output=True, text=True)
-    assert proc.returncode != 0
+    assert proc.returncode == 3
     assert "cog region" in proc.stderr

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import generator_io
 import pytest
 import regen_panel_counts  # type: ignore[import-not-found]  # sibling module made importable by conftest.py
 
@@ -88,7 +89,7 @@ def test_check_returns_5_on_drift_in_any_one_surface(
     )
     (root / "reviewers" / "alpha.md").write_text(drifted)
     rc = _run(["--check", "--manifest", str(manifest), "--corpus-root", str(root)])
-    assert rc == regen_panel_counts._DRIFT_EXIT == 5
+    assert rc == generator_io.DRIFT_EXIT == 5
     err = capsys.readouterr().err
     assert "alpha.md" in err
     assert "regen.sh" in err
@@ -197,7 +198,7 @@ def test_validate_markers_fails_on_unbalanced_start(
         # missing :end marker
     )
     rc = _run(["--validate-markers", "--manifest", str(manifest), "--corpus-root", str(root)])
-    assert rc == regen_panel_counts._DRIFT_EXIT == 5
+    assert rc == generator_io.DRIFT_EXIT == 5
     err = capsys.readouterr().err
     assert "broken.md" in err
 
@@ -210,7 +211,7 @@ def test_validate_markers_fails_on_orphan_end(
     bad = root / "reviewers" / "orphan.md"
     bad.write_text("intro\n<!-- regen:panel-count-total:end -->\n")
     rc = _run(["--validate-markers", "--manifest", str(manifest), "--corpus-root", str(root)])
-    assert rc == regen_panel_counts._DRIFT_EXIT == 5
+    assert rc == generator_io.DRIFT_EXIT == 5
     err = capsys.readouterr().err
     assert "orphan.md" in err
 
@@ -221,7 +222,7 @@ def test_returns_3_when_manifest_missing(
     root = _make_corpus(tmp_path)
     missing = tmp_path / "no-such-personas.yaml"
     rc = _run(["--check", "--manifest", str(missing), "--corpus-root", str(root)])
-    assert rc == regen_panel_counts._MANIFEST_ERROR_EXIT == 3
+    assert rc == generator_io.MANIFEST_ERROR_EXIT == 3
     err = capsys.readouterr().err
     assert "manifest error" in err
 
@@ -265,7 +266,7 @@ def test_validate_coverage_fails_on_unhandled_unwrapped_phrase(
     root = _make_corpus(tmp_path)
     (root / "SKILL.md").write_text("the spec mentions 11 reviewer personas reviewing this PR\n")
     rc = _run(["--validate-coverage", "--manifest", str(manifest), "--corpus-root", str(root)])
-    assert rc == regen_panel_counts._DRIFT_EXIT == 5
+    assert rc == generator_io.DRIFT_EXIT == 5
     err = capsys.readouterr().err
     assert "unhandled numbered persona-count phrase" in err
 
@@ -310,7 +311,7 @@ def test_validate_coverage_rejects_unwrapped_total_shaped_phrases(
         "the other 10 personas review\n"
     )
     rc = _run(["--validate-coverage", "--manifest", str(manifest), "--corpus-root", str(root)])
-    assert rc == regen_panel_counts._DRIFT_EXIT == 5
+    assert rc == generator_io.DRIFT_EXIT == 5
     err = capsys.readouterr().err
     assert "11 reviewer personas" in err
     assert "12 personas" in err
@@ -334,7 +335,7 @@ def test_validate_coverage_rejects_unwrapped_total_regardless_of_number(
     rc = _run(
         ["--validate-coverage", "--manifest", str(manifest), "--corpus-root", str(wrong_root)]
     )
-    assert rc == regen_panel_counts._DRIFT_EXIT == 5
+    assert rc == generator_io.DRIFT_EXIT == 5
     err = capsys.readouterr().err
     assert "999 reviewer personas" in err
 
@@ -344,7 +345,7 @@ def test_validate_coverage_rejects_unwrapped_total_regardless_of_number(
     rc = _run(
         ["--validate-coverage", "--manifest", str(manifest), "--corpus-root", str(match_root)]
     )
-    assert rc == regen_panel_counts._DRIFT_EXIT == 5
+    assert rc == generator_io.DRIFT_EXIT == 5
     err = capsys.readouterr().err
     assert "2 reviewer personas" in err
 
@@ -380,7 +381,7 @@ def test_validate_coverage_catches_phrase_split_across_lines(
     root = _make_corpus(tmp_path)
     (root / "SKILL.md").write_text("the spec mentions 11\nreviewer personas reviewing this PR\n")
     rc = _run(["--validate-coverage", "--manifest", str(manifest), "--corpus-root", str(root)])
-    assert rc == regen_panel_counts._DRIFT_EXIT == 5
+    assert rc == generator_io.DRIFT_EXIT == 5
     err = capsys.readouterr().err
     assert "unhandled numbered persona-count phrase" in err
 
@@ -393,7 +394,7 @@ def test_validate_coverage_catches_parenthesized_phrase(
     root = _make_corpus(tmp_path)
     (root / "SKILL.md").write_text("(11 reviewer personas reviewing this PR)\n")
     rc = _run(["--validate-coverage", "--manifest", str(manifest), "--corpus-root", str(root)])
-    assert rc == regen_panel_counts._DRIFT_EXIT == 5
+    assert rc == generator_io.DRIFT_EXIT == 5
     err = capsys.readouterr().err
     assert "unhandled numbered persona-count phrase" in err
 

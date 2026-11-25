@@ -10,13 +10,10 @@ later, so they all behave the same way.
 ## Why this exists
 
 The repo's editing rule is "manifest is source of truth; everything else syncs
-to it." Sync was originally enforced by bats tests that compared the manifest
-to each dependent surface. That works, but every new surface adds another
-hand-written sync test and another way for an editor to "fix" the wrong end of
-the comparison. Generators flip the polarity: edit the manifest, run one
-command, and every dependent surface is regenerated. Drift becomes impossible
-to commit (CI runs `--check`) rather than something the developer is trusted
-to notice.
+to it." A hand-written sync test per surface lets an editor "fix" the wrong
+end of the comparison. A generator rewrites every dependent surface from the
+manifest with one command, and CI runs it in check mode, so drift cannot be
+committed.
 
 ## Format → tool
 
@@ -24,7 +21,7 @@ to notice.
 | --- | --- | --- |
 | HTML comments (`<!-- -->`): Markdown, HTML, XML | [cog](https://nedbatchelder.com/code/cog/) with `<!--[[[cog ... ]]]-->` markers | cog ships HTML-comment-style markers as the default; edits in place with `-r`. |
 | Hash comments (`#`): YAML, shell, Python, TOML | cog with `# [[[cog ... ]]]` markers | Same `-r` flow; just swap the marker style. |
-| No comments: JSON, most lockfiles | Standalone Python script following [`scripts/regen_schema_enum.py`](../scripts/regen_schema_enum.py)'s shape | No marker possible. Splice via parser-validated regex. |
+| No comments: JSON, most lockfiles | Standalone Python script following [`scripts/regen_adversary_caps.py`](../scripts/regen_adversary_caps.py)'s shape | No marker possible. Splice via parser-validated regex. |
 
 Cog is the default; reach for a standalone script only when the target format
 has no comment syntax at all.
@@ -34,28 +31,35 @@ has no comment syntax at all.
 These rules apply equally to cog-managed regions and standalone scripts.
 
 1. **Two modes.** `--check` (validates, exits non-zero on drift) and `--write`
-   (rewrites in place). The orchestrator scripts
-   [`scripts/regen.sh`](../scripts/regen.sh) and
-   [`scripts/regen-check.sh`](../scripts/regen-check.sh) run every
-   generator in the appropriate mode.
-2. **Exit codes.** `0` ok, `3` manifest error, `5` drift detected. Matches
-   cog's semantics so the orchestrator can chain generators without
-   translating exit codes.
+   (rewrites in place). [`scripts/regen.sh`](../scripts/regen.sh) runs cog
+   and every generator with `--write`, or with `--check` when it is given
+   `--check`; [`scripts/regen-check.sh`](../scripts/regen-check.sh) is the CI
+   entrypoint for `regen.sh --check`.
+2. **Exit codes.** `0` ok, `3` manifest error or a target the generator
+   cannot read or find its region in, `5` drift detected
+   (`generator_io.MANIFEST_ERROR_EXIT`, `generator_io.DRIFT_EXIT`).
+   `regen_panel_counts.py` exits `5` for malformed region markers, and its
+   `--validate-markers` and `--validate-coverage` modes exit `5` for any
+   failure, an unreadable file included. cog also exits `5` on drift, so
+   `regen.sh --check` passes every status through unchanged.
 3. **Drift output.** On drift, emit a unified diff to stderr and a literal
    fix hint: `Run scripts/regen.sh to regenerate ...`. The literal
    string is asserted by
    [`tests/bats/test_manifest_drift_localization.bats`](../tests/bats/test_manifest_drift_localization.bats);
    keep it stable.
-4. **Atomic writes.** Call `generator_io.atomic_write` from
-   [`scripts/generator_io.py`](../scripts/generator_io.py) to preserve target
-   permissions and replace complete content. Cleanup is best effort; the
+4. **Atomic writes.** Write every target through `generator_io.atomic_write`
+   from [`scripts/generator_io.py`](../scripts/generator_io.py), which
+   preserves target permissions and replaces complete content;
+   `generator_io.sync` already does. Cleanup is best effort; the
    original write error propagates if cleanup also fails.
 5. **Canary test.** Add a bats test that pins the *presence* of the marker
    or region. Without this, a future refactor that strips the cog markers
-   (or removes the standalone script's invocation from the orchestrator)
    would make `--check` silently pass with nothing to check. See
    [`tests/bats/test_persona_surfaces_generator_check.bats`](../tests/bats/test_persona_surfaces_generator_check.bats)
    for the existing example.
+   [`tests/bats/test_regen_wiring.bats`](../tests/bats/test_regen_wiring.bats)
+   already fails when a `scripts/regen_*.py` generator is missing from
+   `scripts/regen.sh`.
 
 ## How to add a new surface with cog
 
@@ -82,17 +86,20 @@ HTML-style comments:
    in the target file (model on
    [`test_persona_surfaces_generator_check.bats`](../tests/bats/test_persona_surfaces_generator_check.bats)).
 
-The orchestrator scripts already handle cog-managed files via `cogfiles.txt`;
-nothing else needs wiring.
+`scripts/regen.sh` already runs cog over every file in `cogfiles.txt`; nothing
+else needs wiring.
 
 ## How to add a new surface with a standalone script
 
 For JSON, TOML, or other comment-less formats:
 
-1. Copy the shape of [`scripts/regen_schema_enum.py`](../scripts/regen_schema_enum.py):
+1. Name it `scripts/regen_<surface>.py`; the wiring test finds generators by
+   that pattern. Copy the shape of
+   [`scripts/regen_adversary_caps.py`](../scripts/regen_adversary_caps.py):
    - `--check` / `--write` modes (mutually exclusive argparse group, default
      to `--check`).
-   - Manifest loader: `from personas_manifest import load_manifest`.
+   - Manifest loader: `from personas_manifest import load_manifest` for
+     `reviewers/personas.yaml`.
    - Surgical rewrite: parse with `json.loads` (or equivalent) to **validate
      that the target path exists** before touching anything, then splice the
      new content into the existing file text. **Do not** round-trip the
@@ -100,22 +107,22 @@ For JSON, TOML, or other comment-less formats:
      formatting elsewhere in the file.
    - Render replacement content via the format's parser (`json.dumps`, etc.)
      not by hand-building strings, so escaping is always correct.
-   - Shared output via `generator_io.atomic_write` and `generator_io.emit_drift_diff`.
-   - Exit codes 0 / 3 / 5; drift diff to stderr; fix hint string.
-2. Wire into both orchestrator scripts:
-   - [`scripts/regen.sh`](../scripts/regen.sh): append
-     `python3 "$ROOT/scripts/your_script.py" --write`.
-   - [`scripts/regen-check.sh`](../scripts/regen-check.sh): append
-     `python3 "$ROOT/scripts/your_script.py" --check`.
-   Use the existing entrypoints for regen and check; CI runs `regen-check.sh`.
+   - Run the read, diff-or-write loop through `generator_io.sync`, splice
+     marker regions with `generator_io.sub_region`, and end on a target you
+     cannot rewrite with `generator_io.fail`;
+     [`scripts/regen_adversary_caps.py`](../scripts/regen_adversary_caps.py)
+     uses all three.
+   - Exit codes per rule 2; fix hint string per rule 3.
+2. Add the script name to the `GENERATORS` array in
+   [`scripts/regen.sh`](../scripts/regen.sh), which runs it in both modes.
 3. Add a canary bats test (same as the cog path).
 
 ## Pointers
 
 - [`scripts/regen.sh`](../scripts/regen.sh), user-facing regen entrypoint
-- [`scripts/regen-check.sh`](../scripts/regen-check.sh), CI / pre-commit check entrypoint
-- [`scripts/regen_schema_enum.py`](../scripts/regen_schema_enum.py), reference standalone-script implementation
-- [`scripts/generator_io.py`](../scripts/generator_io.py), shared atomic replacement and diff output
+- [`scripts/regen-check.sh`](../scripts/regen-check.sh), CI check entrypoint (`regen.sh --check`)
+- [`scripts/regen_adversary_caps.py`](../scripts/regen_adversary_caps.py), reference standalone-script implementation
+- [`scripts/generator_io.py`](../scripts/generator_io.py), shared exit codes, region splice, check-or-write loop and atomic replacement
 - [`scripts/_personas_for_cog.py`](../scripts/_personas_for_cog.py), helper imported by inline cog snippets
 - [`docs/editing-personas.md`](editing-personas.md), workflow for the specific personas-manifest case
 
