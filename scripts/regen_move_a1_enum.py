@@ -98,9 +98,7 @@ def _regen_state_schema(text: str, values: list[str]) -> str:
         json.loads(text)
     except json.JSONDecodeError as e:
         generator_io.fail(f"regen_move_a1_enum: state.schema.json is not valid JSON: {e}")
-    # Walk to confirm move_a1_pattern.enum exists somewhere; we don't pin
-    # the path exactly because the schema layout has nested items/properties
-    # branches and a structural sanity check is enough.
+    # a substring check is enough here; the slice regex below locates the enum.
     if "move_a1_pattern" not in text:
         generator_io.fail("regen_move_a1_enum: move_a1_pattern key not found in state.schema.json")
     body = _render_state_enum_body(values)
