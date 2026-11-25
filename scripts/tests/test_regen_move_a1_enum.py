@@ -343,6 +343,14 @@ def test_missing_manifest_exits_three(tmp_path: Path) -> None:
     assert result.returncode == 3, result.stderr
 
 
+def test_bare_string_manifest_exits_three(tmp_path: Path) -> None:
+    paths = _seed(tmp_path)
+    paths["manifest"].write_text("move_a1_pattern: abc\n")
+    result = _run(paths, "--check", "--out-of-region-root", str(tmp_path))
+    assert result.returncode == 3
+    assert "must be a non-empty list of strings" in result.stderr
+
+
 def test_write_propagates_new_value_to_all_surfaces(tmp_path: Path) -> None:
     paths = _seed(tmp_path)
     new_values = [*VALUES[:-1], "renamed_pattern"]
