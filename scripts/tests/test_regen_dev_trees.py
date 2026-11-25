@@ -185,5 +185,5 @@ def test_write_fails_when_a_cog_region_is_missing(tmp_path: Path) -> None:
     # Only the install region exists in this fixture, so the other three
     # emitters must fail loudly rather than silently writing nothing.
     proc = subprocess.run([*args, "--write"], capture_output=True, text=True)
-    assert proc.returncode != 0
+    assert proc.returncode == 3
     assert "cog region" in proc.stderr
