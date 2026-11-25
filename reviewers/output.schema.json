@@ -79,7 +79,7 @@
               "missing_state_assertion",
               "describe_label_drift"
             ],
-            "description": "Set by Move A.1 (assertion-vacuity audit) findings to name the specific sub-mechanic the assertion exhibits. One of five named patterns per reviewers/tests.md. Distinct from move_b_pattern; an assertion-vacuity finding from Move A.1 sets move_a1_pattern, not move_b_pattern. See reviewers/tests.md and SKILL.md §4b."
+            "description": "Set by Move A.1 (assertion-vacuity audit) findings to name the specific sub-mechanic the assertion exhibits. One of the named patterns per reviewers/tests.md. Distinct from move_b_pattern; an assertion-vacuity finding from Move A.1 sets move_a1_pattern, not move_b_pattern. See reviewers/tests.md and SKILL.md §4b."
           }
         },
         "if": {

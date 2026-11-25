@@ -172,7 +172,7 @@ def _regen_prose(text: str, path: Path, values: list[str], *, optional: bool = F
     if not regions:
         generator_io.fail(
             f"regen_move_a1_enum: {path}: no regen:move-a1-enum region found. "
-            "Wrap the sentence naming the five sub-mechanics with "
+            "Wrap the sentence naming the sub-mechanics with "
             "<!-- regen:move-a1-enum:start --> ... <!-- regen:move-a1-enum:end -->."
         )
     new = text

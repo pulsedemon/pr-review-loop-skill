@@ -1,6 +1,6 @@
 # Source of truth for the Move A.1 sub-mechanic enum.
 #
-# Five values; SKILL.md, state.schema.json, output.schema.json,
+# SKILL.md, state.schema.json, output.schema.json,
 # reviewers/tests.md, and reviewers/adversary.md must all carry these
 # verbatim. The generator writes all five surfaces from this list and
 # fails --check if any occurrence of any value sits outside a known
