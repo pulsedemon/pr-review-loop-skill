@@ -84,7 +84,7 @@ def _render_out_enum_body(values: list[str], indent: int = 14) -> str:
 
 def _regen_state_schema(text: str, values: list[str]) -> str:
     try:
-        data = json.loads(text)
+        json.loads(text)
     except json.JSONDecodeError as e:
         raise SystemExit(f"regen_move_a1_enum: state.schema.json is not valid JSON: {e}") from e
     # Walk to confirm move_a1_pattern.enum exists somewhere; we don't pin
@@ -108,7 +108,6 @@ def _regen_state_schema(text: str, values: list[str]) -> str:
         raise SystemExit(
             f"regen_move_a1_enum: regenerated state.schema.json is not valid JSON: {e}"
         ) from e
-    _ = data  # parsed only as pre-flight
     return new
 
 

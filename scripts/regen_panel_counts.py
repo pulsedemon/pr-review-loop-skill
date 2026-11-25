@@ -64,8 +64,7 @@ adjacent. Round-trip is byte-stable.
 - ``--validate-coverage``: walk every corpus file and require every
   numbered persona-count phrase to either fall inside a regen region or
   match a maintained allowlist pattern. Exit 5 after reporting every
-  unhandled phrase. Restores the closure gate the legacy bats test
-  enforced.
+  unhandled phrase.
 
 Exit codes mirror cog's two siblings: 0 ok, 3 manifest error, 5 drift
 detected (or unbalanced markers under ``--validate-markers`` / unhandled
@@ -120,7 +119,7 @@ def _render_template(template: str, n: int) -> str:
 
 
 def _corpus_files(root: Path) -> list[Path]:
-    """Return the sorted list of corpus files matching the legacy bats set."""
+    """Return the sorted corpus files: SKILL.md, tests/scenarios/*.md, reviewers/*.md."""
     files: list[Path] = []
     skill = root / "SKILL.md"
     if skill.is_file():
@@ -207,12 +206,8 @@ class _MarkerError(Exception):
     """Raised when a corpus file has malformed or unbalanced region markers."""
 
 
-def _regenerate_text(text: str, panel_n: int, path: Path) -> tuple[str, list[_Region]]:
-    """Return (regenerated_text, regions) for ``text`` from ``path``.
-
-    Caller decides whether to compare (``--check``) or write
-    (``--write``). Regions are returned for diagnostics.
-    """
+def _regenerate_text(text: str, panel_n: int, path: Path) -> str:
+    """Return ``text`` from ``path`` with every region's body re-rendered."""
     lines = text.splitlines(keepends=False)
     # Track whether the original ended with a newline so writing is byte-stable.
     ended_with_newline = text.endswith("\n")
@@ -223,7 +218,7 @@ def _regenerate_text(text: str, panel_n: int, path: Path) -> tuple[str, list[_Re
     out = "\n".join(lines)
     if ended_with_newline:
         out += "\n"
-    return out, regions
+    return out
 
 
 def _run_check_or_write(*, write: bool, manifest_path: Path, corpus_root: Path) -> int:
@@ -242,7 +237,7 @@ def _run_check_or_write(*, write: bool, manifest_path: Path, corpus_root: Path) 
             print(f"regen_panel_counts: failed to read {path}: {e}", file=sys.stderr)
             return generator_io.MANIFEST_ERROR_EXIT
         try:
-            regenerated, _ = _regenerate_text(current, panel_n, path)
+            regenerated = _regenerate_text(current, panel_n, path)
         except _MarkerError as e:
             print(f"regen_panel_counts: {e}", file=sys.stderr)
             return generator_io.DRIFT_EXIT
