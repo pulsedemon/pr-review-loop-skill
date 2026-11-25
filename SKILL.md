@@ -224,7 +224,7 @@ Pass this visit's failed check names to `scripts/check_exit_conditions.py`; exit
 
 ##### 4d.2 Converting failed CI checks to blockers
 
-Convert each failed check per [`docs/ci-conversion.md`](docs/ci-conversion.md). Match a file in `ci-integrations/` first (existing: `ci-integrations/sonar.md`); fall back to a generic CI blocker if nothing matches. The `scripts/` helper exit convention (helper exits `1` → `SETUP_ERROR` → Step 5) and per-exit fallback rules for `fetch_ci_log.sh` live in the conversion doc. **The scope rule does not apply to CI blockers**: even a CI failure that looks `out_of_scope` for a reviewer persona is in-scope here, because CI gates the merge.
+Convert each failed check per [`docs/ci-conversion.md`](docs/ci-conversion.md). Match a file in `ci-integrations/` first (existing: `ci-integrations/sonar.md`); fall back to a generic CI blocker if nothing matches. Fetch-helper exit handling lives in the conversion doc and the matched integration. **The scope rule does not apply to CI blockers**: even a CI failure that looks `out_of_scope` for a reviewer persona is in-scope here, because CI gates the merge.
 
 #### 4e. Apply changes
 
