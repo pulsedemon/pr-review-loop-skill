@@ -12,7 +12,7 @@ reason the list drifted by hand. Content-specific excludes stay in their
 consumers; only the dev-only trees come from the manifest.
 
 Modes mirror cog: --check exits 0/5, --write rewrites in place atomically.
-Manifest errors exit 3.
+Manifest and target errors exit 3.
 
 Spec: docs/generators.md
 """

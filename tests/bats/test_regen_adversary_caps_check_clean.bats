@@ -8,11 +8,7 @@ load test_helper
 }
 
 @test "scripts/_adversary_caps.sh contains the adversary_caps_sh cog region (marker canary)" {
-  # _regen_helper anchors on these markers. If a refactor strips them,
-  # both --check and --write raise SystemExit from the generator's
-  # _HELPER_REGION.subn n==0 branch (main() calls regen() unconditionally
-  # for both modes). This canary surfaces the failure with a clear
-  # per-marker diagnostic instead of a generator-internal traceback.
+  # the generator exits 3 when a marker is missing; this names which one.
   grep -qF "# [[[cog: adversary_caps_sh ]]]" "${REPO_ROOT}/scripts/_adversary_caps.sh" || {
     echo "scripts/_adversary_caps.sh missing cog open marker '# [[[cog: adversary_caps_sh ]]]'"
     return 1
@@ -24,9 +20,7 @@ load test_helper
 }
 
 @test "docs/adversary.md contains the regen:adversary-caps region (marker canary)" {
-  # _regen_doc anchors on these markers; same per-marker diagnostic
-  # benefit as the cog markers above (generator raises SystemExit in both
-  # modes if either marker is missing).
+  # same per-marker diagnostic as the helper canary above.
   grep -qF "<!-- regen:adversary-caps:start -->" "${REPO_ROOT}/docs/adversary.md" || {
     echo "docs/adversary.md missing region open marker '<!-- regen:adversary-caps:start -->'"
     return 1

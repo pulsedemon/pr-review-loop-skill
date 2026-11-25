@@ -66,7 +66,7 @@ adjacent. Round-trip is byte-stable.
   match a maintained allowlist pattern. Exit 5 after reporting every
   unhandled phrase.
 
-Exit codes mirror cog's two siblings: 0 ok, 3 manifest error, 5 drift
+Exit codes: 0 ok, 3 manifest error or unreadable corpus file, 5 drift
 detected (or unbalanced markers under ``--validate-markers`` / unhandled
 phrase under ``--validate-coverage``).
 

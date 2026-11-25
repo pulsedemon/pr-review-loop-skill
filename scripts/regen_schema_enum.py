@@ -12,7 +12,7 @@ Modes:
             with a unified diff to stderr otherwise.
   --write   rewrite the file in place (atomic via .tmp + os.replace).
 
-Exit codes mirror cog's: 0 ok, 3 manifest error, 5 drift detected.
+Exit codes: 0 ok, 3 manifest or target error, 5 drift detected.
 """
 
 from __future__ import annotations
@@ -59,21 +59,19 @@ def _regenerated(text: str, names: list[str]) -> str:
     try:
         data = json.loads(text)
     except json.JSONDecodeError as e:
-        raise SystemExit(
-            f"regen_schema_enum: reviewers/output.schema.json is not valid JSON: {e}"
-        ) from e
+        generator_io.fail(f"regen_schema_enum: reviewers/output.schema.json is not valid JSON: {e}")
     try:
         data["properties"]["reviewer"]["enum"]
-    except (KeyError, TypeError) as e:
-        raise SystemExit(
+    except (KeyError, TypeError):
+        generator_io.fail(
             "regen_schema_enum: could not find properties.reviewer.enum in "
             "reviewers/output.schema.json. Has the schema structure changed?"
-        ) from e
+        )
 
     body = _render_enum_body(names)
     match = _ENUM_SLICE.search(text)
     if match is None:
-        raise SystemExit(
+        generator_io.fail(
             "regen_schema_enum: properties.reviewer.enum exists in the parsed "
             "schema but the slice locator regex did not match. The schema's "
             "formatting around the reviewer.enum block may have changed."

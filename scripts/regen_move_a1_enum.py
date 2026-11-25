@@ -11,7 +11,7 @@ Source of truth is ``manifests/move-a1-enum.yaml``. Mirrors:
 
 ``--check`` accumulates drift across all surfaces and exits 5 if any are
 dirty (so a single run shows the full picture). ``--write`` rewrites in
-place atomically. Manifest errors exit 3.
+place atomically. Manifest and target errors exit 3.
 
 Future-mirror discovery: ``--check`` scans the tree under
 ``--out-of-region-root`` (default repo root) for any enum value occurring
@@ -86,12 +86,12 @@ def _regen_state_schema(text: str, values: list[str]) -> str:
     try:
         json.loads(text)
     except json.JSONDecodeError as e:
-        raise SystemExit(f"regen_move_a1_enum: state.schema.json is not valid JSON: {e}") from e
+        generator_io.fail(f"regen_move_a1_enum: state.schema.json is not valid JSON: {e}")
     # Walk to confirm move_a1_pattern.enum exists somewhere; we don't pin
     # the path exactly because the schema layout has nested items/properties
     # branches and a structural sanity check is enough.
     if "move_a1_pattern" not in text:
-        raise SystemExit("regen_move_a1_enum: move_a1_pattern key not found in state.schema.json")
+        generator_io.fail("regen_move_a1_enum: move_a1_pattern key not found in state.schema.json")
     body = _render_state_enum_body(values)
     new = generator_io.sub_region(
         _STATE_ENUM_SLICE,
@@ -105,9 +105,9 @@ def _regen_state_schema(text: str, values: list[str]) -> str:
     try:
         json.loads(new)
     except json.JSONDecodeError as e:
-        raise SystemExit(
+        generator_io.fail(
             f"regen_move_a1_enum: regenerated state.schema.json is not valid JSON: {e}"
-        ) from e
+        )
     return new
 
 
@@ -115,15 +115,15 @@ def _regen_out_schema(text: str, values: list[str]) -> str:
     try:
         json.loads(text)
     except json.JSONDecodeError as e:
-        raise SystemExit(f"regen_move_a1_enum: output.schema.json is not valid JSON: {e}") from e
+        generator_io.fail(f"regen_move_a1_enum: output.schema.json is not valid JSON: {e}")
     if "move_a1_pattern" not in text:
-        raise SystemExit("regen_move_a1_enum: move_a1_pattern key not found in output.schema.json")
+        generator_io.fail("regen_move_a1_enum: move_a1_pattern key not found in output.schema.json")
     # Detect indentation from the existing match so we render with the
     # same per-line pad. Falls back to 14 spaces (the real schema's
     # current indent) if detection fails.
     match = _OUT_ENUM_SLICE.search(text)
     if match is None:
-        raise SystemExit(
+        generator_io.fail(
             "regen_move_a1_enum: could not locate move_a1_pattern.enum slice in output.schema.json."
         )
     inner = match.group(2)
@@ -136,9 +136,9 @@ def _regen_out_schema(text: str, values: list[str]) -> str:
     try:
         json.loads(new)
     except json.JSONDecodeError as e:
-        raise SystemExit(
+        generator_io.fail(
             f"regen_move_a1_enum: regenerated output.schema.json is not valid JSON: {e}"
-        ) from e
+        )
     return new
 
 
@@ -162,7 +162,7 @@ def _regen_prose(text: str, path: Path, values: list[str], *, optional: bool = F
         # re-emits the bullet and regen-check fails on the diff.
         return text
     if not regions:
-        raise SystemExit(
+        generator_io.fail(
             f"regen_move_a1_enum: {path}: no regen:move-a1-enum region found. "
             "Wrap the sentence naming the five sub-mechanics with "
             "<!-- regen:move-a1-enum:start --> ... <!-- regen:move-a1-enum:end -->."
@@ -182,7 +182,7 @@ def _regen_prose(text: str, path: Path, values: list[str], *, optional: bool = F
         new = new[:body_start] + sub + new[body_end:]
 
     if not rewrote_any:
-        raise SystemExit(
+        generator_io.fail(
             f"regen_move_a1_enum: {path}: no backticked value list found in any "
             "regen:move-a1-enum region. The region must contain a list like "
             "`a`, `b`, `c`, ..."

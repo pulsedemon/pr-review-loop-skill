@@ -10,7 +10,7 @@ Surfaces (all three written from one manifest value):
     rewritten.
 
 Modes mirror cog: --check exits 0/5, --write rewrites in place atomically.
-Manifest errors exit 3.
+Manifest and target errors exit 3.
 
 Spec: docs/generators.md
 """
@@ -44,17 +44,17 @@ def _regen_schema(text: str, cap: int) -> str:
     try:
         data = json.loads(text)
     except json.JSONDecodeError as e:
-        raise SystemExit(
+        generator_io.fail(
             f"regen_adversary_caps: templates/state.schema.json is not valid JSON: {e}"
-        ) from e
+        )
     for field in _SCHEMA_FIELDS:
         try:
             data["properties"][field]["maximum"]
-        except (KeyError, TypeError) as e:
-            raise SystemExit(
+        except (KeyError, TypeError):
+            generator_io.fail(
                 f"regen_adversary_caps: could not find properties.{field}.maximum in "
                 "templates/state.schema.json. Has the schema structure changed?"
-            ) from e
+            )
 
     new = text
     for field in _SCHEMA_FIELDS:
@@ -64,7 +64,7 @@ def _regen_schema(text: str, cap: int) -> str:
         )
         new, n = pattern.subn(lambda m: m.group(1) + str(cap), new, count=1)
         if n != 1:
-            raise SystemExit(
+            generator_io.fail(
                 f"regen_adversary_caps: properties.{field}.maximum exists in the "
                 "parsed schema but the slice locator regex did not match. The "
                 "schema's formatting around that field may have changed."
@@ -87,7 +87,7 @@ def _regen_helper(text: str, cap: int) -> str:
         text,
         body,
         "regen_adversary_caps: could not find adversary_caps_sh cog region in "
-        "scripts/_adversary_caps.sh. Has the file's cog markers been edited?",
+        "scripts/_adversary_caps.sh. Have the file's cog markers been edited?",
     )
 
 
@@ -98,7 +98,7 @@ def _regen_doc(text: str, cap: int) -> str:
         text,
         body,
         "regen_adversary_caps: could not find regen:adversary-caps region in "
-        "docs/adversary.md. Has the doc's region markers been edited?",
+        "docs/adversary.md. Have the doc's region markers been edited?",
     )
 
 
