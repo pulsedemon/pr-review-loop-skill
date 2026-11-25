@@ -341,7 +341,7 @@ The **PR-scope gate** lives in `gates/pr-scope.md`, not `reviewers/`. It runs at
 
 - Operates in-place in the user's current repo; refuses if `origin` doesn't match the PR's `owner/repo`
 - Refuses to run with any uncommitted or staged changes in the working tree
-- Never push to `main`/`master`/`develop`/`release`/`prod`/`production`
+- Never push to a protected branch (the Step 1 list; `scripts/safe_push.sh` refuses it)
 - Never force-push, amend, or use `--no-verify`
 - Abort if remote head changed externally between fetch and push
 - Loop state lives in `<git-dir>/pr-loop/` (never tracked)
