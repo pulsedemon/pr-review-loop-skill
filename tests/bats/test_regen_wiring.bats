@@ -52,6 +52,15 @@ assert_every_generator_ran() {
   [[ "$stderr" == *"cog output"* ]]
 }
 
+@test "regen.sh --check passes a generator's drift exit through" {
+  # cog runs first, so drift it also sees cannot show a generator's status
+  # being swallowed; this drift is visible to regen_dev_trees.py alone.
+  stub_cmd python3 'if [[ "$*" == *"/scripts/regen_dev_trees.py --check" ]]; then exit 5; fi'
+  cd "$REPO_ROOT"
+  run bash scripts/regen.sh --check
+  [[ "$status" -eq 5 ]]
+}
+
 @test "regen.sh runs cog and every generator in write mode" {
   record_python3
   cd "$REPO_ROOT"
