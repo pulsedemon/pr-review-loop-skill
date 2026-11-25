@@ -91,9 +91,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import generator_io  # noqa: E402
 from personas_manifest import ManifestError, load_manifest  # noqa: E402
 
-_DRIFT_EXIT = 5
-_MANIFEST_ERROR_EXIT = 3
-
 _KIND_TOTAL = "total"
 
 _START_RE = re.compile(r"^<!-- regen:panel-count-(total|total-plus-1):start -->\s*$")
@@ -234,7 +231,7 @@ def _run_check_or_write(*, write: bool, manifest_path: Path, corpus_root: Path) 
         manifest = load_manifest(manifest_path)
     except ManifestError as e:
         print(f"regen_panel_counts: manifest error: {e}", file=sys.stderr)
-        return _MANIFEST_ERROR_EXIT
+        return generator_io.MANIFEST_ERROR_EXIT
     panel_n = len(manifest.panel)
 
     drifted: list[Path] = []
@@ -243,12 +240,12 @@ def _run_check_or_write(*, write: bool, manifest_path: Path, corpus_root: Path) 
             current = path.read_text()
         except (OSError, UnicodeDecodeError) as e:
             print(f"regen_panel_counts: failed to read {path}: {e}", file=sys.stderr)
-            return _MANIFEST_ERROR_EXIT
+            return generator_io.MANIFEST_ERROR_EXIT
         try:
             regenerated, _ = _regenerate_text(current, panel_n, path)
         except _MarkerError as e:
             print(f"regen_panel_counts: {e}", file=sys.stderr)
-            return _DRIFT_EXIT
+            return generator_io.DRIFT_EXIT
         if current == regenerated:
             continue
         if write:
@@ -264,7 +261,7 @@ def _run_check_or_write(*, write: bool, manifest_path: Path, corpus_root: Path) 
             + "\nRun scripts/regen.sh to regenerate.",
             file=sys.stderr,
         )
-        return _DRIFT_EXIT
+        return generator_io.DRIFT_EXIT
     return 0
 
 
@@ -284,7 +281,7 @@ def _run_validate_markers(*, corpus_root: Path) -> int:
         print("regen_panel_counts: marker validation failed:", file=sys.stderr)
         for f in failures:
             print(f"  {f}", file=sys.stderr)
-        return _DRIFT_EXIT
+        return generator_io.DRIFT_EXIT
     return 0
 
 
@@ -342,7 +339,7 @@ def _run_validate_coverage(*, corpus_root: Path) -> int:
         print("regen_panel_counts: coverage check failed:", file=sys.stderr)
         for f in failures:
             print(f"  {f}", file=sys.stderr)
-        return _DRIFT_EXIT
+        return generator_io.DRIFT_EXIT
     return 0
 
 

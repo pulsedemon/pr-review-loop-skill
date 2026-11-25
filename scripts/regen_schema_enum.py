@@ -28,9 +28,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import generator_io  # noqa: E402
 from personas_manifest import ManifestError, load_manifest  # noqa: E402
 
-_DRIFT_EXIT = 5
-_MANIFEST_ERROR_EXIT = 3
-
 # Locates the `reviewer.enum` slice for in-place replacement. Anchored on
 # the property key + type so we never grab a sibling property's enum by
 # accident. Content production is handled by json.dumps below; this regex
@@ -107,14 +104,14 @@ def main(argv: list[str]) -> int:
         manifest = load_manifest(args.manifest)
     except ManifestError as e:
         print(f"regen_schema_enum: manifest error: {e}", file=sys.stderr)
-        return _MANIFEST_ERROR_EXIT
+        return generator_io.MANIFEST_ERROR_EXIT
 
     names = [p.name for p in manifest.panel] + [manifest.adversary.name]
     try:
         current = args.schema.read_text()
     except (OSError, UnicodeDecodeError) as e:
         print(f"regen_schema_enum: failed to read {args.schema}: {e}", file=sys.stderr)
-        return _MANIFEST_ERROR_EXIT
+        return generator_io.MANIFEST_ERROR_EXIT
     regenerated = _regenerated(current, names)
 
     if args.check:
@@ -126,7 +123,7 @@ def main(argv: list[str]) -> int:
             "Run scripts/regen.sh to regenerate.",
             file=sys.stderr,
         )
-        return _DRIFT_EXIT
+        return generator_io.DRIFT_EXIT
 
     if current != regenerated:
         generator_io.atomic_write(args.schema, regenerated)

@@ -27,9 +27,6 @@ from pathlib import Path
 import generator_io
 import yaml
 
-_DRIFT_EXIT = 5
-_MANIFEST_ERROR_EXIT = 3
-
 # A dev-tree entry is a bare filename: no separators, no shell metacharacters,
 # no leading dash that grep or rsync would read as a flag. `.` and `..` pass
 # this pattern but are rejected separately: `find . -name .` matches the search
@@ -92,13 +89,13 @@ def _regen_move_a1(text: str, names: list[str]) -> str:
 
 
 def _sub_region(region: re.Pattern[str], text: str, body: str, label: str, marker: str) -> str:
-    new, n = region.subn(lambda m: m.group(1) + body + m.group(3), text, count=1)
-    if n != 1:
-        raise SystemExit(
-            f"regen_dev_trees: could not find the {marker} cog region in {label}. "
-            "Have the file's cog markers been edited?"
-        )
-    return new
+    return generator_io.sub_region(
+        region,
+        text,
+        body,
+        f"regen_dev_trees: could not find the {marker} cog region in {label}. "
+        "Have the file's cog markers been edited?",
+    )
 
 
 def main(argv: list[str]) -> int:
@@ -141,25 +138,17 @@ def main(argv: list[str]) -> int:
             raise ValueError(f"duplicate dev_trees entries: {dupes}")
     except (FileNotFoundError, KeyError, TypeError, ValueError, yaml.YAMLError) as e:
         print(f"regen_dev_trees: manifest error: {e}", file=sys.stderr)
-        return _MANIFEST_ERROR_EXIT
+        return generator_io.MANIFEST_ERROR_EXIT
 
-    targets = [
-        (args.install, _regen_install),
-        (args.runsh, _regen_runsh),
-        (args.helper, _regen_helper),
-        (args.move_a1, _regen_move_a1),
-    ]
-    drifted = False
-    for path, regen in targets:
-        before = path.read_text()
-        after = regen(before, names)
-        if before == after:
-            continue
-        if args.check:
-            generator_io.emit_drift_diff(path, before, after)
-            drifted = True
-        else:
-            generator_io.atomic_write(path, after)
+    drifted = generator_io.sync(
+        [
+            (args.install, lambda text: _regen_install(text, names)),
+            (args.runsh, lambda text: _regen_runsh(text, names)),
+            (args.helper, lambda text: _regen_helper(text, names)),
+            (args.move_a1, lambda text: _regen_move_a1(text, names)),
+        ],
+        check=args.check,
+    )
 
     if args.check and drifted:
         print(
@@ -167,7 +156,7 @@ def main(argv: list[str]) -> int:
             "Run scripts/regen.sh to regenerate.",
             file=sys.stderr,
         )
-        return _DRIFT_EXIT
+        return generator_io.DRIFT_EXIT
     return 0
 
 

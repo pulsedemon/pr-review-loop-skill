@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import generator_io
 import pytest
 import regen_schema_enum  # type: ignore[import-not-found]  # sibling module made importable by conftest.py
 
@@ -99,7 +100,7 @@ def test_check_returns_5_with_diff_on_drift(
     schema = _write_schema(tmp_path, ["alpha"])  # missing beta + adversary
     before = schema.read_bytes()
     rc = _run(["--check", "--manifest", str(manifest), "--schema", str(schema)])
-    assert rc == regen_schema_enum._DRIFT_EXIT == 5
+    assert rc == generator_io.DRIFT_EXIT == 5
     captured = capsys.readouterr()
     assert captured.out == ""
     assert schema.read_bytes() == before
@@ -118,7 +119,7 @@ def test_returns_3_when_manifest_is_malformed(
     manifest.write_text("panel: []\nadversary:\n  name: x\n  file: x.md\n  description: x\n")
     schema = _write_schema(tmp_path, ["alpha"])
     rc = _run(["--check", "--manifest", str(manifest), "--schema", str(schema)])
-    assert rc == regen_schema_enum._MANIFEST_ERROR_EXIT == 3
+    assert rc == generator_io.MANIFEST_ERROR_EXIT == 3
     err = capsys.readouterr().err
     assert "manifest error" in err
 
@@ -129,7 +130,7 @@ def test_returns_3_when_schema_is_missing(
     manifest = _write_manifest(tmp_path, ["alpha"])
     missing = tmp_path / "nonexistent.json"
     rc = _run(["--check", "--manifest", str(manifest), "--schema", str(missing)])
-    assert rc == regen_schema_enum._MANIFEST_ERROR_EXIT == 3
+    assert rc == generator_io.MANIFEST_ERROR_EXIT == 3
     err = capsys.readouterr().err
     assert "failed to read" in err
 
@@ -141,7 +142,7 @@ def test_returns_3_when_schema_is_unreadable(
     schema = tmp_path / "output.schema.json"
     schema.write_bytes(b"\xff\xfe\xfd")
     rc = _run(["--check", "--manifest", str(manifest), "--schema", str(schema)])
-    assert rc == regen_schema_enum._MANIFEST_ERROR_EXIT == 3
+    assert rc == generator_io.MANIFEST_ERROR_EXIT == 3
     err = capsys.readouterr().err
     assert "failed to read" in err
 

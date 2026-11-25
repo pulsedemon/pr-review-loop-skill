@@ -26,9 +26,6 @@ from pathlib import Path
 import generator_io
 import yaml
 
-_DRIFT_EXIT = 5
-_MANIFEST_ERROR_EXIT = 3
-
 _HELPER_REGION = re.compile(
     r"(# \[\[\[cog: adversary_caps_sh \]\]\]\n)(.*?)(# \[\[\[end\]\]\])",
     re.DOTALL,
@@ -85,24 +82,24 @@ def _regen_helper(text: str, cap: int) -> str:
         f"fi\n"
         f"readonly ADVERSARY_CAP={cap}\n"
     )
-    new, n = _HELPER_REGION.subn(lambda m: m.group(1) + body + m.group(3), text, count=1)
-    if n != 1:
-        raise SystemExit(
-            "regen_adversary_caps: could not find adversary_caps_sh cog region in "
-            "scripts/_adversary_caps.sh. Has the file's cog markers been edited?"
-        )
-    return new
+    return generator_io.sub_region(
+        _HELPER_REGION,
+        text,
+        body,
+        "regen_adversary_caps: could not find adversary_caps_sh cog region in "
+        "scripts/_adversary_caps.sh. Has the file's cog markers been edited?",
+    )
 
 
 def _regen_doc(text: str, cap: int) -> str:
     body = f"The cap is {cap} (see ADVERSARY_CAP in templates/state.schema.json).\n"
-    new, n = _DOC_REGION.subn(lambda m: m.group(1) + body + m.group(3), text, count=1)
-    if n != 1:
-        raise SystemExit(
-            "regen_adversary_caps: could not find regen:adversary-caps region in "
-            "docs/adversary.md. Has the doc's region markers been edited?"
-        )
-    return new
+    return generator_io.sub_region(
+        _DOC_REGION,
+        text,
+        body,
+        "regen_adversary_caps: could not find regen:adversary-caps region in "
+        "docs/adversary.md. Has the doc's region markers been edited?",
+    )
 
 
 def main(argv: list[str]) -> int:
@@ -124,24 +121,16 @@ def main(argv: list[str]) -> int:
         cap = int(manifest["cap"])
     except (FileNotFoundError, KeyError, TypeError, ValueError, yaml.YAMLError) as e:
         print(f"regen_adversary_caps: manifest error: {e}", file=sys.stderr)
-        return _MANIFEST_ERROR_EXIT
+        return generator_io.MANIFEST_ERROR_EXIT
 
-    targets = [
-        ("schema", args.schema, _regen_schema),
-        ("helper", args.helper, _regen_helper),
-        ("doc", args.doc, _regen_doc),
-    ]
-    drifted = False
-    for _label, path, regen in targets:
-        before = path.read_text()
-        after = regen(before, cap)
-        if before == after:
-            continue
-        if args.check:
-            generator_io.emit_drift_diff(path, before, after)
-            drifted = True
-        else:
-            generator_io.atomic_write(path, after)
+    drifted = generator_io.sync(
+        [
+            (args.schema, lambda text: _regen_schema(text, cap)),
+            (args.helper, lambda text: _regen_helper(text, cap)),
+            (args.doc, lambda text: _regen_doc(text, cap)),
+        ],
+        check=args.check,
+    )
 
     if args.check and drifted:
         print(
@@ -149,7 +138,7 @@ def main(argv: list[str]) -> int:
             "Run scripts/regen.sh to regenerate.",
             file=sys.stderr,
         )
-        return _DRIFT_EXIT
+        return generator_io.DRIFT_EXIT
     return 0
 
 
