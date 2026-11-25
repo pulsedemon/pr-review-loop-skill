@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
 # reply_pr_comments.sh <owner> <repo> <pr_number> <comment_id> <body_file>
+# reply_pr_comments.sh --print-existing <owner> <repo> <pr_number> <comment_id>
 #
 # posts or updates a single marker-tagged reply to an inline review comment
 # thread. idempotent via a mandatory thread scan: an unchanged reply owned by
 # the authenticated user does nothing and exits 0. The scan uses its own gh
-# fetch (NOT the loop's
-# fetch_pr_comments.sh, which drops marker comments and so cannot see prior
-# replies). This is the sole cross-run guard. state (comment_ledger) is
-# ephemeral.
+# fetch (NOT the loop's fetch_pr_comments.sh, which drops marker comments and so
+# cannot see prior replies). This is the sole cross-run guard. state
+# (comment_ledger) is ephemeral.
+#
+# --print-existing runs the same scan and checks, writes nothing, and prints the
+# owned marker reply as {id, body, html_url}, or null when there is none.
 #
 # Callers MUST ensure the body file's FIRST LINE is the reply marker so that
 # fetch_pr_comments.sh drops it on the next iteration.
@@ -17,23 +20,33 @@
 # that root id (not on a mid-thread reply's id).
 #
 # exit codes:
-#   0 - posted, updated, or no-op (reply body is unchanged)
-#   1 - authentication, reply scan, POST, or PATCH failed
+#   0 - posted, updated, no-op (reply body is unchanged), or printed
+#   1 - authentication, reply scan, POST, or PATCH failed, or the thread has
+#       foreign or duplicate marker replies
 #   2 - usage error (missing or empty argument, missing body file, or body
 #       first line is not the reply marker)
 #   7 - gh missing (SETUP_ERROR)
 
 set -euo pipefail
 
-if [[ $# -lt 5 || -z "$1" || -z "$2" || -z "$3" || -z "$4" || -z "$5" ]]; then
+usage() {
   echo "usage: reply_pr_comments.sh <owner> <repo> <pr_number> <comment_id> <body_file>" >&2
+  echo "       reply_pr_comments.sh --print-existing <owner> <repo> <pr_number> <comment_id>" >&2
   exit 2
+}
+
+PRINT_EXISTING=false
+if [[ "${1:-}" == --print-existing ]]; then
+  PRINT_EXISTING=true
+  shift
+  [[ $# -ge 4 && -n "$1" && -n "$2" && -n "$3" && -n "$4" ]] || usage
+else
+  [[ $# -ge 5 && -n "$1" && -n "$2" && -n "$3" && -n "$4" && -n "$5" ]] || usage
 fi
 OWNER="$1"
 REPO="$2"
 PR="$3"
 COMMENT_ID="$4"
-BODY_FILE="$5"
 
 REPLY_MARKER='<!-- pr-review-loop-reply -->'
 
@@ -42,21 +55,24 @@ if ! command -v gh >/dev/null 2>&1; then
   exit 7
 fi
 
-if [[ ! -f "$BODY_FILE" ]]; then
-  echo "reply_pr_comments: body file not found: $BODY_FILE" >&2
-  exit 2
-fi
+if ! $PRINT_EXISTING; then
+  BODY_FILE="$5"
+  if [[ ! -f "$BODY_FILE" ]]; then
+    echo "reply_pr_comments: body file not found: $BODY_FILE" >&2
+    exit 2
+  fi
 
-# Enforce the self-trigger invariant in-script (symmetric to the body-file
-# check above): the body's first line MUST be the reply marker so
-# fetch_pr_comments.sh drops it next iteration. without the marker the loop
-# re-ingests its own reply and re-replies every iteration until max_iterations.
-if [[ "$(head -n 1 "$BODY_FILE")" != "$REPLY_MARKER" ]]; then
-  echo "reply_pr_comments: body first line is not the reply marker: $BODY_FILE" >&2
-  exit 2
-fi
+  # Enforce the self-trigger invariant in-script (symmetric to the body-file
+  # check above): the body's first line MUST be the reply marker so
+  # fetch_pr_comments.sh drops it next iteration. without the marker the loop
+  # re-ingests its own reply and re-replies every iteration until max_iterations.
+  if [[ "$(head -n 1 "$BODY_FILE")" != "$REPLY_MARKER" ]]; then
+    echo "reply_pr_comments: body first line is not the reply marker: $BODY_FILE" >&2
+    exit 2
+  fi
 
-BODY=$(cat "$BODY_FILE")
+  BODY=$(cat "$BODY_FILE")
+fi
 
 ERR_FILE="$(mktemp)"
 trap 'rm -f "$ERR_FILE"' EXIT
@@ -99,6 +115,11 @@ fi
 if [[ "$MARKER_COUNT" -ne "$OWNED_COUNT" ]] || [[ "$OWNED_COUNT" -gt 1 ]]; then
   echo "reply_pr_comments: foreign or duplicate marker replies require inspection" >&2
   exit 1
+fi
+
+if $PRINT_EXISTING; then
+  printf '%s' "$OWNED" | jq -c 'map({id, body, html_url}) | .[0]'
+  exit 0
 fi
 
 if [[ "$OWNED_COUNT" -eq 1 ]]; then
