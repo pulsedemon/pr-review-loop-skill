@@ -251,7 +251,7 @@ Exit-code handling:
 - **0**: all detected validators passed (or nothing to run). Continue to 4g.
 - **1**: harness/setup error: not in a git repo, or a stack was detected but the required toolchain is missing. Treat as `SETUP_ERROR` → Step 5. The stderr `# setup-error:` line identifies which case fired (see `scripts/run_local_validation.sh` for the full enumeration).
 - **2**: no recognized stack. Soft pass: log a note in state's history entry under `addressed` (e.g., `"local validation skipped: no recognized stack"`) and continue to 4g.
-- **3+**: a validator failed. Revert this iteration's edits (`git reset --hard "$PRE_EDIT_SHA"`), record `tests_regressed: true` in state, exit with `TESTS_REGRESSED` → Step 5.
+- **3**: a validator failed. Revert this iteration's edits (`git reset --hard "$PRE_EDIT_SHA"`), record `tests_regressed: true` in state, exit with `TESTS_REGRESSED` → Step 5.
 
 #### 4g. Commit
 
