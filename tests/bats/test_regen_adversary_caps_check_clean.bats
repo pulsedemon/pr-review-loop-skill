@@ -11,30 +11,6 @@ load test_helper
     "${REPO_ROOT}/manifests/adversary-caps.yaml"
 }
 
-@test "scripts/regen-check.sh invokes regen_adversary_caps.py --check (wiring canary)" {
-  # If a refactor drops this invocation, the standalone --check test above
-  # still passes against the manifest, but the CI gate silently stops
-  # guarding the adversary-cap mirrors. Pin the wiring so that case fails
-  # loudly with a clear diagnostic.
-  grep -qE 'regen_adversary_caps\.py[^A-Za-z0-9_].*--check' "${REPO_ROOT}/scripts/regen-check.sh" || {
-    echo "scripts/regen-check.sh no longer invokes regen_adversary_caps.py --check."
-    echo "Without it, adversary-cap mirror drift would not be detected by the CI gate."
-    return 1
-  }
-}
-
-@test "scripts/regen.sh invokes regen_adversary_caps.py --write (wiring canary)" {
-  # Companion to the --check wiring canary above. Without --write in
-  # scripts/regen.sh, maintainers running the regen entrypoint would no
-  # longer regenerate the adversary-cap mirrors and drift would land
-  # despite the CI gate.
-  grep -qE 'regen_adversary_caps\.py[^A-Za-z0-9_].*--write' "${REPO_ROOT}/scripts/regen.sh" || {
-    echo "scripts/regen.sh no longer invokes regen_adversary_caps.py --write."
-    echo "Without it, scripts/regen.sh would not refresh adversary-cap mirrors."
-    return 1
-  }
-}
-
 @test "scripts/_adversary_caps.sh contains the adversary_caps_sh cog region (marker canary)" {
   # _regen_helper anchors on these markers. If a refactor strips them,
   # both --check and --write raise SystemExit from the generator's

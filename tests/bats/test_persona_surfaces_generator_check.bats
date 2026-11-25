@@ -1,17 +1,10 @@
 #!/usr/bin/env bats
 
-# Generator-check gate for persona-derived surfaces.
+# Generator-check gate for manifest-derived surfaces.
 #
-# scripts/regen-check.sh regenerates the SKILL.md "Reviewer personas"
-# section (via cog) and the reviewer.enum in reviewers/output.schema.json
-# (via scripts/regen_schema_enum.py) from reviewers/personas.yaml and
-# diffs against the checked-in files. Drift exits non-zero with a
-# unified diff and a hint to run scripts/regen.sh.
-#
-# This bats wraps that gate so a drifted PR fails locally with the same
-# diagnostic CI prints, and adds a canary that pins the presence of the
-# cog markers (without which `cog --check` would degenerate to a vacuous
-# pass).
+# Runs scripts/regen-check.sh on the checked-in tree so a drifted PR fails
+# locally with the diagnostic CI prints, and pins the SKILL.md cog markers
+# and routing, without which cog --check passes with nothing to check.
 
 load test_helper
 
@@ -43,7 +36,7 @@ load test_helper
 }
 
 @test "scripts/cogfiles.txt routes cog at SKILL.md (canary against silent re-routing)" {
-  # scripts/regen-check.sh invokes cog with @cogfiles.txt. If a refactor
+  # scripts/regen.sh invokes cog with @cogfiles.txt. If a refactor
   # empties cogfiles.txt or drops SKILL.md from it, cog --check exits 0 with
   # nothing checked — the cog markers canary above still passes, but cog is
   # no longer pointed at them. Pin the routing so that case fails loudly.
@@ -52,22 +45,6 @@ load test_helper
     echo "Without it, scripts/regen-check.sh would silently pass while SKILL.md drifts."
     echo "Current contents:"
     cat "${REPO_ROOT}/scripts/cogfiles.txt"
-    return 1
-  }
-}
-
-@test "scripts/regen-check.sh invokes both cog and regen_schema_enum.py" {
-  # regen-check.sh is the single CI gate for both managed surfaces.
-  # If a refactor removes either invocation, the gate silently shrinks
-  # to one surface and the other can drift undetected by CI.
-  grep -qE 'cogapp' "${REPO_ROOT}/scripts/regen-check.sh" || {
-    echo "scripts/regen-check.sh no longer invokes cogapp."
-    echo "Without it, SKILL.md drift would not be detected by the CI gate."
-    return 1
-  }
-  grep -qE 'regen_schema_enum\.py[^A-Za-z0-9_].*--check' "${REPO_ROOT}/scripts/regen-check.sh" || {
-    echo "scripts/regen-check.sh no longer invokes regen_schema_enum.py --check."
-    echo "Without it, reviewers/output.schema.json enum drift would not be detected."
     return 1
   }
 }

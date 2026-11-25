@@ -16,6 +16,45 @@ load test_helper
   }
 }
 
+# Records each python3 call instead of running it, so these tests see what
+# regen.sh runs and change nothing.
+record_python3() {
+  CALLS="${BATS_TEST_TMPDIR}/python3-calls"
+  stub_cmd python3 "printf '%s\n' \"\$*\" >>'${CALLS}'"
+}
+
+# Fails unless every scripts/regen_*.py ran with the given mode flag.
+assert_every_generator_ran() {
+  local mode="$1" generator
+  for generator in "${REPO_ROOT}"/scripts/regen_*.py; do
+    grep -qE "/scripts/$(basename "$generator") ${mode}\$" "$CALLS" || {
+      echo "$(basename "$generator") did not run with ${mode}; calls:"
+      cat "$CALLS"
+      return 1
+    }
+  done
+}
+
+@test "regen.sh --check runs cog and every generator in check mode" {
+  record_python3
+  cd "$REPO_ROOT"
+  run bash scripts/regen.sh --check
+  [[ "$status" -eq 0 ]]
+  grep -qE '^-m cogapp --check --diff .*/scripts/cogfiles\.txt$' "$CALLS"
+  assert_every_generator_ran --check
+  grep -qE '/scripts/regen_panel_counts\.py --validate-markers$' "$CALLS"
+  grep -qE '/scripts/regen_panel_counts\.py --validate-coverage$' "$CALLS"
+}
+
+@test "regen.sh runs cog and every generator in write mode" {
+  record_python3
+  cd "$REPO_ROOT"
+  run bash scripts/regen.sh
+  [[ "$status" -eq 0 ]]
+  grep -qE '^-m cogapp -r .*/scripts/cogfiles\.txt$' "$CALLS"
+  assert_every_generator_ran --write
+}
+
 @test "personas-regen.sh shim execs regen.sh" {
   local shim="${REPO_ROOT}/scripts/personas-regen.sh"
   [[ -x "$shim" ]] || { echo "shim missing: $shim"; return 1; }
