@@ -7,6 +7,15 @@
 # (state.json initial_head_sha, or history[-1].head_sha_after). It is required:
 # without it the divergence check cannot see a force-push that rewound the
 # remote to an ancestor of local HEAD.
+#
+# Exits:
+#   0: pushed
+#   2: usage error
+#   10: head branch is protected
+#   11: current branch is not <head_branch>
+#   12: remote moved, diverged, was deleted, or could not be fetched
+#   other: git's own status, including a failed push whose remote could not be
+#          queried afterwards
 
 set -euo pipefail
 
@@ -36,7 +45,7 @@ LOCAL_HEAD=$(git rev-parse --verify 'HEAD^{commit}')
 
 # refuse when the remote state cannot be verified.
 if ! git fetch origin "$HEAD_BRANCH" --quiet; then
-  echo "REFUSE: could not fetch origin/'$HEAD_BRANCH' — remote state unknown." >&2
+  echo "REFUSE: could not fetch origin/'$HEAD_BRANCH'; remote state unknown." >&2
   exit 12
 fi
 
@@ -44,7 +53,7 @@ REMOTE_HEAD=$(git rev-parse "origin/${HEAD_BRANCH}" 2>/dev/null || echo "")
 
 # An absent remote ref means the branch is gone; pushing would recreate it.
 if [[ -z "$REMOTE_HEAD" ]]; then
-  echo "REFUSE: remote '$HEAD_BRANCH' has no head — branch deleted or never pushed." >&2
+  echo "REFUSE: remote '$HEAD_BRANCH' has no head; branch deleted or never pushed." >&2
   exit 12
 fi
 

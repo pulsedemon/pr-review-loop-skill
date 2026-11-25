@@ -265,11 +265,11 @@ bash "$SKILL_ROOT/scripts/safe_push.sh" <head_branch> <expected_remote_sha>
 
 `<expected_remote_sha>` is the remote head this iteration started from (`initial_head_sha`, or `history[-1].head_sha_after` on later iterations). It is required: without it a force-push that rewound the remote to an ancestor of local HEAD reads as fast-forwardable and the loop silently re-pushes over it.
 
-`safe_push.sh` refuses to:
+Exits 2 (usage), 10, and 11 of `safe_push.sh` map to `SETUP_ERROR`; exit 12, which also covers a remote it cannot fetch, maps to `EXTERNAL_PUSH`. It refuses to:
 
 - Push to a protected branch
 - Make a non-fast-forward update
-- Push when the remote head SHA differs from what we started from (external push detected → abort with `EXTERNAL_PUSH`)
+- Push when the remote head SHA differs from what we started from (external push detected)
 - Use `--no-verify`
 
 #### 4i. Append to state
