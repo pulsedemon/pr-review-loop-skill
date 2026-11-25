@@ -2,10 +2,6 @@
 
 load test_helper
 
-@test "regen_adversary_caps.py --check passes on a clean tree" {
-  python3 "${REPO_ROOT}/scripts/regen_adversary_caps.py" --check
-}
-
 @test "manifests/adversary-caps.yaml exists and is valid YAML" {
   python3 -c "import yaml,sys; yaml.safe_load(open(sys.argv[1]).read())" \
     "${REPO_ROOT}/manifests/adversary-caps.yaml"

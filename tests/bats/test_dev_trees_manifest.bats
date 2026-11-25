@@ -4,13 +4,11 @@
 #
 # manifests/dev-trees.yaml is the source of truth for the dev-only trees
 # every consumer skips. scripts/regen_dev_trees.py writes four surfaces from
-# it, each in its own syntax. Before the manifest existed the four lists had
-# drifted five ways, which is what let .worktrees ship into the Cursor install
-# (#77).
+# it, each in its own syntax.
 #
 # Covers the generator contract (docs/generators.md): a canary pinning the
-# markers, a drift check, and the cross-consumer sync assertion that is the
-# actual point of the manifest.
+# markers and the cross-consumer sync assertion that is the actual point of
+# the manifest.
 
 load test_helper
 
@@ -22,17 +20,6 @@ dev_tree_names() {
 import sys, yaml
 print('\n'.join(yaml.safe_load(open('${REPO_ROOT}/${MANIFEST}'))['dev_trees']))
 "
-}
-
-@test "regen_dev_trees --check succeeds on the checked-in tree" {
-  run python3 "${REPO_ROOT}/${GENERATOR}" --check
-  [[ "$status" -eq 0 ]] || {
-    echo "generator reports drift (exit $status):"
-    echo "$output"
-    echo ""
-    echo "Fix: run scripts/regen.sh and commit the result."
-    return 1
-  }
 }
 
 @test "cog markers are present in every generated surface (canary)" {

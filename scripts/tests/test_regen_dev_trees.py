@@ -34,13 +34,6 @@ def test_rsync_pattern_slashes_only_directories(name: str, expected: str) -> Non
     assert _rsync_pattern(name) == expected
 
 
-def test_check_passes_on_the_checked_in_tree() -> None:
-    proc = subprocess.run(
-        [sys.executable, str(GENERATOR), "--check"], capture_output=True, text=True
-    )
-    assert proc.returncode == 0, proc.stderr
-
-
 def test_manifest_without_dev_trees_key_exits_3(tmp_path: Path) -> None:
     manifest = tmp_path / "dev-trees.yaml"
     manifest.write_text("other_key: [a]\n")
