@@ -65,11 +65,13 @@ setup() {
   }
   # The five rows are the rule. Each is a distinct decision; losing one turns
   # the table into prose that no longer says what settles a finding. The last
-  # three phrases are the contract a host has to get right to call the script
-  # at all: who owns a finding, that ownership accumulates rather than tracking
-  # the newest sighting, and that a pre-iteration status is not an error.
+  # four phrases are the contract a host has to get right to call the script
+  # at all: that the adversary is not a panel persona, who owns a finding, that
+  # ownership accumulates rather than tracking the newest sighting, and that a
+  # pre-iteration status is not an error.
   local phrase
   for phrase in \
+    'Re-raised it (matched per' \
     'Re-raised it as a blocker, promoted it, or deferred it' \
     'holds its `fixed_from` record' \
     'Ran its owning persona and did not re-raise it' \

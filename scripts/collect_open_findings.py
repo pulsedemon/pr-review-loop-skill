@@ -87,10 +87,10 @@ def _key(record: dict) -> tuple:
     return (record.get("file"), record.get("line"), record.get("summary"))
 
 
-def _settles(record: dict) -> bool:
+def _settles(record: dict, field: str) -> bool:
     if record.get("promoted_from") == "suggestion":
         return well_formed_promotion(record)
-    if record.get("fixed_from") in OPEN_SEVERITIES:
+    if field == "addressed" and record.get("fixed_from") in OPEN_SEVERITIES:
         return isinstance(record.get("summary"), str) and located_fields_ok(record)
     return False
 
@@ -102,8 +102,9 @@ def _settled(entry: dict) -> set[tuple]:
     rewriting `severity`, and routes a failed evidence check to deferred[] the
     same way, so severity alone cannot tell an open suggestion from one that
     already has a home elsewhere in the summary. addressed[]/deferred[] carry
-    the provenance record for exactly those. A `fixed_from` record is a
-    suggestion or nit §4e fixed; its finding keeps its severity the same way.
+    the provenance record for exactly those. A `fixed_from` record in
+    addressed[] is a suggestion or nit §4e fixed; its finding keeps its severity
+    the same way.
 
     Keys, not the matcher: `_provenance` and §4e's `fixed_from` record copy
     `file`/`line`/`summary` off the finding verbatim, so exact equality is
@@ -124,7 +125,7 @@ def _settled(entry: dict) -> set[tuple]:
     keys = set()
     for field in ("addressed", "deferred"):
         for record in entry.get(field) or []:
-            if not isinstance(record, dict) or not _settles(record):
+            if not isinstance(record, dict) or not _settles(record, field):
                 continue
             keys.add((record.get("file"), record.get("line"), base_summary(record["summary"])))
     return keys
@@ -306,12 +307,11 @@ def _rounds(history: list, current: dict) -> list[dict]:
     #
     # maximum matching keeps restatement order from duplicating a finding whose
     # only match a greedy pass gave to another item with alternatives.
-    # the stdin partitions still hold what §4i recorded as fixed.
-    kept = [
-        f
-        for f in _unmatched(current["candidates"], existing["candidates"], current)
-        if _key(f) not in existing["settled"]
-    ]
+    #
+    # the stdin partitions still hold what §4i recorded as fixed. drop it before
+    # matching, or it can take an open neighbor's match and duplicate that item.
+    fresh = [f for f in current["candidates"] if _key(f) not in existing["settled"]]
+    kept = _unmatched(fresh, existing["candidates"], current)
     current_candidates = {id(f) for f in current["candidates"]}
     existing_candidates = {id(f) for f in existing["candidates"]}
     settlers = _unmatched(

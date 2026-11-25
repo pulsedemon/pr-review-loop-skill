@@ -421,6 +421,22 @@ def test_a_fixed_nit_stays_settled_when_its_iteration_is_folded_in():
     assert collect(current(1, nits=[dict(f)], ran=["tests"]), [e])["nits"] == []
 
 
+def test_a_folded_fixed_nit_does_not_duplicate_its_open_neighbor():
+    # listed first, the fixed nit would take the neighbor's fuzzy match
+    done = finding(severity="nit", line=10, summary="typo in the retry budget comment")
+    left = finding(severity="nit", line=13, summary="typo in the retry budget comment header")
+    e = entry(1, findings=[done, left], ran=["tests"], addressed=[fixed(done)])
+    payload = current(1, nits=[dict(done), dict(left)], ran=["tests"])
+    assert summaries(collect(payload, [e])["nits"]) == [left["summary"]]
+
+
+def test_a_fixed_record_in_deferred_settles_nothing():
+    # the schema admits a fixed_from record in addressed[] only
+    f = finding(severity="nit")
+    e = entry(1, findings=[f], ran=["tests"], deferred=[fixed(f)])
+    assert summaries(collect(current(2, ran=[]), [e])["nits"]) == [f["summary"]]
+
+
 @pytest.mark.parametrize(
     "bad",
     [{"fixed_from": "blocker"}, {"summary": ["typo"]}, {"line": True}],
