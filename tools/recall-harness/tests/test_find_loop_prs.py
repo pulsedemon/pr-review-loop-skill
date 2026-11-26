@@ -200,12 +200,14 @@ def test_archived_state_prs_skips_a_non_object_state_file(tmp_path):
     assert find_loop_prs.archived_state_prs(tmp_path) == {13}
 
 
-def test_archived_state_prs_skips_unreadable_files(tmp_path):
+def test_archived_state_prs_reports_unreadable_files(tmp_path, capsys):
     loop = tmp_path / ".git" / "pr-loop"
     loop.mkdir(parents=True)
-    (loop / "state.pr12.done.json").write_text("{not json")
+    invalid = loop / "state.pr12.done.json"
+    invalid.write_text("{not json")
     (loop / "state.pr13.done.json").write_text(json.dumps({"pr_number": 13}))
     assert find_loop_prs.archived_state_prs(tmp_path) == {13}
+    assert f"archive cross-check incomplete for {invalid}:" in capsys.readouterr().err
 
 
 def test_archived_state_prs_follows_a_worktree_git_pointer(tmp_path):

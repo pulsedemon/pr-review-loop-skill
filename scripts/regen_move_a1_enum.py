@@ -250,13 +250,16 @@ def _scan_out_of_region(
     mirror_paths: list[Path],
 ) -> list[str]:
     """Return a list of "<file>:<lineno>: <line>" hits for any enum value
-    occurring outside a known region in any non-excluded file under root."""
+    occurring outside a known region in non-excluded UTF-8 text under root.
+    A NUL byte identifies binary input. Unreadable text makes the scan incomplete."""
     mirror_set = {p.resolve() for p in mirror_paths}
     manifest_resolved = manifest.resolve()
     hits: list[str] = []
-    if not root.exists():
-        return hits
-    for dirpath, dirnames, filenames in os.walk(root):
+
+    def fail_walk(error: OSError) -> None:
+        generator_io.fail(f"cannot scan {root}: {error}")
+
+    for dirpath, dirnames, filenames in os.walk(root, onerror=fail_walk):
         current_dir = Path(dirpath)
         rel_dir = current_dir.relative_to(root)
         dirnames[:] = sorted(d for d in dirnames if not _is_excluded(rel_dir / d))
@@ -271,9 +274,12 @@ def _scan_out_of_region(
             if resolved in mirror_set:
                 continue
             try:
-                text = path.read_text(encoding="utf-8")
-            except (OSError, UnicodeDecodeError):
-                continue
+                data = path.read_bytes()
+                if b"\0" in data:
+                    continue
+                text = data.decode("utf-8")
+            except (OSError, UnicodeDecodeError) as error:
+                generator_io.fail(f"cannot scan {path}: {error}")
             for lineno, line in enumerate(text.splitlines(), start=1):
                 for v in values:
                     if re.search(r"\b" + re.escape(v) + r"\b", line):

@@ -5,6 +5,7 @@ import io
 import os
 import re
 import sys
+import tempfile
 from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import NoReturn
@@ -15,18 +16,24 @@ MANIFEST_ERROR_EXIT = 3
 
 def atomic_write(path: Path, content: str | bytes) -> None:
     """preserve target permissions when replacing generated content."""
-    tmp = path.with_suffix(path.suffix + ".tmp")
+    binary = isinstance(content, bytes)
+    stream = tempfile.NamedTemporaryFile(
+        mode="wb" if binary else "w",
+        encoding=None if binary else "utf-8",
+        dir=path.parent,
+        prefix=f".{path.name}.",
+        suffix=".tmp",
+        delete=False,
+    )
+    tmp = Path(stream.name)
     try:
-        if isinstance(content, bytes):
-            tmp.write_bytes(content)
-        else:
-            tmp.write_text(content, encoding="utf-8")
+        with stream:
+            stream.write(content)
         os.chmod(tmp, path.stat().st_mode & 0o7777)
         os.replace(tmp, path)
-    except Exception:
+    except BaseException:
         try:
-            if tmp.exists():
-                tmp.unlink()
+            tmp.unlink()
         except OSError:
             # keep cleanup errors from hiding the write failure.
             pass

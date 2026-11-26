@@ -292,14 +292,31 @@ def test_write_repairs_drift_across_all_surfaces(tmp_path: Path) -> None:
     assert check.returncode == 0, check.stderr
 
 
-def test_out_of_region_occurrence_in_sibling_file_exits_five(tmp_path: Path) -> None:
+def test_out_of_region_occurrence_in_sibling_file_exits_five(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     paths = _seed(tmp_path)
     stray = tmp_path / "docs" / "stray.md"
     stray.parent.mkdir(parents=True, exist_ok=True)
-    stray.write_text("This document mentions cross_fixture without any region marker.\n")
+    stray.write_text("ā mentions cross_fixture without a region marker.\n", encoding="utf-8")
+    monkeypatch.setenv("LC_ALL", "C")
+    monkeypatch.setenv("PYTHONUTF8", "0")
+    monkeypatch.setenv("PYTHONCOERCECLOCALE", "0")
     result = _run(paths, "--check", "--out-of-region-root", str(tmp_path))
     assert result.returncode == 5
-    assert "stray.md" in result.stderr, result.stderr
+    assert "stray.md:1:" in result.stderr, result.stderr
+
+
+def test_out_of_region_scan_rejects_undecodable_text_and_skips_binary(tmp_path: Path) -> None:
+    paths = _seed(tmp_path)
+    source = tmp_path / "stray.md"
+    source.write_bytes(b"caf\xe9 cross_fixture")
+    result = _run(paths, "--check", "--out-of-region-root", str(tmp_path))
+    assert result.returncode == 3
+    assert f"cannot scan {source}" in result.stderr
+    source.write_bytes(b"\x00\xffcross_fixture")
+    result = _run(paths, "--check", "--out-of-region-root", str(tmp_path))
+    assert result.returncode == 0, result.stderr
 
 
 def test_out_of_region_scan_ignores_nested_worktrees(tmp_path: Path) -> None:

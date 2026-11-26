@@ -448,6 +448,8 @@ def test_validate_coverage_allows_subset_phrases(tmp_path: Path) -> None:
         "after the round, 2 personas approved and 1 persona objected\n"
         "agreed by 3 personas\n"
         "3 personas agreed in total\n"
+        "The proposal was agreed by 3 personas in total silence.\n"
+        "The revisions agreed by 3 personas total, on average, five pages.\n"
         "The revisions agreed by 3 personas total five pages.\n"
         "The revisions agreed by 3 personas total (on average) five pages.\n"
         "4 Move C personas link to docs/procedure-moves.md\n"
@@ -462,6 +464,9 @@ def test_validate_coverage_allows_subset_phrases(tmp_path: Path) -> None:
         ("The panel of 999 personas agreed", "panel of 999 personas"),
         ("A total of 11 personas agreed", "A total of 11 personas"),
         ("A total of **11 personas agreed**", "A total of **11 personas"),
+        ("A total of **11** personas agreed", "A total of **11** personas"),
+        ("A total of `11` personas agreed", "A total of `11` personas"),
+        ("agreed by 12 personas **in total**", "12 personas **in total"),
         ("agreed by 3 personas\nTotal of 11 personas agreed", "Total of 11 personas"),
         ("The other 10 personas agreed", "The other 10 personas"),
         ("agreed by 12 personas total", "12 personas total"),

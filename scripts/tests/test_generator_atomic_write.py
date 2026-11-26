@@ -13,21 +13,23 @@ def test_atomic_write_preserves_mode(tmp_path: Path, mode: int) -> None:
     target = tmp_path / "target.sh"
     target.write_text("before\n")
     target.chmod(mode)
+    other = tmp_path / "target.sh.tmp"
+    other.write_text("reserved")
 
     generator_io.atomic_write(target, "after\n")
 
     assert target.read_text() == "after\n"
+    assert other.read_text() == "reserved"
     assert target.stat().st_mode & 0o7777 == mode
 
 
-@pytest.mark.parametrize("cleanup_failure", [None, "exists", "unlink"])
+@pytest.mark.parametrize("cleanup_failure", [False, True])
 def test_failed_replacement_preserves_target_and_original_error(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, cleanup_failure: str | None
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, cleanup_failure: bool
 ) -> None:
     target = tmp_path / "target.sh"
     target.write_text("before\n")
     target.chmod(0o755)
-    temporary = tmp_path / "target.sh.tmp"
     replacement_error = OSError("replacement failed")
 
     def fail_replace(source: Path, destination: Path) -> None:
@@ -38,8 +40,8 @@ def test_failed_replacement_preserves_target_and_original_error(
 
     with monkeypatch.context() as failure_patch:
         failure_patch.setattr(generator_io.os, "replace", fail_replace)
-        if cleanup_failure is not None:
-            failure_patch.setattr(Path, cleanup_failure, fail_cleanup)
+        if cleanup_failure:
+            failure_patch.setattr(Path, "unlink", fail_cleanup)
 
         with pytest.raises(OSError) as raised:
             generator_io.atomic_write(target, "after\n")
@@ -47,4 +49,4 @@ def test_failed_replacement_preserves_target_and_original_error(
     assert raised.value is replacement_error
     assert target.read_text() == "before\n"
     assert target.stat().st_mode & 0o7777 == 0o755
-    assert temporary.exists() is (cleanup_failure is not None)
+    assert len(list(tmp_path.glob("*.tmp"))) == int(cleanup_failure)

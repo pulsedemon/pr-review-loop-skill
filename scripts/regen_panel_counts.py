@@ -300,9 +300,9 @@ def _run_validate_markers(*, corpus_root: Path) -> int:
 
 # match punctuation-led and wrapped counts without matching tokens such as B2.
 _COVERAGE_BROAD_RE = re.compile(
-    r"\b(?:(?i:(?:a\s+)?total\s+of|panel\s+of|the\s+other|all(?:\s+of)?(?:\s+the)?)\s+[*_`]*)?"
+    r"\b(?:(?i:(?:a\s+)?total\s+of|panel\s+of|the\s+other|all(?:\s+of)?(?:\s+the)?)\s+)?"
     r"\d+\s+(?:reviewer\s+)?personas?\b"
-    r"(?:\s+(?i:in\s+total)\b|\s+(?i:total)(?=\s*(?:[.,;:!?)]|$|\(panel\s*\+\s*adversary\))))?"
+    r"(?:\s+(?i:(?:in\s+)?total)(?=\s*(?:[.;:!?)]|$|\(panel\s*\+\s*adversary\))))?"
 )
 
 # total-shaped phrases must stay generated even when their counts currently match.
@@ -315,7 +315,16 @@ _COVERAGE_ALLOW_PATTERNS: tuple[re.Pattern[str], ...] = (
 )
 
 
+def _mask_word_markup(match: re.Match[str]) -> str:
+    """keep source offsets while matching words next to Markdown emphasis or code delimiters."""
+    text = match.string
+    left = text[max(0, match.start() - 1) : match.start()]
+    right = text[match.end() : match.end() + 1]
+    return " " * len(match[0]) if left.isalnum() != right.isalnum() else match[0]
+
+
 def _unwrapped_counts(paragraph: str) -> Iterator[re.Match[str]]:
+    paragraph = re.sub(r"[*_`]+", _mask_word_markup, paragraph)
     allowed_spans = [
         match.span()
         for pattern in _COVERAGE_ALLOW_PATTERNS
@@ -355,7 +364,7 @@ def _run_validate_coverage(*, corpus_root: Path) -> int:
                 start_line = line_number + paragraph.count("\n", 0, m.start())
                 failures.append(
                     f"{path}: line {start_line}: unhandled numbered persona-count phrase: "
-                    f"{m.group(0)!r}\n"
+                    f"{paragraph[m.start() : m.end()]!r}\n"
                     f"    fix: wrap the phrase in a regen:panel-count region, OR add an "
                     f"allowlist pattern to _COVERAGE_ALLOW_PATTERNS in "
                     f"scripts/regen_panel_counts.py."

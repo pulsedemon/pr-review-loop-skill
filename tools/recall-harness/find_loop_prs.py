@@ -133,8 +133,12 @@ def archived_state_prs(checkout: Path) -> set[int]:
         if path.name == "state.json":
             continue
         try:
-            state = json.loads(path.read_text())
-        except (OSError, json.JSONDecodeError):
+            state = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+            print(
+                f"find_loop_prs: archive cross-check incomplete for {path}: {error}",
+                file=sys.stderr,
+            )
             continue
         if not isinstance(state, dict):
             continue
