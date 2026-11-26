@@ -80,7 +80,7 @@ The useful rate covers manually judged, uncorroborated loop findings: `loop_true
 ## Workflow
 
 1. Run A1 + A2.
-2. Open `labels.csv` and for each new row needed (from `unmatched/*.jsonl`, `matched/*.jsonl`, `loop_unmatched/*.jsonl`, and the corpus files for the unanchored buckets), add a row.
+2. Open `labels.csv` and for each new row needed (from `unmatched/<owner>/<repo>/pr-<N>.jsonl`, `matched/<owner>/<repo>/pr-<N>.jsonl`, `loop_unmatched/<owner>/<repo>/pr-<N>.jsonl`, and the corpus files for the unanchored buckets), add a row.
 3. Apply the label. Use `notes` liberally when in doubt: future-you will thank you.
 4. Run A4 (`report.py`) to regenerate REPORT.md.
 5. Commit `labels.csv` (and `corpus-manifest.csv` if you added PRs). `REPORT.md` is generated, not committed.

@@ -18,6 +18,7 @@ import math
 import re
 import sys
 from collections import Counter, defaultdict
+from itertools import pairwise
 from pathlib import Path
 from typing import NamedTuple
 
@@ -580,16 +581,8 @@ def main() -> int:
             )
         # the final upper bound includes scores of exactly one in half-open bins.
         if rm_total:
-            bins = [
-                (0.00, 0.10),
-                (0.10, 0.20),
-                (0.20, 0.30),
-                (0.30, 0.40),
-                (0.40, NEAR_MISS_DECISION_CUT),
-                (NEAR_MISS_DECISION_CUT, 0.50),
-                (0.50, 0.75),
-                (0.75, 1.01),
-            ]
+            edges = sorted({0.00, 0.10, 0.20, 0.30, 0.40, NEAR_MISS_DECISION_CUT, 0.50, 0.75, 1.01})
+            bins = list(pairwise(edges))
             counts = [sum(1 for r in real_miss_with_score if lo <= r.score < hi) for lo, hi in bins]
             out.write(f"Real_miss near-miss score distribution (n={rm_total}):\n")
             for (lo, hi), c in zip(bins, counts, strict=True):
