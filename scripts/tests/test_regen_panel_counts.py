@@ -69,12 +69,17 @@ def test_check_reports_drift_on_each_surface(
         "the panel of 99 personas\n"  # drifted: should be 3
         "<!-- regen:panel-count-total:end -->\n"
     )
-    (root / surface).write_text(drifted)
+    (root / surface).write_bytes(drifted.rstrip("\n").replace("\n", "\r").encode())
     rc = _run(["--check", "--manifest", str(manifest), "--corpus-root", str(root)])
     assert rc == generator_io.DRIFT_EXIT == 5
     err = capsys.readouterr().err
     assert surface in err
     assert "regen.sh" in err
+    lines = err.split("\n")
+    assert "-the panel of 99 personas" in lines
+    assert "+the panel of 3 personas" in lines
+    end = lines.index(" <!-- regen:panel-count-total:end -->")
+    assert lines[end + 1] == r"\ No newline at end of file"
 
 
 def test_write_repairs_drift_across_all_surfaces(tmp_path: Path) -> None:

@@ -36,7 +36,13 @@ def emit_drift_diff(path: Path, current: str, regenerated: str) -> None:
         fromfile=str(path),
         tofile=f"{path} (regenerated)",
     )
-    sys.stderr.writelines(diff)
+    for line in diff:
+        if line.endswith("\r"):
+            print(line[:-1], file=sys.stderr)
+        elif line.endswith("\n"):
+            sys.stderr.write(line)
+        else:
+            print(line, r"\ No newline at end of file", sep="\n", file=sys.stderr)
 
 
 def fail(message: str) -> NoReturn:
