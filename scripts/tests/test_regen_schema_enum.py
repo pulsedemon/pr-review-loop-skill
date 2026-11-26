@@ -55,6 +55,7 @@ def test_write_rewrites_drifted_schema(tmp_path: Path) -> None:
     manifest = write_personas_yaml(tmp_path, ["alpha", "beta", "gamma"])
     schema = _write_schema(tmp_path, ["alpha"])  # drifted: missing beta, gamma, adversary
     original = schema.read_text().replace("\n", "\r\n").encode()
+    original = original.replace(b'"alpha"\r\n', b'"alpha"\n')
     schema.write_bytes(original)
     schema.chmod(0o755)
     rc = _run(["--write", "--manifest", str(manifest), "--schema", str(schema)])
@@ -63,7 +64,7 @@ def test_write_rewrites_drifted_schema(tmp_path: Path) -> None:
     assert data["properties"]["reviewer"]["enum"] == ["alpha", "beta", "gamma", "adversary"]
     assert schema.stat().st_mode & 0o7777 == 0o755
     expected = original.replace(
-        b'"alpha"', b'"alpha",\r\n        "beta",\r\n        "gamma",\r\n        "adversary"'
+        b'"alpha"\n', b'"alpha",\n        "beta",\r\n        "gamma",\r\n        "adversary"\r\n'
     )
     assert schema.read_bytes() == expected
     assert _run(["--check", "--manifest", str(manifest), "--schema", str(schema)]) == 0

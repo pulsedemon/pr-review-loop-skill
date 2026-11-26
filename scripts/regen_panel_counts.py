@@ -309,6 +309,11 @@ _COVERAGE_BROAD_RE = re.compile(
     r"|\s+(?i:(?:in\s+)?total)(?=\s*(?:[.;:!?)]|$|\(panel\s*\+\s*adversary\)"
     rf"|,\s*(?i:including|excluding)\b[^,.;!?\n]*(?:[.;!?]|$)|{_TOTAL_PREFIX}\s+\d))))?"
 )
+_PARAGRAPH_BOUNDARY = re.compile(
+    r"(\n[^\S\n]*\n|^[ \t]*(?:>[ \t]*|(?:[-+*]|\d{1,9}[.)])[ \t]+)*"
+    r"#{1,6}(?:[ \t]+[^\n]*)?$)",
+    re.MULTILINE,
+)
 _WORD_MARKUP = re.compile(r"[*_`]+")
 
 # total-shaped phrases must stay generated even when their counts currently match.
@@ -365,11 +370,7 @@ def _run_validate_coverage(*, corpus_root: Path) -> int:
         scan_text = "\n".join(scan_lines)
         line_number = 1
         # isolate headings and keep separators so line offsets still index the source.
-        for paragraph in re.split(
-            r"(\n[^\S\n]*\n|^ {0,3}(?:>[ \t]*)*#{1,6}(?:[ \t]+[^\n]*)?$)",
-            scan_text,
-            flags=re.MULTILINE,
-        ):
+        for paragraph in _PARAGRAPH_BOUNDARY.split(scan_text):
             for m in _unwrapped_counts(paragraph):
                 start_line = line_number + paragraph.count("\n", 0, m.start())
                 phrase = paragraph[m.start() : m.end()]

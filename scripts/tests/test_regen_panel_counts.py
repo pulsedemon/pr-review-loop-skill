@@ -532,6 +532,19 @@ def test_headings_and_blank_lines_separate_total_qualifiers_from_allowed_subsets
     assert _run(["--validate-coverage", "--corpus-root", str(root)]) == 0
 
 
+@pytest.mark.parametrize("container", ["- ", "1. ", "> - "])
+def test_list_headings_keep_their_own_counts(tmp_path: Path, capsys, container: str) -> None:
+    root = _make_corpus(tmp_path)
+    (root / "SKILL.md").write_text(
+        f"{container}## 99 personas: The Other\n  2 personas approved.\n"
+    )
+    assert _run(["--validate-coverage", "--corpus-root", str(root)]) == 5
+    label = "unhandled numbered persona-count phrase: "
+    assert [
+        line.partition(label)[2] for line in capsys.readouterr().err.splitlines() if label in line
+    ] == ["'99 personas'"]
+
+
 def test_validate_coverage_catches_phrase_split_across_lines(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

@@ -344,11 +344,15 @@ def test_scan_reports_undecodable_text_with_a_bom(tmp_path: Path, data: bytes) -
     assert f"cannot scan {notes}" in result.stderr
 
 
-def test_missing_scan_root_reports_incomplete_discovery(tmp_path: Path) -> None:
+def test_missing_scan_root_reports_incomplete_discovery_after_mirror_drift(tmp_path: Path) -> None:
     paths = _seed(tmp_path)
+    mirror = paths["out_schema"]
+    mirror.write_text(mirror.read_text().replace("describe_label_drift", "stale_label", 1))
     missing = tmp_path / "missing"
     result = _run(paths, "--check", "--out-of-region-root", str(missing))
     assert result.returncode == 3
+    assert f"--- {mirror}\n" in result.stderr
+    assert "stale_label" in result.stderr
     assert f"cannot scan {missing}" in result.stderr
 
 
