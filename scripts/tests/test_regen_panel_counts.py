@@ -156,20 +156,18 @@ def test_subset_phrases_outside_regions_are_not_touched(tmp_path: Path) -> None:
 
 
 def test_validate_markers_passes_on_balanced_tree(tmp_path: Path) -> None:
-    manifest = write_personas_yaml(tmp_path, ["a", "b"])  # n = 2 (irrelevant for marker validation)
     root = _make_corpus(tmp_path)
     (root / "SKILL.md").write_text(
         _total_region("{n} {personas|persona}", "2 personas")
         + _total_plus_1_region("{n} personas", "3 personas")
     )
-    rc = _run(["--validate-markers", "--manifest", str(manifest), "--corpus-root", str(root)])
+    rc = _run(["--validate-markers", "--corpus-root", str(root)])
     assert rc == 0
 
 
 def test_validate_markers_fails_on_unbalanced_start(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    manifest = write_personas_yaml(tmp_path, ["a", "b"])
     root = _make_corpus(tmp_path)
     bad = root / "reviewers" / "broken.md"
     bad.write_text(
@@ -178,7 +176,7 @@ def test_validate_markers_fails_on_unbalanced_start(
         "the panel of 2 personas\n"
         # missing :end marker
     )
-    rc = _run(["--validate-markers", "--manifest", str(manifest), "--corpus-root", str(root)])
+    rc = _run(["--validate-markers", "--corpus-root", str(root)])
     assert rc == generator_io.DRIFT_EXIT == 5
     err = capsys.readouterr().err
     assert "broken.md" in err
@@ -187,11 +185,10 @@ def test_validate_markers_fails_on_unbalanced_start(
 def test_validate_markers_fails_on_orphan_end(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    manifest = write_personas_yaml(tmp_path, ["a", "b"])
     root = _make_corpus(tmp_path)
     bad = root / "reviewers" / "orphan.md"
     bad.write_text("intro\n<!-- regen:panel-count-total:end -->\n")
-    rc = _run(["--validate-markers", "--manifest", str(manifest), "--corpus-root", str(root)])
+    rc = _run(["--validate-markers", "--corpus-root", str(root)])
     assert rc == generator_io.DRIFT_EXIT == 5
     err = capsys.readouterr().err
     assert "orphan.md" in err
@@ -232,10 +229,9 @@ def test_write_atomically_creates_no_tmp_files(tmp_path: Path) -> None:
 
 def test_validate_coverage_passes_on_empty_corpus(tmp_path: Path) -> None:
     """A corpus with no numbered persona-count phrases is trivially covered."""
-    manifest = write_personas_yaml(tmp_path, ["a", "b"])
     root = _make_corpus(tmp_path)
     (root / "SKILL.md").write_text("intro paragraph\n\nno counts here\n")
-    rc = _run(["--validate-coverage", "--manifest", str(manifest), "--corpus-root", str(root)])
+    rc = _run(["--validate-coverage", "--corpus-root", str(root)])
     assert rc == 0
 
 
@@ -243,10 +239,9 @@ def test_validate_coverage_fails_on_unhandled_unwrapped_phrase(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """An unwrapped panel-count phrase that doesn't match the allowlist fails."""
-    manifest = write_personas_yaml(tmp_path, ["a", "b"])
     root = _make_corpus(tmp_path)
     (root / "SKILL.md").write_text("the spec mentions 11 reviewer personas reviewing this PR\n")
-    rc = _run(["--validate-coverage", "--manifest", str(manifest), "--corpus-root", str(root)])
+    rc = _run(["--validate-coverage", "--corpus-root", str(root)])
     assert rc == generator_io.DRIFT_EXIT == 5
     err = capsys.readouterr().err
     assert "unhandled numbered persona-count phrase" in err
@@ -262,7 +257,6 @@ def test_validate_coverage_allows_phrases_inside_regions(tmp_path: Path) -> None
     flip the verdict, isolating the region-exemption code path from
     the allowlist-exemption path.
     """
-    manifest = write_personas_yaml(tmp_path, ["a", "b"])
     root = _make_corpus(tmp_path)
     (root / "SKILL.md").write_text(
         _total_region(
@@ -270,7 +264,7 @@ def test_validate_coverage_allows_phrases_inside_regions(tmp_path: Path) -> None
             "the spec mentions 11 reviewer personas reviewing this PR",
         )
     )
-    rc = _run(["--validate-coverage", "--manifest", str(manifest), "--corpus-root", str(root)])
+    rc = _run(["--validate-coverage", "--corpus-root", str(root)])
     assert rc == 0
 
 
@@ -284,14 +278,13 @@ def test_validate_coverage_rejects_unwrapped_total_shaped_phrases(
     silently accept any digit (the gap the deleted bats first/second
     @test blocks previously closed).
     """
-    manifest = write_personas_yaml(tmp_path, ["a", "b"])
     root = _make_corpus(tmp_path)
     (root / "SKILL.md").write_text(
         "the panel of 11 reviewer personas runs in parallel\n"
         "12 personas total (panel + adversary)\n"
         "the other 10 personas review\n"
     )
-    rc = _run(["--validate-coverage", "--manifest", str(manifest), "--corpus-root", str(root)])
+    rc = _run(["--validate-coverage", "--corpus-root", str(root)])
     assert rc == generator_io.DRIFT_EXIT == 5
     err = capsys.readouterr().err
     assert "11 reviewer personas" in err
@@ -302,30 +295,16 @@ def test_validate_coverage_rejects_unwrapped_total_shaped_phrases(
 def test_validate_coverage_rejects_unwrapped_total_regardless_of_number(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """Both a matching and a wrong number fail outside a region.
-
-    --validate-coverage doesn't compare digits against the manifest; it
-    rejects unwrapped total shapes outright. Wrapping is the only way to
-    pass, which then routes the numeric check to --check.
-    """
-    manifest = write_personas_yaml(tmp_path, ["a", "b"])  # len(panel) = 2
-
-    # Wrong number (clearly drifted): must fail.
     wrong_root = _make_corpus(tmp_path / "wrong")
     (wrong_root / "SKILL.md").write_text("panel of 999 reviewer personas\n")
-    rc = _run(
-        ["--validate-coverage", "--manifest", str(manifest), "--corpus-root", str(wrong_root)]
-    )
+    rc = _run(["--validate-coverage", "--corpus-root", str(wrong_root)])
     assert rc == generator_io.DRIFT_EXIT == 5
     err = capsys.readouterr().err
     assert "999 reviewer personas" in err
 
-    # Matching number (still unwrapped): must also fail.
     match_root = _make_corpus(tmp_path / "match")
     (match_root / "SKILL.md").write_text("panel of 2 reviewer personas\n")
-    rc = _run(
-        ["--validate-coverage", "--manifest", str(manifest), "--corpus-root", str(match_root)]
-    )
+    rc = _run(["--validate-coverage", "--corpus-root", str(match_root)])
     assert rc == generator_io.DRIFT_EXIT == 5
     err = capsys.readouterr().err
     assert "2 reviewer personas" in err
@@ -333,14 +312,13 @@ def test_validate_coverage_rejects_unwrapped_total_regardless_of_number(
 
 def test_validate_coverage_allows_subset_phrases(tmp_path: Path) -> None:
     """Subset-of-panel phrases (e.g. '2 personas approved') are allowlisted."""
-    manifest = write_personas_yaml(tmp_path, ["a", "b"])
     root = _make_corpus(tmp_path)
     (root / "SKILL.md").write_text(
         "after the round, 2 personas approved and 1 persona objected\n"
         "agreed by 3 personas\n"
         "4 Move C personas link to docs/procedure-moves.md\n"
     )
-    rc = _run(["--validate-coverage", "--manifest", str(manifest), "--corpus-root", str(root)])
+    rc = _run(["--validate-coverage", "--corpus-root", str(root)])
     assert rc == 0
 
 
@@ -358,10 +336,9 @@ def test_validate_coverage_catches_phrase_split_across_lines(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """A numbered persona-count phrase wrapped across a line break still fails."""
-    manifest = write_personas_yaml(tmp_path, ["a", "b"])
     root = _make_corpus(tmp_path)
     (root / "SKILL.md").write_text("the spec mentions 11\nreviewer personas reviewing this PR\n")
-    rc = _run(["--validate-coverage", "--manifest", str(manifest), "--corpus-root", str(root)])
+    rc = _run(["--validate-coverage", "--corpus-root", str(root)])
     assert rc == generator_io.DRIFT_EXIT == 5
     err = capsys.readouterr().err
     assert "unhandled numbered persona-count phrase" in err
@@ -371,10 +348,9 @@ def test_validate_coverage_catches_parenthesized_phrase(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """A persona-count phrase led by punctuation (no whitespace) still fails."""
-    manifest = write_personas_yaml(tmp_path, ["a", "b"])
     root = _make_corpus(tmp_path)
     (root / "SKILL.md").write_text("(11 reviewer personas reviewing this PR)\n")
-    rc = _run(["--validate-coverage", "--manifest", str(manifest), "--corpus-root", str(root)])
+    rc = _run(["--validate-coverage", "--corpus-root", str(root)])
     assert rc == generator_io.DRIFT_EXIT == 5
     err = capsys.readouterr().err
     assert "unhandled numbered persona-count phrase" in err
@@ -382,12 +358,11 @@ def test_validate_coverage_catches_parenthesized_phrase(
 
 def test_validate_coverage_ignores_non_persona_numbers(tmp_path: Path) -> None:
     """Numbered tokens that aren't persona-counts (e.g. '5 minutes') are not flagged."""
-    manifest = write_personas_yaml(tmp_path, ["a", "b"])
     root = _make_corpus(tmp_path)
     (root / "SKILL.md").write_text(
         "wait 5 minutes for CI\n"
         "see issue #42 for context\n"
         "B2 persona is a Move A.1 sub-mechanic label\n"  # word-boundary anchor blocks this
     )
-    rc = _run(["--validate-coverage", "--manifest", str(manifest), "--corpus-root", str(root)])
+    rc = _run(["--validate-coverage", "--corpus-root", str(root)])
     assert rc == 0
