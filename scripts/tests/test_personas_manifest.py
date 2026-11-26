@@ -324,6 +324,21 @@ def test_cli_rejects_legacy_file_key(
     assert "unknown key(s): ['file']" in capsys.readouterr().err
 
 
+@pytest.mark.parametrize("name", ["alpha", "adversary"])
+def test_persona_name_rejects_a_trailing_newline(tmp_path: Path, name: str) -> None:
+    manifest = _MINIMAL_VALID.replace(f"name: {name}\n", f'name: "{name}\\n"\n')
+    with pytest.raises(ManifestError, match="must match"):
+        load_manifest(_write(tmp_path, manifest))
+
+
+def test_unknown_keys_of_different_types_report_a_manifest_error(tmp_path: Path) -> None:
+    manifest = _MINIMAL_VALID.replace(
+        "    description: alpha", "    file: alpha.md\n    1: extra\n    description: alpha"
+    )
+    with pytest.raises(ManifestError, match=r"unknown key\(s\): \['file', 1\]"):
+        load_manifest(_write(tmp_path, manifest))
+
+
 def test_unknown_adversary_key_rejected(tmp_path: Path) -> None:
     p = _write(
         tmp_path,

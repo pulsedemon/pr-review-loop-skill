@@ -119,13 +119,13 @@ def _parse_persona(path: Path, label: str, raw: object, allowed_keys: frozenset[
     extra = set(raw.keys()) - allowed_keys
     if extra:
         raise ManifestError(
-            f"{path}: {label} has unknown key(s): {sorted(extra)} "
+            f"{path}: {label} has unknown key(s): {sorted(extra, key=repr)} "
             f"(typo? allowed: {sorted(allowed_keys)})"
         )
     name = raw["name"]
     if not isinstance(name, str):
         raise ManifestError(f"{path}: {label} 'name' must be a string, got {type(name).__name__}")
-    if not _NAME_RE.match(name):
+    if not _NAME_RE.fullmatch(name):
         raise ManifestError(
             f"{path}: {label}: 'name' {name!r} must match {_NAME_RE.pattern} "
             f"(lowercase identifier; constrains downstream filename + schema enum splice)"
