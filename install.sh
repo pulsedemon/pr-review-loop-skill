@@ -227,20 +227,33 @@ target_is_source() {
   [[ ! -L "$1" && -d "$1" ]] && [[ "$(canonical_dir "$1")" == "$SOURCE_DIR" ]]
 }
 
+# True when the symlink at $1 points at $2. A directory source also matches
+# relative and logical links to it; a file source matches only its exact path.
 symlink_points_to_source() {
-  local link_path="$1"
-  local current resolved
+  local link_path="$1" src="$2"
+  local current
   current="$(readlink "$link_path")"
-  [[ "$current" == "$SOURCE_DIR" ]] && return 0
+  [[ "$current" == "$src" ]] && return 0
+  [[ -d "$src" ]] || return 1
   if [[ "$current" != /* ]]; then
     current="$(dirname "$link_path")/$current"
   fi
-  if [[ -d "$current" ]]; then
-    resolved="$(canonical_dir "$current")"
+  [[ -d "$current" ]] && [[ "$(canonical_dir "$current")" == "$src" ]]
+}
+
+# Removes the symlink $2 only when it points at $1. A foreign link stays, with a
+# warning, because removing links we did not create is never the installer's job.
+remove_own_link() {
+  local src="$1" target="$2" label="$3"
+  if symlink_points_to_source "$target" "$src"; then
+    rm "$target" || {
+      echo "ERROR: cannot remove $target ($label)" >&2
+      return 1
+    }
+    echo "removed symlink: $target ($label)"
   else
-    return 1
+    echo "skipped (symlink points elsewhere): $target -> $(readlink "$target") ($label)" >&2
   fi
-  [[ "$resolved" == "$SOURCE_DIR" ]]
 }
 
 cursor_write_marker() {
@@ -422,17 +435,7 @@ cursor_install_one() {
 
   if ((UNINSTALL)); then
     if [[ -L "$CURSOR_TARGET" ]]; then
-      local current
-      current="$(readlink "$CURSOR_TARGET")"
-      if symlink_points_to_source "$CURSOR_TARGET"; then
-        rm "$CURSOR_TARGET" || {
-          echo "ERROR: cannot remove $CURSOR_TARGET (Cursor)" >&2
-          return 1
-        }
-        echo "removed symlink: $CURSOR_TARGET (Cursor)"
-      else
-        echo "skipped (symlink points elsewhere): $CURSOR_TARGET -> $current (Cursor)" >&2
-      fi
+      remove_own_link "$SOURCE_DIR" "$CURSOR_TARGET" "Cursor" || return 1
     elif cursor_is_our_install; then
       rm -rf "$CURSOR_TARGET" || {
         echo "ERROR: cannot remove $CURSOR_TARGET (Cursor)" >&2
@@ -455,7 +458,7 @@ cursor_install_one() {
   if [[ -L "$CURSOR_TARGET" ]]; then
     local current
     current="$(readlink "$CURSOR_TARGET")"
-    if symlink_points_to_source "$CURSOR_TARGET"; then
+    if symlink_points_to_source "$CURSOR_TARGET" "$SOURCE_DIR"; then
       rm "$CURSOR_TARGET" || {
         echo "ERROR: cannot remove $CURSOR_TARGET (Cursor)" >&2
         return 1
@@ -502,30 +505,24 @@ cursor_install_one() {
   fi
 }
 
+# Symlinks $2 to $1. Install refuses a foreign regular file even with --force,
+# and a foreign symlink unless --force. Uninstall removes only our own link and
+# skips anything else without failing.
 link_one() {
-  local target="$1"
-  local label="$2"
+  local src="$1"
+  local target="$2"
+  local label="$3"
   local parent
   parent="$(dirname "$target")"
 
-  if target_is_source "$target"; then
+  if [[ -d "$src" ]] && target_is_source "$target"; then
     echo "skipped (target is this source checkout): $target ($label)"
     return
   fi
 
   if ((UNINSTALL)); then
     if [[ -L "$target" ]]; then
-      local current
-      current="$(readlink "$target")"
-      if symlink_points_to_source "$target"; then
-        rm "$target" || {
-          echo "ERROR: cannot remove $target ($label)" >&2
-          return 1
-        }
-        echo "removed symlink: $target ($label)"
-      else
-        echo "skipped (symlink points elsewhere): $target -> $current ($label)" >&2
-      fi
+      remove_own_link "$src" "$target" "$label" || return 1
     elif [[ -e "$target" ]]; then
       echo "skipped (not a symlink): $target ($label)"
     else
@@ -542,7 +539,7 @@ link_one() {
   if [[ -L "$target" ]]; then
     local current
     current="$(readlink "$target")"
-    if symlink_points_to_source "$target"; then
+    if symlink_points_to_source "$target" "$src"; then
       if ! ((FORCE)); then
         echo "already linked: $target ($label)"
         return
@@ -558,89 +555,12 @@ link_one() {
       echo "ERROR: cannot remove $target ($label)" >&2
       return 1
     }
-    ln -s "$SOURCE_DIR" "$target" || {
-      echo "ERROR: failed to link $target ($label)" >&2
-      return 1
-    }
-    echo "re-linked: $target -> $SOURCE_DIR ($label)"
-    return
-  elif [[ -e "$target" ]]; then
-    echo "ERROR: $target exists and is not a symlink. Remove it manually." >&2
-    return 1
-  fi
-
-  ln -s "$SOURCE_DIR" "$target" || {
-    echo "ERROR: failed to link $target ($label)" >&2
-    return 1
-  }
-  echo "linked: $target -> $SOURCE_DIR ($label)"
-}
-
-# Per-file variant of link_one for the opencode agent files: the identity
-# oracle compares the link value to one specific source file, not the repo
-# root. On install, a foreign file or foreign symlink is refused with a
-# non-zero return; --force re-establishes a foreign or stale symlink, while a
-# foreign regular file is never replaced, with or without --force. On uninstall
-# a foreign-symlink skip warns on stderr and a non-symlink skip prints to
-# stdout; both stay non-fatal, because removing links we did not create is
-# never the installer's job.
-link_file_one() {
-  local src="$1"
-  local target="$2"
-  local label="$3"
-  local parent
-  parent="$(dirname "$target")"
-
-  if ((UNINSTALL)); then
-    if [[ -L "$target" ]]; then
-      local current
-      current="$(readlink "$target")"
-      if [[ "$current" == "$src" ]]; then
-        rm "$target" || {
-          echo "ERROR: cannot remove $target ($label)" >&2
-          return 1
-        }
-        echo "removed symlink: $target ($label)"
-      else
-        echo "skipped (symlink points elsewhere): $target -> $current ($label)" >&2
-      fi
-    elif [[ -e "$target" ]]; then
-      echo "skipped (not a symlink): $target ($label)"
-    else
-      echo "not installed: $target ($label)"
-    fi
-    return 0
-  fi
-
-  mkdir -p "$parent" || {
-    echo "ERROR: cannot create $parent ($label)" >&2
-    return 1
-  }
-
-  if [[ -L "$target" ]]; then
-    local current
-    current="$(readlink "$target")"
-    if [[ "$current" == "$src" ]]; then
-      if ! ((FORCE)); then
-        echo "already linked: $target ($label)"
-        return 0
-      fi
-    elif ! ((FORCE)); then
-      echo "skipped (symlink points elsewhere): $target -> $current ($label)" >&2
-      return 1
-    fi
-    # Reaching here means --force: re-establish the link even when foreign or
-    # stale. It is also the recovery path after the checkout moved.
-    rm "$target" || {
-      echo "ERROR: cannot remove $target ($label)" >&2
-      return 1
-    }
     ln -s "$src" "$target" || {
       echo "ERROR: failed to link $target ($label)" >&2
       return 1
     }
     echo "re-linked: $target -> $src ($label)"
-    return 0
+    return
   elif [[ -e "$target" ]]; then
     echo "ERROR: $target exists and is not a symlink ($label). Remove it manually." >&2
     return 1
@@ -656,9 +576,9 @@ link_file_one() {
 opencode_install_one() {
   local rc=0
   local agent
-  link_one "$OPENCODE_TARGET" "opencode" || rc=1
+  link_one "$SOURCE_DIR" "$OPENCODE_TARGET" "opencode" || rc=1
   for agent in "${OPENCODE_AGENTS[@]}"; do
-    link_file_one "${OPENCODE_AGENT_SRC_DIR}/${agent}" \
+    link_one "${OPENCODE_AGENT_SRC_DIR}/${agent}" \
       "${OPENCODE_AGENT_DIR}/${agent}" "opencode agent ${agent%.md}" || rc=1
   done
   return "$rc"
@@ -674,12 +594,12 @@ if ((WANT_CURSOR)); then
 fi
 
 if ((WANT_CLAUDE)); then
-  link_one "$CLAUDE_TARGET" "Claude Code" || install_rc=1
+  link_one "$SOURCE_DIR" "$CLAUDE_TARGET" "Claude Code" || install_rc=1
 fi
 
 if ((WANT_CODEX)); then
-  link_one "$CODEX_TARGET" "Codex" || install_rc=1
-  link_one "$CODEX_SHARED_TARGET" "Codex shared skills" || install_rc=1
+  link_one "$SOURCE_DIR" "$CODEX_TARGET" "Codex" || install_rc=1
+  link_one "$SOURCE_DIR" "$CODEX_SHARED_TARGET" "Codex shared skills" || install_rc=1
 fi
 
 if ((WANT_OPENCODE)); then
