@@ -12,9 +12,9 @@ HARNESS = Path(__file__).resolve().parents[1]
 REPO_ROOT = HARNESS.parent.parent
 
 
-def test_collect_default_out_dir_is_anchored():
-    assert collect_pr_corpus.DEFAULT_OUT_DIR.is_absolute()
-    assert collect_pr_corpus.DEFAULT_OUT_DIR == HARNESS / "corpus"
+def test_collect_default_corpus_dir_is_anchored():
+    assert collect_pr_corpus.DEFAULT_CORPUS_DIR.is_absolute()
+    assert collect_pr_corpus.DEFAULT_CORPUS_DIR == HARNESS / "corpus"
 
 
 def test_match_external_default_dirs_are_anchored():

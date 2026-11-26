@@ -1,10 +1,16 @@
-"""shared finding identity and corpus validation for the recall harness."""
+"""shared paths, finding identity and corpus validation for the recall harness."""
 
 from __future__ import annotations
 
 import hashlib
 import json
 from pathlib import Path
+
+HARNESS_DIR = Path(__file__).resolve().parent
+DEFAULT_CORPUS_DIR = HARNESS_DIR / "corpus"
+DEFAULT_UNMATCHED_DIR = HARNESS_DIR / "unmatched"
+DEFAULT_MATCHED_DIR = HARNESS_DIR / "matched"
+DEFAULT_LOOP_UNMATCHED_DIR = HARNESS_DIR / "loop_unmatched"
 
 
 def require_corpus_version(corpus: dict, corpus_path: Path, expected_version: int) -> None:

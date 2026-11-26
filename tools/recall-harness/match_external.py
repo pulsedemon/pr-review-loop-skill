@@ -32,6 +32,11 @@ from pathlib import Path
 from types import ModuleType
 
 from _shared import (
+    DEFAULT_CORPUS_DIR,
+    DEFAULT_LOOP_UNMATCHED_DIR,
+    DEFAULT_MATCHED_DIR,
+    DEFAULT_UNMATCHED_DIR,
+    HARNESS_DIR,
     finding_id,
     require_corpus_version,
     require_nested_layout,
@@ -41,12 +46,7 @@ from collect_pr_corpus import (
     matched_filename,
 )
 
-_HARNESS_DIR = Path(__file__).resolve().parent
-DEFAULT_CORPUS_DIR = _HARNESS_DIR / "corpus"
-DEFAULT_UNMATCHED_DIR = _HARNESS_DIR / "unmatched"
-DEFAULT_MATCHED_DIR = _HARNESS_DIR / "matched"
-DEFAULT_LOOP_UNMATCHED_DIR = _HARNESS_DIR / "loop_unmatched"
-DEFAULT_MATCH_SCRIPT = _HARNESS_DIR.parents[1] / "scripts" / "finding_matcher.py"
+DEFAULT_MATCH_SCRIPT = HARNESS_DIR.parents[1] / "scripts" / "finding_matcher.py"
 
 # allow external reviewers to anchor the same issue to different lines.
 # this window is independent of the loop's finding-deduplication window.

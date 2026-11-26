@@ -81,7 +81,7 @@ It does not mean the panel found the issue *first*. A1 parses the current summar
 
 ## What does not get committed
 
-- `corpus/`, `unmatched/`, `matched/`, `REPORT.md`: generated, regeneratable. `REPORT.md` is a view over `labels.csv` + the (gitignored, possibly private-repo) corpus, so it is machine-dependent; regenerate it on demand rather than committing it.
+- `corpus/`, `unmatched/`, `matched/`, `loop_unmatched/`, `REPORT.md`: generated, regeneratable. `REPORT.md` is a view over `labels.csv` + the (gitignored, possibly private-repo) corpus, so it is machine-dependent; regenerate it on demand rather than committing it.
 
 ## Evaluating changes
 

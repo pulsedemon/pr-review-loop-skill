@@ -40,10 +40,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from _shared import canonical_summary
-
-_HARNESS_DIR = Path(__file__).resolve().parent
-DEFAULT_OUT_DIR = _HARNESS_DIR / "corpus"
+from _shared import DEFAULT_CORPUS_DIR, canonical_summary
 
 SUMMARY_MARKER = "<!-- pr-review-loop-summary -->"
 
@@ -626,7 +623,7 @@ def main() -> int:
     parser.add_argument(
         "--out-dir",
         type=Path,
-        default=DEFAULT_OUT_DIR,
+        default=DEFAULT_CORPUS_DIR,
     )
     parser.add_argument(
         "--include-open",

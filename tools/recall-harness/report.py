@@ -21,18 +21,22 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import NamedTuple
 
-from _shared import finding_id, require_corpus_version, require_nested_layout
+from _shared import (
+    DEFAULT_CORPUS_DIR,
+    DEFAULT_LOOP_UNMATCHED_DIR,
+    DEFAULT_MATCHED_DIR,
+    DEFAULT_UNMATCHED_DIR,
+    HARNESS_DIR,
+    finding_id,
+    require_corpus_version,
+    require_nested_layout,
+)
 from collect_pr_corpus import (
     CORPUS_VERSION,
     matched_filename,
 )
 
-_HARNESS_DIR = Path(__file__).resolve().parent
-DEFAULT_CORPUS_DIR = _HARNESS_DIR / "corpus"
-DEFAULT_UNMATCHED_DIR = _HARNESS_DIR / "unmatched"
-DEFAULT_MATCHED_DIR = _HARNESS_DIR / "matched"
-DEFAULT_LOOP_UNMATCHED_DIR = _HARNESS_DIR / "loop_unmatched"
-DEFAULT_LABELS = _HARNESS_DIR / "labels.csv"
+DEFAULT_LABELS = HARNESS_DIR / "labels.csv"
 
 MATCHED_FALSE_WARN_THRESHOLD = 0.10  # 10%
 
