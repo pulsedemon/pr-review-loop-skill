@@ -332,9 +332,9 @@ def main() -> int:
     for corpus_path in corpora:
         corpus = json.loads(corpus_path.read_text())
         require_corpus_version(corpus, corpus_path, CORPUS_VERSION)
+        require_corpus_identity(corpus, corpus_path)
         if corpus.get("skipped"):
             continue
-        require_corpus_identity(corpus, corpus_path)
         pr = corpus["pr"]
         owner = corpus["owner"]
         repo = corpus["repo"]

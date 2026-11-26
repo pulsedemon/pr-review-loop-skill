@@ -23,9 +23,21 @@ def require_corpus_version(corpus: dict, corpus_path: Path, expected_version: in
         )
 
 
+def require_pr_number(value: int) -> int:
+    if type(value) is not int or value <= 0:
+        raise ValueError("pr must be a positive integer")
+    return value
+
+
 def require_corpus_identity(corpus: dict, path: Path) -> None:
     owner, repo, filename = path.parts[-3:]
-    if (owner, repo, filename) != (corpus["owner"], corpus["repo"], f"pr-{corpus['pr']}.json"):
+    pr = require_pr_number(corpus.get("pr"))
+    # skipped records from the collector can omit owner and repo.
+    if corpus.get("skipped"):
+        matches_repo = (corpus.get("owner", owner), corpus.get("repo", repo)) == (owner, repo)
+    else:
+        matches_repo = (corpus.get("owner"), corpus.get("repo")) == (owner, repo)
+    if not matches_repo or filename != f"pr-{pr}.json":
         raise ValueError(f"corpus identity does not match its path: {path}")
 
 

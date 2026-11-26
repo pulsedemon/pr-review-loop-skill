@@ -11,7 +11,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from collect_pr_corpus import list_merged_prs, read_manifest
+from collect_pr_corpus import FetchResponseError, list_merged_prs, read_manifest
 
 
 def missing_from_manifest(
@@ -48,7 +48,7 @@ def main() -> int:
             file=sys.stderr,
         )
         return 2
-    except (FileNotFoundError, json.JSONDecodeError) as e:
+    except (FileNotFoundError, json.JSONDecodeError, FetchResponseError) as e:
         print(
             f"check_manifest_drift: cannot list merged PRs for {args.owner}/{args.repo}\n"
             f"{type(e).__name__}: {e}",

@@ -41,7 +41,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from _shared import DEFAULT_CORPUS_DIR, canonical_summary
+from _shared import DEFAULT_CORPUS_DIR, canonical_summary, require_pr_number
 
 SUMMARY_MARKER = "<!-- pr-review-loop-summary -->"
 
@@ -172,8 +172,7 @@ def corpus_filename(owner: str, repo: str, pr: int) -> str:
             or Path(part).name != part
         ):
             raise ValueError("owner and repo must each be a single directory name")
-    if type(pr) is not int or pr <= 0:
-        raise ValueError("pr must be a positive integer")
+    require_pr_number(pr)
     return f"{owner}/{repo}/pr-{pr}.json"
 
 
@@ -187,7 +186,7 @@ def parse_pr_list(raw: str) -> list[int]:
     Strips whitespace and filters empty elements so a trailing comma or
     space-after-comma doesn't crash on int(). Raises ValueError (via int())
     on a genuinely non-numeric element so typos surface loudly."""
-    return [int(s.strip()) for s in raw.split(",") if s.strip()]
+    return [require_pr_number(int(s)) for s in raw.split(",") if s.strip()]
 
 
 def read_manifest(path: Path) -> list[tuple[str, str, int]]:
@@ -195,7 +194,11 @@ def read_manifest(path: Path) -> list[tuple[str, str, int]]:
     triples, in file order. csv handles quoting; pr is coerced to int so a
     non-numeric value raises loudly."""
     with path.open(newline="") as f:
-        return [(r["owner"], r["repo"], int(r["pr"])) for r in csv.DictReader(f)]
+        return [(r["owner"], r["repo"], require_pr_number(int(r["pr"]))) for r in csv.DictReader(f)]
+
+
+class FetchResponseError(ValueError):
+    """gh returned JSON with a different shape than the requested fields."""
 
 
 def list_merged_prs(owner: str, repo: str, merged_since: str) -> list[int]:
@@ -224,7 +227,16 @@ def list_merged_prs(owner: str, repo: str, merged_since: str) -> list[int]:
         capture_output=True,
         text=True,
     )
-    return sorted(item["number"] for item in json.loads(listing_raw.stdout))
+    listing = json.loads(listing_raw.stdout)
+    if not isinstance(listing, list):
+        raise FetchResponseError("expected a list of merged PRs")
+    try:
+        return sorted(
+            require_pr_number(item.get("number") if isinstance(item, dict) else None)
+            for item in listing
+        )
+    except ValueError as error:
+        raise FetchResponseError(f"invalid merged PR listing: {error}") from error
 
 
 _PROMOTION_SUFFIX = r"(?:\s+\u2014\s+Promoted from suggestion.*)?$"
@@ -448,7 +460,9 @@ def collect_pr(owner: str, repo: str, pr_number: int, include_open: bool = False
         text=True,
     )
     pr_meta = json.loads(pr_meta_raw.stdout)
-    merged_at = pr_meta.get("mergedAt")
+    if not isinstance(pr_meta, dict) or "mergedAt" not in pr_meta:
+        raise FetchResponseError("expected PR metadata with mergedAt")
+    merged_at = pr_meta["mergedAt"]
     if not merged_at and not include_open:
         return {"corpus_version": CORPUS_VERSION, "pr": pr_number, "skipped": "not merged"}
     is_open = merged_at is None
@@ -594,7 +608,12 @@ def collect_pr(owner: str, repo: str, pr_number: int, include_open: bool = False
     }
 
 
-_FETCH_ERRORS = (subprocess.CalledProcessError, FileNotFoundError, json.JSONDecodeError)
+_FETCH_ERRORS = (
+    subprocess.CalledProcessError,
+    FileNotFoundError,
+    json.JSONDecodeError,
+    FetchResponseError,
+)
 
 
 def _fetch_error_detail(error: Exception) -> str:
@@ -684,9 +703,12 @@ def main() -> int:
         # single-repo flags to collect a subset on purpose.
         grouped: dict[tuple[str, str], list[int]] = {}
         expected_paths = set()
-        for owner, repo, pr in read_manifest(args.manifest):
-            grouped.setdefault((owner, repo), []).append(pr)
-            expected_paths.add(args.out_dir / corpus_filename(owner, repo, pr))
+        try:
+            for owner, repo, pr in read_manifest(args.manifest):
+                grouped.setdefault((owner, repo), []).append(pr)
+                expected_paths.add(args.out_dir / corpus_filename(owner, repo, pr))
+        except (OSError, ValueError, KeyError) as error:
+            parser.error(f"cannot read manifest {args.manifest}: {error}")
         for (owner, repo), prs in grouped.items():
             if not _collect_and_write(owner, repo, prs, args.out_dir, include_open=False):
                 print(
