@@ -234,7 +234,6 @@ symlink_points_to_source() {
   local current
   current="$(readlink "$link_path")"
   [[ "$current" == "$src" ]] && return 0
-  [[ -d "$src" ]] || return 1
   if [[ "$current" != /* ]]; then
     current="$(dirname "$link_path")/$current"
   fi
@@ -515,7 +514,7 @@ link_one() {
   local parent
   parent="$(dirname "$target")"
 
-  if [[ -d "$src" ]] && target_is_source "$target"; then
+  if target_is_source "$target"; then
     echo "skipped (target is this source checkout): $target ($label)"
     return
   fi
