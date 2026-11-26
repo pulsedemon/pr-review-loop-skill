@@ -19,6 +19,7 @@ jobs:
         with:
           scandir: '.'
           severity: warning
+          version: v0.10.0 # match .pre-commit-config.yaml (shellcheck-py v0.10.0.1 installs ShellCheck v0.10.0)
 
   markdown:
     runs-on: ubuntu-latest
