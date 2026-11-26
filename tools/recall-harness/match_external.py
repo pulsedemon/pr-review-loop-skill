@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""A2: Match external findings against loop findings using scripts/match_findings.py.
+"""A2: Match external findings against loop findings using scripts/finding_matcher.py.
 
 For each corpus file in --corpus-dir:
 - Skip external findings without file/line (unanchored: the matcher requires
   both; unanchored go directly to A4's unanchored buckets).
-- For each anchored external finding, apply scripts/match_findings.py's
+- For each anchored external finding, apply scripts/finding_matcher.py's
   `is_match` in-process against every anchored loop finding, scoring
   token_containment at CONTAINMENT_THRESHOLD within HARNESS_LINE_WINDOW rather
   than the loop's own jaccard defaults (see the README on why). If any match,
@@ -17,7 +17,7 @@ from the external finding using the same hash as A1's collect_pr_corpus),
 external, and matched_loop (matched only).
 
 the matcher module is imported once via --match-script (default
-scripts/match_findings.py). missing or wrongly typed fields raise RuntimeError
+scripts/finding_matcher.py). missing or wrongly typed fields raise RuntimeError
 so malformed inputs cannot inflate the candidate-miss bucket.
 """
 
@@ -52,7 +52,7 @@ DEFAULT_CORPUS_DIR = _HARNESS_DIR / "corpus"
 DEFAULT_UNMATCHED_DIR = _HARNESS_DIR / "unmatched"
 DEFAULT_MATCHED_DIR = _HARNESS_DIR / "matched"
 DEFAULT_LOOP_UNMATCHED_DIR = _HARNESS_DIR / "loop_unmatched"
-DEFAULT_MATCH_SCRIPT = _HARNESS_DIR.parents[1] / "scripts" / "match_findings.py"
+DEFAULT_MATCH_SCRIPT = _HARNESS_DIR.parents[1] / "scripts" / "finding_matcher.py"
 
 # allow external reviewers to anchor the same issue to different lines.
 # this window is independent of the loop's finding-deduplication window.
@@ -69,19 +69,16 @@ def _is_anchored(finding: dict) -> bool:
 
 
 def _load_matcher(match_script: Path) -> ModuleType:
-    """Import match_findings.py once per run so its rules apply in-process."""
-    spec = importlib.util.spec_from_file_location("match_findings", match_script)
+    """Import finding_matcher.py once per run so its rules apply in-process."""
+    spec = importlib.util.spec_from_file_location("finding_matcher", match_script)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"cannot load matcher module from {match_script}")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     for name in (
-        "token_overlap",
         "token_containment",
         "is_match",
         "tokens",
-        "LINE_WINDOW",
-        "OVERLAP_THRESHOLD",
         "CONTAINMENT_THRESHOLD",
         "MIN_CONTAINMENT_TOKENS",
     ):
@@ -136,7 +133,7 @@ def _best_near_miss(
     number is directly comparable to the threshold it fell short of.
 
     Scope is restricted to same-file findings (mirroring the matcher's first
-    short-circuit at match_findings.py:135) because that's the cohort the
+    short-circuit in finding_matcher.is_match) because that's the cohort the
     matcher would have considered. Line-window is *not* applied: the whole
     point of the near-miss diagnostic is to see whether the matcher's
     summary-overlap rule is the gate that fired; restricting by line again

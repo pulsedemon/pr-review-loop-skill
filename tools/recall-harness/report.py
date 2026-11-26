@@ -700,7 +700,7 @@ def main() -> int:
             out.write(f"matched_false rate: {rate:.1%}\n\n")
             out.write(
                 f"**MATCHER QUALITY WARNING**: matched_false rate {rate:.1%} is above 10%. "
-                "Tune `scripts/match_findings.py` before trusting unmatched-driven groups.\n"
+                "Tune `scripts/finding_matcher.py` before trusting unmatched-driven groups.\n"
             )
         else:
             out.write(f"matched_false rate: {rate:.1%}\n")

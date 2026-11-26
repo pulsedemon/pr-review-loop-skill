@@ -16,7 +16,7 @@ from collect_pr_corpus import (  # type: ignore[import-not-found]
 HARNESS = Path(__file__).resolve().parents[1]
 MATCH_SCRIPT_PATH = HARNESS / "match_external.py"
 REPORT_SCRIPT_PATH = HARNESS / "report.py"
-REPO_MATCH_FINDINGS = HARNESS.parent.parent / "scripts" / "match_findings.py"
+REPO_FINDING_MATCHER = HARNESS.parent.parent / "scripts" / "finding_matcher.py"
 
 
 def _valid_corpus(owner: str, repo: str, pr: int) -> dict:
@@ -66,7 +66,7 @@ def _run_match(
             "--loop-unmatched-dir",
             str(loop_unmatched),
             "--match-script",
-            str(REPO_MATCH_FINDINGS),
+            str(REPO_FINDING_MATCHER),
         ],
         capture_output=True,
         text=True,

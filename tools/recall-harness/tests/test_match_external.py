@@ -1,4 +1,4 @@
-"""Tests for match_external bucketing. Uses real match_findings.py."""
+"""Tests for match_external bucketing. Uses real finding_matcher.py."""
 
 import json
 import subprocess
@@ -9,7 +9,7 @@ import pytest
 
 HARNESS = Path(__file__).resolve().parents[1]
 SCRIPT = HARNESS / "match_external.py"
-MATCH_SCRIPT = HARNESS.parent.parent / "scripts" / "match_findings.py"
+MATCH_SCRIPT = HARNESS.parent.parent / "scripts" / "finding_matcher.py"
 
 from collect_pr_corpus import (  # type: ignore[import-not-found]  # noqa: E402  — sibling made importable by conftest.py
     CORPUS_VERSION,

@@ -22,7 +22,7 @@ from report import _load_labels  # type: ignore[import-not-found]  # noqa: E402
 HARNESS = Path(__file__).resolve().parents[1]
 MATCH_SCRIPT_PATH = HARNESS / "match_external.py"
 REPORT_SCRIPT_PATH = HARNESS / "report.py"
-REPO_MATCH_FINDINGS = HARNESS.parent.parent / "scripts" / "match_findings.py"
+REPO_FINDING_MATCHER = HARNESS.parent.parent / "scripts" / "finding_matcher.py"
 
 
 def test_load_labels_raises_on_legacy_5_column_csv(tmp_path):
@@ -90,7 +90,7 @@ def test_match_external_rejects_legacy_corpus_version(tmp_path):
             "--loop-unmatched-dir",
             str(tmp_path / "loop_unmatched"),
             "--match-script",
-            str(REPO_MATCH_FINDINGS),
+            str(REPO_FINDING_MATCHER),
         ],
         capture_output=True,
         text=True,
@@ -123,7 +123,7 @@ def test_match_external_rejects_legacy_flat_layout(tmp_path):
             "--loop-unmatched-dir",
             str(tmp_path / "loop_unmatched"),
             "--match-script",
-            str(REPO_MATCH_FINDINGS),
+            str(REPO_FINDING_MATCHER),
         ],
         capture_output=True,
         text=True,

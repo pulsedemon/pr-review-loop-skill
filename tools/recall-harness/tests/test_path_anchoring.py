@@ -33,7 +33,7 @@ def test_match_external_default_dirs_are_anchored():
 
 def test_match_external_match_script_anchored_to_repo_root():
     assert match_external.DEFAULT_MATCH_SCRIPT.is_absolute()
-    assert match_external.DEFAULT_MATCH_SCRIPT == REPO_ROOT / "scripts" / "match_findings.py"
+    assert match_external.DEFAULT_MATCH_SCRIPT == REPO_ROOT / "scripts" / "finding_matcher.py"
     assert match_external.DEFAULT_MATCH_SCRIPT.exists()
 
 
