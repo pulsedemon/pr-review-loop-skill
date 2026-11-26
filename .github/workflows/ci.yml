@@ -41,12 +41,9 @@ jobs:
       - run: uv sync --group dev --frozen
       - run: uv run python scripts/validate_metadata.py
       - run: uv run yamllint .
-      - name: persona-derived surfaces are up to date
-        # Fast-feedback gate: if reviewers/personas.yaml drifts from SKILL.md
-        # or reviewers/output.schema.json, exits 5 with a unified diff naming
-        # scripts/regen.sh as the fix. Also covered by
-        # test_persona_surfaces_generator_check.bats, but running it in the
-        # cheap validate job lets contributors see drift fast.
+      - name: generated surfaces are up to date
+        # Exits 5 with a diff when any generated surface is stale; scripts/regen.sh
+        # fixes it. The bats job runs the same check, but this job fails sooner.
         run: uv run bash scripts/regen-check.sh
 
   ruff:
