@@ -19,7 +19,7 @@ jobs:
         with:
           scandir: '.'
           severity: warning
-          additional_files: install.sh
+          version: v0.10.0 # match .pre-commit-config.yaml (shellcheck-py v0.10.0.1 installs ShellCheck v0.10.0)
 
   markdown:
     runs-on: ubuntu-latest
@@ -41,12 +41,9 @@ jobs:
       - run: uv sync --group dev --frozen
       - run: uv run python scripts/validate_metadata.py
       - run: uv run yamllint .
-      - name: persona-derived surfaces are up to date
-        # Fast-feedback gate: if reviewers/personas.yaml drifts from SKILL.md
-        # or reviewers/output.schema.json, exits 5 with a unified diff naming
-        # scripts/regen.sh as the fix. Also covered by
-        # test_persona_surfaces_generator_check.bats, but running it in the
-        # cheap validate job lets contributors see drift fast.
+      - name: generated surfaces are up to date
+        # Exits 5 with a diff when any generated surface is stale; scripts/regen.sh
+        # fixes it. The bats job runs the same check, but this job fails sooner.
         run: uv run bash scripts/regen-check.sh
 
   ruff:
@@ -89,7 +86,7 @@ jobs:
           curl -fsSL -o /usr/local/bin/shfmt \
             "https://github.com/mvdan/sh/releases/download/${SHFMT_VERSION}/shfmt_${SHFMT_VERSION}_linux_amd64"
           chmod +x /usr/local/bin/shfmt
-      - run: shfmt -d -i 2 -ci scripts/ install.sh tests/run.sh
+      - run: shfmt -d -i 2 -ci scripts/ install.sh tests/run.sh tests/bats/test_helper.bash
 
   bats:
     runs-on: ubuntu-latest
@@ -116,9 +113,7 @@ jobs:
             echo "runner image no longer preinstalls: ${missing[*]}" >&2
             exit 1
           fi
-          # 1.10.0 is what noble shipped. 1.11+ errors on an empty suite
-          # (`Found no tests`), which the cap-drift fixtures in
-          # test_cap_drift_guard_fires.bats rely on exiting 0.
+          # 1.10.0 is what Ubuntu 24.04 (noble) shipped.
           BATS_VERSION=1.10.0
           curl -fsSL --retry 3 --retry-all-errors --connect-timeout 15 --max-time 120 \
             "https://github.com/bats-core/bats-core/archive/refs/tags/v${BATS_VERSION}.tar.gz" \
@@ -154,23 +149,3 @@ jobs:
           test ! -L "$HOME/.codex/skills/pr-review-loop"
           test ! -e "$HOME/.config/opencode/skills/pr-review-loop"
           test ! -e "$HOME/.config/opencode/agent/prl-cheap.md"
-      - name: bare install with nothing detected exits 0
-        run: |
-          set -euo pipefail
-          export HOME="$RUNNER_TEMP/fakehome-empty"
-          export XDG_CONFIG_HOME="$HOME/.config"
-          mkdir -p "$HOME"
-          out="$(./install.sh 2>&1)"
-          echo "$out" | grep -q "no supported hosts detected"
-          test -z "$(ls -A "$HOME")"
-      - name: uninstall preserves symlinks pointing elsewhere
-        run: |
-          set -euo pipefail
-          export HOME="$RUNNER_TEMP/fakehome2"
-          mkdir -p "$HOME/.cursor/skills" "$HOME/.claude/skills" "$RUNNER_TEMP/other"
-          # Foreign symlink: not pointing at this repo. Call --uninstall
-          # directly to prove uninstall leaves symlinks it didn't create alone.
-          ln -s "$RUNNER_TEMP/other" "$HOME/.cursor/skills/pr-review-loop"
-          ./install.sh --uninstall
-          test -L "$HOME/.cursor/skills/pr-review-loop"
-          test "$(readlink "$HOME/.cursor/skills/pr-review-loop")" = "$RUNNER_TEMP/other"

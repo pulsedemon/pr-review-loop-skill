@@ -13,7 +13,7 @@ repos:
     hooks:
       - id: shellcheck
         args: [--severity=warning]
-        # CI shellcheck action only scans .sh/.bash/etc. — not .bats.
+        # CI shellcheck action only scans .sh/.bash/etc., not .bats.
         # Keep pre-commit's scope aligned with CI.
         exclude: \.bats$
 
@@ -22,13 +22,13 @@ repos:
     hooks:
       - id: shfmt
         args: [-i, '2', -ci, -d]
-        # Task 3 shfmt'd .sh files only; .bats files are out of scope.
+        # .bats files are not shfmt-formatted, and CI's shfmt job skips them too.
         exclude: \.bats$
 
   - repo: https://github.com/DavidAnson/markdownlint-cli2
     # Match the markdownlint-cli2-action@v23 (markdownlint-cli2 v0.22.1,
     # markdownlint v0.40.0) used by .github/workflows/ci.yml so CI and
-    # pre-commit agree on the rule set — e.g. MD060 (table-column-style)
+    # pre-commit agree on the rule set, e.g. MD060 (table-column-style)
     # only exists from markdownlint v0.40+. Mirrors the parity convention
     # already noted on the ruff and yamllint blocks below.
     rev: v0.22.1

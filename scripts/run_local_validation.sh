@@ -1,20 +1,17 @@
 #!/usr/bin/env bash
-# run_local_validation.sh — detect repo stack and run its standard validation suite.
-#
-# Replaces the inlined "detect project type and run appropriate commands" snippet
-# in SKILL.md §4f. Deterministic, scripted, exit-coded.
+# run_local_validation.sh: detect repo stack and run its standard validation suite.
 #
 # Usage:
 #   run_local_validation.sh
 #
 # Exits:
-#   0  — all detected validators passed (or nothing to run for a recognized stack)
-#   1  — harness/setup error: cwd not a repo, internal error, or a stack was
+#   0  - all detected validators passed (or nothing to run for a recognized stack)
+#   1  - harness/setup error: cwd not a repo, internal error, or a stack was
 #        detected (e.g. package.json, go.mod, Cargo.toml, Gemfile, pyproject.toml)
 #        but the required toolchain is not on PATH. Treated as SETUP_ERROR by
-#        the caller — a false-green is worse than a clear failure.
-#   2  — no recognized stack (treat as soft pass; skill should log and continue)
-#   3+ — a validator failed; tail of its output is on stderr
+#        the caller: a false-green is worse than a clear failure.
+#   2  - no recognized stack (treat as soft pass; skill should log and continue)
+#   3  - a validator failed; tail of its output is on stderr
 #
 # stderr carries a "# stack: <name>" line per detected stack, then either
 # "# pass: <command>" per success or "# fail: <command> (exit <N>)" plus the

@@ -544,7 +544,7 @@ load test_helper
   HOME="${fakehome}" XDG_CONFIG_HOME="${fakehome}/.config" CODEX_HOME="${fakehome}/.codex" run "${REPO_ROOT}/install.sh"
 
   [[ "$status" -eq 1 ]]
-  [[ "$output" == *"${fakehome}/.claude/skills/pr-review-loop exists and is not a symlink"* ]]
+  [[ "$output" == *"${fakehome}/.claude/skills/pr-review-loop exists and is not a symlink (Claude Code)."* ]]
   [[ -d "${fakehome}/.cursor/skills/pr-review-loop" ]]
   [[ -L "${fakehome}/.codex/skills/pr-review-loop" ]]
   [[ -L "${fakehome}/.config/opencode/skills/pr-review-loop" ]]
@@ -618,6 +618,7 @@ load test_helper
 
   [[ "$status" -eq 1 ]]
   [[ "$output" == *"skipped (symlink points elsewhere): ${fakehome}/.config/opencode/agent/prl-cheap.md"* ]]
+  [[ "$output" == *"rerun with --force to replace this symlink"* ]]
   [[ "$(readlink "${fakehome}/.config/opencode/agent/prl-cheap.md")" == "$other/prl-cheap.md" ]]
   [[ -L "${fakehome}/.config/opencode/skills/pr-review-loop" ]]
   [[ -L "${fakehome}/.config/opencode/agent/prl-standard.md" ]]
@@ -867,4 +868,20 @@ load test_helper
     [[ "$output" != *"Remove it manually"* ]]
     [[ -f "$checkout/SKILL.md" ]]
   done
+}
+
+@test "a checkout living at an opencode agent file path is refused, not skipped" {
+  local fakehome="${BATS_TEST_TMPDIR}/home"
+  local checkout="${fakehome}/.config/opencode/agent/prl-cheap.md"
+  mkdir -p "$checkout/hosts/opencode"
+  cp "${REPO_ROOT}/install.sh" "$checkout/install.sh"
+  cp -R "${REPO_ROOT}/hosts/opencode/agent" "$checkout/hosts/opencode/agent"
+  printf 'fixture\n' >"$checkout/SKILL.md"
+
+  HOME="$fakehome" XDG_CONFIG_HOME="$fakehome/.config" CODEX_HOME="$fakehome/.codex" run bash "$checkout/install.sh" --opencode
+
+  [[ "$status" -eq 1 ]]
+  [[ "$output" == *"ERROR: ${checkout} exists and is not a symlink (opencode agent prl-cheap). Remove it manually."* ]]
+  [[ "$output" != *"skipped (target is this source checkout): ${checkout}"* ]]
+  [[ -f "$checkout/SKILL.md" ]]
 }
