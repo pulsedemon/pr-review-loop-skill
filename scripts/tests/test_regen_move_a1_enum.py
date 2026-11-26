@@ -330,8 +330,15 @@ def test_out_of_region_scan_rejects_undecodable_text_and_skips_binary(tmp_path: 
     source.rename(tmp_path / "asset.bin")
     result = _run(paths, "--check", "--out-of-region-root", str(tmp_path))
     assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize(
+    "data", ["cross_fixture".encode("utf-16"), b"\xef\xbb\xbf\x00\xffcross_fixture"]
+)
+def test_scan_reports_undecodable_text_with_a_bom(tmp_path: Path, data: bytes) -> None:
+    paths = _seed(tmp_path)
     notes = tmp_path / "notes.txt"
-    notes.write_bytes("cross_fixture".encode("utf-16"))
+    notes.write_bytes(data)
     result = _run(paths, "--check", "--out-of-region-root", str(tmp_path))
     assert result.returncode == 3
     assert f"cannot scan {notes}" in result.stderr

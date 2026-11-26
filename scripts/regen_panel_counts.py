@@ -305,9 +305,9 @@ _TOTAL_PREFIX = (
 _COVERAGE_BROAD_RE = re.compile(
     rf"\b(?:{_TOTAL_PREFIX}\s+)?\d+\s+(?:reviewer\s+)?personas?\b"
     rf"(?:(?!\s+{_TOTAL_PREFIX}\s+\d)"
-    r"(?:\s+(?i:in\s+total)(?=\s*(?:,|(?i:across)\b))"
+    r"(?:\s+(?i:in\s+total)(?=\s+(?i:across)\b)"
     r"|\s+(?i:(?:in\s+)?total)(?=\s*(?:[.;:!?)]|$|\(panel\s*\+\s*adversary\)"
-    rf"|,\s*(?i:including|excluding)\b|{_TOTAL_PREFIX}\s+\d))))?"
+    rf"|,\s*(?i:including|excluding)\b[^,.;!?\n]*(?:[.;!?]|$)|{_TOTAL_PREFIX}\s+\d))))?"
 )
 _WORD_MARKUP = re.compile(r"[*_`]+")
 
@@ -366,7 +366,9 @@ def _run_validate_coverage(*, corpus_root: Path) -> int:
         line_number = 1
         # isolate headings and keep separators so line offsets still index the source.
         for paragraph in re.split(
-            r"(\n[^\S\n]*\n|^ {0,3}#{1,6}(?:[ \t]+[^\n]*)?$)", scan_text, flags=re.MULTILINE
+            r"(\n[^\S\n]*\n|^ {0,3}(?:>[ \t]*)*#{1,6}(?:[ \t]+[^\n]*)?$)",
+            scan_text,
+            flags=re.MULTILINE,
         ):
             for m in _unwrapped_counts(paragraph):
                 start_line = line_number + paragraph.count("\n", 0, m.start())

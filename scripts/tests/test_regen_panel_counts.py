@@ -450,6 +450,8 @@ def test_validate_coverage_allows_subset_phrases(tmp_path: Path) -> None:
         "3 personas agreed in total\n"
         "The proposal was agreed by 3 personas in total silence.\n"
         "The revisions agreed by 3 personas total, on average, five pages.\n"
+        "The reports agreed by 3 personas total, excluding appendices, five pages.\n"
+        "The report was agreed by 3 personas in total, stunned silence.\n"
         "The revisions agreed by 3 personas total five pages.\n"
         "The revisions agreed by 3 personas total (on average) five pages.\n"
         "4 Move C personas link to docs/procedure-moves.md\n"
@@ -517,12 +519,15 @@ def test_adjacent_counts_keep_their_own_qualifiers(tmp_path: Path, capsys, text,
     assert reports == [repr(phrase) for phrase in expected]
 
 
-def test_blank_lines_separate_total_qualifiers_from_allowed_subsets(tmp_path: Path) -> None:
+def test_headings_and_blank_lines_separate_total_qualifiers_from_allowed_subsets(
+    tmp_path: Path,
+) -> None:
     root = _make_corpus(tmp_path)
     (root / "SKILL.md").write_text(
         "## The Other\n \n2 personas approved.\n\nagreed by 3 personas\n\nTotal elapsed time.\n"
         "A total of\n\n11 personas agreed.\n"
         "## The Other\n2 personas approved.\n"
+        "> ## The Other\n3 personas agreed.\n"
     )
     assert _run(["--validate-coverage", "--corpus-root", str(root)]) == 0
 

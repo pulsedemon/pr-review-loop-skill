@@ -287,7 +287,12 @@ def _scan_out_of_region(
                     path.suffix.lower() not in text_suffixes
                     and b"\0" in data
                     and not data.startswith(
-                        (codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE, codecs.BOM_UTF32_BE)
+                        (
+                            codecs.BOM_UTF8,
+                            codecs.BOM_UTF16_LE,
+                            codecs.BOM_UTF16_BE,
+                            codecs.BOM_UTF32_BE,
+                        )
                     )
                 ):
                     continue
