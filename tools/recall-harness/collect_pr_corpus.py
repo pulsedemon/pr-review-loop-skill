@@ -163,11 +163,16 @@ def corpus_filename(owner: str, repo: str, pr: int) -> str:
     `/` (which neither GitHub owner nor repo names may contain) is
     unambiguous. The matched/ and unmatched/ JSONL outputs use the same
     scheme (with .jsonl extension)."""
+    for part in (owner, repo):
+        if not isinstance(part, str) or not part or part in (".", "..") or Path(part).name != part:
+            raise ValueError("owner and repo must each be a single directory name")
+    if type(pr) is not int:
+        raise ValueError("pr must be an integer")
     return f"{owner}/{repo}/pr-{pr}.json"
 
 
 def matched_filename(owner: str, repo: str, pr: int) -> str:
-    return f"{owner}/{repo}/pr-{pr}.jsonl"
+    return corpus_filename(owner, repo, pr) + "l"
 
 
 def parse_pr_list(raw: str) -> list[int]:
@@ -676,7 +681,11 @@ def main() -> int:
             expected_paths.add(args.out_dir / corpus_filename(owner, repo, pr))
         for (owner, repo), prs in grouped.items():
             if not _collect_and_write(owner, repo, prs, args.out_dir, include_open=False):
-                print("Manifest collection stopped before pruning.", file=sys.stderr)
+                print(
+                    "Manifest collection stopped before pruning. "
+                    "Use --owner/--repo/--pr-list to collect a subset.",
+                    file=sys.stderr,
+                )
                 return 1
         args.out_dir.mkdir(parents=True, exist_ok=True)
         # prune only after every requested record was collected successfully.

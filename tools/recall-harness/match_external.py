@@ -17,7 +17,7 @@ from the external finding with _shared.finding_id),
 external, and matched_loop (matched only).
 
 the matcher module is imported once via --match-script (default
-scripts/finding_matcher.py). missing or wrongly typed fields raise RuntimeError
+scripts/finding_matcher.py). invalid matcher fields on anchored findings raise RuntimeError
 so malformed inputs cannot inflate the candidate-miss bucket.
 """
 
@@ -26,8 +26,8 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
-import shutil
 import sys
+from contextlib import ExitStack, contextmanager
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import ModuleType
@@ -61,7 +61,7 @@ def _scorer_stamp(matcher: ModuleType) -> str:
 
 
 def _load_matcher(match_script: Path) -> ModuleType:
-    """Import finding_matcher.py once per run so its rules apply in-process."""
+    """load the matcher module supplied for this run."""
     spec = importlib.util.spec_from_file_location("finding_matcher", match_script)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"cannot load matcher module from {match_script}")
@@ -181,7 +181,13 @@ def process_corpus_file(
     matched_lines: list[str] = []
     unmatched_lines: list[str] = []
 
-    anchored_loop = [f for f in loop if is_anchored(f)]
+    anchored_loop = []
+    for index, finding in enumerate(loop):
+        if is_anchored(finding):
+            _require_matcher_fields(
+                "loop", finding, f"{owner}/{repo} PR #{pr} loop_findings[{index}]"
+            )
+            anchored_loop.append(finding)
     # Which loop findings some external corroborated. Tracked by index because
     # loop findings are plain dicts (unhashable) and carry no id of their own.
     corroborated_loop_idx: set[int] = set()
@@ -248,6 +254,44 @@ def process_corpus_file(
     )
 
 
+@contextmanager
+def _stage_outputs(destinations: tuple[Path, ...], corpus_dir: Path):
+    """keep prior buckets available if matching or publication fails."""
+    if any(path.is_symlink() for path in destinations):
+        raise ValueError("output directories cannot be symlinks")
+    paths = tuple(path.resolve() for path in destinations)
+    if len(set(paths)) != len(paths):
+        raise ValueError("each matcher output needs its own directory")
+    corpus = corpus_dir.resolve()
+    for path in paths:
+        if corpus.is_relative_to(path):
+            raise ValueError(f"output directory would replace the corpus: {path}")
+        if path.exists() and not path.is_dir():
+            raise NotADirectoryError(path)
+    roots = [path for path in paths if not any(parent in paths for parent in path.parents)]
+    with ExitStack() as cleanup:
+        staging = {}
+        for root in roots:
+            root.parent.mkdir(parents=True, exist_ok=True)
+            staging[root] = Path(cleanup.enter_context(TemporaryDirectory(dir=root.parent)))
+        outputs = []
+        for path in paths:
+            root = next(root for root in roots if path.is_relative_to(root))
+            output = staging[root] / "new" / path.relative_to(root)
+            output.mkdir(parents=True, exist_ok=True)
+            outputs.append(output)
+        yield outputs
+        with ExitStack() as rollback:
+            for root, temp in staging.items():
+                backup = temp / "previous"
+                if root.exists():
+                    root.rename(backup)
+                    rollback.callback(backup.rename, root)
+                (temp / "new").rename(root)
+                rollback.callback(root.rename, temp / "new")
+            rollback.pop_all()
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="A2: match external findings")
     parser.add_argument("--corpus-dir", type=Path, default=DEFAULT_CORPUS_DIR)
@@ -279,17 +323,9 @@ def main() -> int:
     require_nested_layout(args.corpus_dir, corpora, CORPUS_VERSION)
     # publish only after every corpus record has been matched successfully.
     destinations = (args.unmatched_dir, args.matched_dir, args.loop_unmatched_dir)
-    with TemporaryDirectory() as scratch:
-        staged = tuple(Path(scratch) / name for name in ("unmatched", "matched", "loop_unmatched"))
-        for directory in staged:
-            directory.mkdir()
+    with _stage_outputs(destinations, args.corpus_dir) as staged:
         for corpus_path in corpora:
             process_corpus_file(corpus_path, *staged, matcher)
-        for destination in destinations:
-            destination.mkdir(parents=True, exist_ok=True)
-        for source, destination in zip(staged, destinations, strict=True):
-            shutil.rmtree(destination)
-            shutil.move(source, destination)
 
     return 0
 
