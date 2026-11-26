@@ -514,7 +514,7 @@ link_one() {
   local parent
   parent="$(dirname "$target")"
 
-  if target_is_source "$target"; then
+  if [[ -d "$src" ]] && target_is_source "$target"; then
     echo "skipped (target is this source checkout): $target ($label)"
     return
   fi

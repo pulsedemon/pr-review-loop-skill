@@ -869,3 +869,19 @@ load test_helper
     [[ -f "$checkout/SKILL.md" ]]
   done
 }
+
+@test "a checkout living at an opencode agent file path is refused, not skipped" {
+  local fakehome="${BATS_TEST_TMPDIR}/home"
+  local checkout="${fakehome}/.config/opencode/agent/prl-cheap.md"
+  mkdir -p "$checkout/hosts/opencode"
+  cp "${REPO_ROOT}/install.sh" "$checkout/install.sh"
+  cp -R "${REPO_ROOT}/hosts/opencode/agent" "$checkout/hosts/opencode/agent"
+  printf 'fixture\n' >"$checkout/SKILL.md"
+
+  HOME="$fakehome" XDG_CONFIG_HOME="$fakehome/.config" CODEX_HOME="$fakehome/.codex" run bash "$checkout/install.sh" --opencode
+
+  [[ "$status" -eq 1 ]]
+  [[ "$output" == *"ERROR: ${checkout} exists and is not a symlink (opencode agent prl-cheap). Remove it manually."* ]]
+  [[ "$output" != *"skipped (target is this source checkout): ${checkout}"* ]]
+  [[ -f "$checkout/SKILL.md" ]]
+}
