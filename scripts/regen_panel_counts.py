@@ -141,6 +141,15 @@ def _parse_regions(lines: list[str], path: Path) -> list[_Region]:
     is not a ``<!-- template: ... -->`` comment. Catching these in the
     same walk keeps marker validation and drift detection on one parser.
     """
+    for number, line in enumerate(lines, start=1):
+        if "<!-- regen:panel-count-" in line:
+            fragments = line.splitlines()
+            if len(fragments) > 1 and any(
+                _START_RE.fullmatch(part) or _END_RE.fullmatch(part) for part in fragments
+            ):
+                raise _MarkerError(
+                    f"{path}: line {number}: put the marker on its own physical line"
+                )
     regions: list[_Region] = []
     i = 0
     n_lines = len(lines)
@@ -177,6 +186,8 @@ def _parse_regions(lines: list[str], path: Path) -> list[_Region]:
             raise _MarkerError(
                 f"{path}: line {i + 1}: regen:panel-count-{kind}:start without matching :end marker"
             )
+        if _START_RE.fullmatch(lines[i + 2]) or _END_RE.fullmatch(lines[i + 2]):
+            raise _MarkerError(f"{path}: line {i + 3}: expected rendered prose, found a marker")
         end_line_m = _END_RE.match(lines[i + 3])
         if end_line_m is None:
             raise _MarkerError(
@@ -281,7 +292,9 @@ def _run_validate_markers(*, corpus_root: Path) -> int:
 
 
 # match punctuation-led and wrapped counts without matching tokens such as B2.
-_COVERAGE_BROAD_RE = re.compile(r"\b\d+\s+(?:reviewer\s+)?personas?\b")
+_COVERAGE_BROAD_RE = re.compile(
+    r"\b(?:(?i:panel\s+of|the\s+other)\s+)?\d+\s+(?:reviewer\s+)?personas?\b(?:\s+(?i:total)\b)?"
+)
 
 # total-shaped phrases must stay generated even when their counts currently match.
 _COVERAGE_ALLOW_PATTERNS: tuple[re.Pattern[str], ...] = (

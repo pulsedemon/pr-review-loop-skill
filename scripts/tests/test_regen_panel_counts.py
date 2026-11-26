@@ -194,13 +194,27 @@ def test_unicode_separator_in_prose_does_not_start_a_marker_line(
 ) -> None:
     root = _make_corpus(tmp_path)
     path = root / "SKILL.md"
-    original = "prose\u2028" + _total_region("{n} personas", "2 personas")
+    original = "prose\u2028<!-- regen:panel-count-total:end -->\n"
     path.write_text(original)
     args = [mode, "--corpus-root", str(root)]
     if mode in ("--check", "--write"):
         args.extend(["--manifest", str(write_personas_yaml(tmp_path, ["a", "b"]))])
     assert _run(args) == generator_io.DRIFT_EXIT
-    assert "line 4: orphan end marker" in capsys.readouterr().err
+    assert "line 1: put the marker on its own physical line" in capsys.readouterr().err
+    assert path.read_text() == original
+
+
+@pytest.mark.parametrize("prefix", ["", "2 personas\u2028"])
+def test_write_preserves_a_malformed_region_containing_another_marker(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], prefix: str
+) -> None:
+    root = _make_corpus(tmp_path)
+    path = root / "SKILL.md"
+    original = _total_region("{n} personas", prefix + "<!-- regen:panel-count-total:start -->")
+    path.write_text(original)
+    manifest = write_personas_yaml(tmp_path, ["a", "b"])
+    assert _run(["--write", "--corpus-root", str(root), "--manifest", str(manifest)]) == 5
+    assert "line 3:" in capsys.readouterr().err
     assert path.read_text() == original
 
 
@@ -384,10 +398,12 @@ def test_allowed_subset_does_not_hide_a_total_on_the_same_line(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     root = _make_corpus(tmp_path)
-    (root / "SKILL.md").write_text("The panel of 999 personas reviews; 2 personas approved.\n")
+    (root / "SKILL.md").write_text("The panel of 999 personas agreed; 2 personas approved.\n")
     rc = _run(["--validate-coverage", "--corpus-root", str(root)])
     assert rc == 5
-    assert "999 personas" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "999 personas" in err
+    assert "2 personas approved" not in err
 
 
 def test_validate_coverage_catches_phrase_split_across_lines(
@@ -395,11 +411,13 @@ def test_validate_coverage_catches_phrase_split_across_lines(
 ) -> None:
     """A numbered persona-count phrase wrapped across a line break still fails."""
     root = _make_corpus(tmp_path)
-    (root / "SKILL.md").write_text("the spec mentions 11\nreviewer personas reviewing this PR\n")
+    (root / "SKILL.md").write_bytes(
+        b"intro\r\nthe spec mentions 11\r\nreviewer personas reviewing this PR\r\n"
+    )
     rc = _run(["--validate-coverage", "--corpus-root", str(root)])
     assert rc == generator_io.DRIFT_EXIT == 5
     err = capsys.readouterr().err
-    assert "unhandled numbered persona-count phrase" in err
+    assert "line 2: unhandled numbered persona-count phrase" in err
 
 
 def test_validate_coverage_catches_parenthesized_phrase(

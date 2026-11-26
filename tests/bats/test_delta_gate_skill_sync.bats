@@ -29,6 +29,13 @@ gate_enum_matches_panel() {
   [[ "$status" -eq 1 && "$output" == false ]]
 }
 
+@test "a gate enum must include every panel name and no additional names" {
+  run gate_enum_matches_panel $'alpha\nbeta' <<<'{"properties":{"reviewer":{"enum":["alpha"]}}}'
+  [[ "$status" -eq 1 && "$output" == false ]]
+  run gate_enum_matches_panel alpha <<<'{"properties":{"reviewer":{"enum":["alpha","beta"]}}}'
+  [[ "$status" -eq 1 && "$output" == false ]]
+}
+
 @test "the gate enum comparison requires exactly one schema document" {
   local schema='{"properties":{"reviewer":{"enum":["alpha"]}}}'
   run gate_enum_matches_panel alpha </dev/null
