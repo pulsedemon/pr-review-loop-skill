@@ -14,7 +14,7 @@ Authors wrap each panel-count phrase in named-region markers and supply the
 *template* on the line immediately after the start marker, in a hidden
 ``<!-- template: ... -->`` HTML comment. The line after the template holds
 the rendered prose. Region boundaries occupy whole physical lines. Template
-text and rendered bodies cannot contain another control comment. The end
+text and rendered bodies cannot contain another control-comment opener. The end
 marker closes the region:
 
 ```
@@ -93,8 +93,10 @@ from personas_manifest import ManifestError, load_manifest
 
 _KIND_TOTAL = "total"
 
-_CONTROL_RE = re.compile(r"<!-- regen:panel-count-(total|total-plus-1):(start|end) -->")
-_TEMPLATE_RE = re.compile(r"<!-- template: (.+?) -->")
+_CONTROL_PREFIX = "<!-- regen:panel-count-"
+_TEMPLATE_PREFIX = "<!-- template:"
+_CONTROL_RE = re.compile(_CONTROL_PREFIX + r"(total|total-plus-1):(start|end) -->")
+_TEMPLATE_RE = re.compile(_TEMPLATE_PREFIX + r" (.+?) -->")
 
 _PLACEHOLDER_PERSONAS = "{personas|persona}"
 _PLACEHOLDER_N = "{n}"
@@ -144,7 +146,7 @@ def _parse_regions(lines: list[str], path: Path) -> list[_Region]:
     same walk keeps marker validation and drift detection on one parser.
     """
     for number, line in enumerate(lines, start=1):
-        if "<!-- regen:panel-count-" in line:
+        if _CONTROL_PREFIX in line:
             fragments = line.splitlines()
             if len(fragments) > 1 and any(
                 _CONTROL_RE.fullmatch(part.rstrip()) for part in fragments
@@ -188,7 +190,7 @@ def _parse_regions(lines: list[str], path: Path) -> list[_Region]:
                 f"{path}: line {i + 1}: regen:panel-count-{kind}:start without matching :end marker"
             )
         for number, content in ((i + 2, template_m[1]), (i + 3, lines[i + 2])):
-            if _CONTROL_RE.search(content) or _TEMPLATE_RE.search(content):
+            if _CONTROL_PREFIX in content or _TEMPLATE_PREFIX in content:
                 raise _MarkerError(
                     f"{path}: line {number}: expected panel-count prose, found a marker"
                 )
@@ -297,7 +299,8 @@ def _run_validate_markers(*, corpus_root: Path) -> int:
 
 # match punctuation-led and wrapped counts without matching tokens such as B2.
 _COVERAGE_BROAD_RE = re.compile(
-    r"\b(?:(?i:panel\s+of|the\s+other|all)\s+)?\d+\s+(?:reviewer\s+)?personas?\b(?:\s+(?i:total)\b)?"
+    r"\b(?:(?i:panel\s+of|the\s+other|all(?:\s+of)?(?:\s+the)?)\s+)?"
+    r"\d+\s+(?:reviewer\s+)?personas?\b(?:\s+(?i:(?:in\s+)?total)\b)?"
 )
 
 # total-shaped phrases must stay generated even when their counts currently match.

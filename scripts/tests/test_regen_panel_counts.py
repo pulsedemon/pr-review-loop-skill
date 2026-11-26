@@ -213,6 +213,10 @@ def test_unicode_separator_in_prose_does_not_start_a_marker_line(
         ("{n} personas", "2 personas <!-- regen:panel-count-total:end -->", 3),
         ("{n} personas", "<!-- template: extra -->", 3),
         ("<!-- regen:panel-count-total:start -->", "ordinary prose", 2),
+        ("<!-- regen:panel-count-total-plus-{n}:start -->", "ordinary prose", 2),
+        ("<!-- template: inner -->", "ordinary prose", 2),
+        ("<!-- template: inner", "ordinary prose", 2),
+        ("{n} personas", "<!-- template:  -->", 3),
     ],
 )
 def test_write_preserves_a_region_containing_another_marker(
@@ -222,9 +226,24 @@ def test_write_preserves_a_region_containing_another_marker(
     path = root / "SKILL.md"
     original = _total_region(template, body).encode()
     path.write_bytes(original)
-    manifest = write_personas_yaml(tmp_path, ["a", "b"])
+    manifest = write_personas_yaml(tmp_path, ["one"])
     assert _run(["--write", "--corpus-root", str(root), "--manifest", str(manifest)]) == 5
     assert f"line {error_line}:" in capsys.readouterr().err
+    assert path.read_bytes() == original
+
+
+def test_write_rejects_a_start_marker_in_the_closing_slot(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = _make_corpus(tmp_path)
+    path = root / "SKILL.md"
+    original = (
+        _total_region("{n} personas", "99 personas").replace(":end -->", ":start -->").encode()
+    )
+    path.write_bytes(original)
+    manifest = write_personas_yaml(tmp_path, ["one"])
+    assert _run(["--write", "--corpus-root", str(root), "--manifest", str(manifest)]) == 5
+    assert "line 4: expected regen:panel-count-total:end" in capsys.readouterr().err
     assert path.read_bytes() == original
 
 
@@ -305,7 +324,7 @@ def test_write_replaces_target_and_leaves_no_tmp_files(tmp_path: Path) -> None:
     assert leftover == []
 
 
-def test_validate_coverage_passes_on_empty_corpus(tmp_path: Path) -> None:
+def test_validate_coverage_passes_without_count_phrases(tmp_path: Path) -> None:
     """A corpus with no numbered persona-count phrases is trivially covered."""
     root = _make_corpus(tmp_path)
     (root / "SKILL.md").write_text("intro paragraph\n\nno counts here\n")
@@ -399,6 +418,7 @@ def test_validate_coverage_allows_subset_phrases(tmp_path: Path) -> None:
     (root / "SKILL.md").write_text(
         "after the round, 2 personas approved and 1 persona objected\n"
         "agreed by 3 personas\n"
+        "3 personas agreed in total\n"
         "4 Move C personas link to docs/procedure-moves.md\n"
     )
     rc = _run(["--validate-coverage", "--corpus-root", str(root)])
@@ -412,6 +432,8 @@ def test_validate_coverage_allows_subset_phrases(tmp_path: Path) -> None:
         ("The other 10 personas agreed", "The other 10 personas"),
         ("agreed by 12 personas total", "12 personas total"),
         ("All 11 personas agreed", "All 11 personas"),
+        ("All of the 11 personas agreed", "All of the 11 personas"),
+        ("agreed by 12 personas in total", "12 personas in total"),
     ],
 )
 def test_allowed_subset_does_not_hide_an_explicit_total(
