@@ -25,6 +25,9 @@ Summaries are whitespace-collapsed.
 
 Recognized external review tools (currently `copilot` and `orchestrator-review`)
 live in the `EXTERNAL_REVIEW_TOOLS` registry below.
+
+Exit 0 on success, 1 on a fetch error, or 2 on a usage error. Manifest mode
+prunes old records only after all fetches succeed.
 """
 
 from __future__ import annotations
@@ -33,7 +36,6 @@ import argparse
 import csv
 import json
 import re
-import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -381,9 +383,6 @@ def _gh_api(path: str) -> list:
 
     `gh api --paginate` concatenates pages as a stream of JSON arrays; we decode
     each and flatten."""
-    if shutil.which("gh") is None:
-        print("collect_pr_corpus: gh CLI not on PATH", file=sys.stderr)
-        sys.exit(1)
     result = subprocess.run(
         ["gh", "api", path, "--paginate"],
         check=True,
@@ -582,6 +581,16 @@ def collect_pr(owner: str, repo: str, pr_number: int, include_open: bool = False
     }
 
 
+_FETCH_ERRORS = (subprocess.CalledProcessError, FileNotFoundError, json.JSONDecodeError)
+
+
+def _fetch_error_detail(error: Exception) -> str:
+    detail = f"{type(error).__name__}: {error}"
+    if isinstance(error, subprocess.CalledProcessError) and error.stderr:
+        return f"{detail}\nstderr: {error.stderr}"
+    return detail
+
+
 def _collect_and_write(
     owner: str, repo: str, pr_numbers: list[int], out_dir: Path, include_open: bool
 ) -> None:
@@ -656,12 +665,12 @@ def main() -> int:
         for (owner, repo), prs in grouped.items():
             try:
                 _collect_and_write(owner, repo, prs, args.out_dir, include_open=False)
-            except subprocess.CalledProcessError as e:
+            except _FETCH_ERRORS as e:
                 print(
                     f"collect_pr_corpus: cannot collect {owner}/{repo} "
-                    f"(gh exited {e.returncode}). --manifest needs access to every "
+                    "--manifest needs access to every "
                     "listed repo; use --owner/--repo/--pr-list to collect a subset.\n"
-                    f"stderr: {e.stderr}",
+                    f"{_fetch_error_detail(e)}",
                     file=sys.stderr,
                 )
                 return 1
@@ -681,20 +690,30 @@ def main() -> int:
         # malformed search "merged:>=None"; require one explicitly.
         parser.error("provide --pr-list or --merged-since in single-repo mode")
 
+    if args.pr_list is not None and args.merged_since is not None:
+        parser.error("--pr-list and --merged-since are mutually exclusive")
+
     if args.include_open and not args.pr_list:
         parser.error(
             "--include-open requires --pr-list; --merged-since lists only merged PRs "
             "(gh pr list is invoked with --state merged)"
         )
 
-    if args.pr_list:
-        pr_numbers = parse_pr_list(args.pr_list)
-    else:
-        pr_numbers = list_merged_prs(args.owner, args.repo, args.merged_since)
+    try:
+        if args.pr_list:
+            pr_numbers = parse_pr_list(args.pr_list)
+        else:
+            pr_numbers = list_merged_prs(args.owner, args.repo, args.merged_since)
 
-    _collect_and_write(
-        args.owner, args.repo, pr_numbers, args.out_dir, include_open=args.include_open
-    )
+        _collect_and_write(
+            args.owner, args.repo, pr_numbers, args.out_dir, include_open=args.include_open
+        )
+    except _FETCH_ERRORS as e:
+        print(
+            f"collect_pr_corpus: cannot collect {args.owner}/{args.repo}\n{_fetch_error_detail(e)}",
+            file=sys.stderr,
+        )
+        return 1
     return 0
 
 
