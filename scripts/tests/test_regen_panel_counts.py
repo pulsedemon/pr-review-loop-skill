@@ -491,16 +491,30 @@ def test_allowed_subset_does_not_hide_an_explicit_total(
     assert [line.partition(label)[2] for line in err.splitlines() if label in line] == [repr(total)]
 
 
-def test_adjacent_explicit_totals_are_both_reported(tmp_path: Path, capsys) -> None:
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        (
+            "agreed by 3 personas in total\nA total of 11 personas agreed",
+            ["3 personas in total", "A total of 11 personas"],
+        ),
+        (
+            "A total of 3 personas  \nIn total, 11 personas agreed",
+            ["A total of 3 personas", "In total, 11 personas"],
+        ),
+        ("Agreed by 3 personas  \nIn total, 11 personas agreed", ["In total, 11 personas"]),
+    ],
+)
+def test_adjacent_counts_keep_their_own_qualifiers(tmp_path: Path, capsys, text, expected) -> None:
     root = _make_corpus(tmp_path)
-    (root / "SKILL.md").write_text("agreed by 3 personas in total\nA total of 11 personas agreed")
+    (root / "SKILL.md").write_text(text)
     assert _run(["--validate-coverage", "--corpus-root", str(root)]) == 5
     reports = [
         line.partition("unhandled numbered persona-count phrase: ")[2]
         for line in capsys.readouterr().err.splitlines()
         if "unhandled numbered persona-count phrase: " in line
     ]
-    assert reports == ["'3 personas in total'", "'A total of 11 personas'"]
+    assert reports == [repr(phrase) for phrase in expected]
 
 
 def test_blank_lines_separate_total_qualifiers_from_allowed_subsets(tmp_path: Path) -> None:
@@ -508,6 +522,7 @@ def test_blank_lines_separate_total_qualifiers_from_allowed_subsets(tmp_path: Pa
     (root / "SKILL.md").write_text(
         "## The Other\n \n2 personas approved.\n\nagreed by 3 personas\n\nTotal elapsed time.\n"
         "A total of\n\n11 personas agreed.\n"
+        "## The Other\n2 personas approved.\n"
     )
     assert _run(["--validate-coverage", "--corpus-root", str(root)]) == 0
 

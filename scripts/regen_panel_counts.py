@@ -304,9 +304,10 @@ _TOTAL_PREFIX = (
 )
 _COVERAGE_BROAD_RE = re.compile(
     rf"\b(?:{_TOTAL_PREFIX}\s+)?\d+\s+(?:reviewer\s+)?personas?\b"
+    rf"(?:(?!\s+{_TOTAL_PREFIX}\s+\d)"
     r"(?:\s+(?i:in\s+total)(?=\s*(?:,|(?i:across)\b))"
     r"|\s+(?i:(?:in\s+)?total)(?=\s*(?:[.;:!?)]|$|\(panel\s*\+\s*adversary\)"
-    rf"|,\s*(?i:including|excluding)\b|{_TOTAL_PREFIX}\s+\d)))?"
+    rf"|,\s*(?i:including|excluding)\b|{_TOTAL_PREFIX}\s+\d))))?"
 )
 _WORD_MARKUP = re.compile(r"[*_`]+")
 
@@ -315,7 +316,7 @@ _COVERAGE_ALLOW_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(
         r"\d+\s+personas?\s+(?:approved|objected|requested\s+changes|raised|flagged|agreed)"
     ),
-    re.compile(r"agreed\s+by\s+\d+\s+personas?"),
+    re.compile(r"agreed\s+by\s+\d+\s+personas?", re.IGNORECASE),
     re.compile(r"\d+\s+Move\s+C\s+personas?"),
 )
 
@@ -363,8 +364,10 @@ def _run_validate_coverage(*, corpus_root: Path) -> int:
         ]
         scan_text = "\n".join(scan_lines)
         line_number = 1
-        # keep the delimiters so diagnostics retain physical line numbers.
-        for paragraph in re.split(r"(\n[^\S\n]*\n)", scan_text):
+        # isolate headings and keep separators so line offsets still index the source.
+        for paragraph in re.split(
+            r"(\n[^\S\n]*\n|^ {0,3}#{1,6}(?:[ \t]+[^\n]*)?$)", scan_text, flags=re.MULTILINE
+        ):
             for m in _unwrapped_counts(paragraph):
                 start_line = line_number + paragraph.count("\n", 0, m.start())
                 phrase = paragraph[m.start() : m.end()]

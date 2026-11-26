@@ -264,9 +264,15 @@ def test_write_repairs_drift_across_all_surfaces(tmp_path: Path) -> None:
     paths["state_schema"].write_text(
         paths["state_schema"].read_text().replace("cross_fixture", "xfoo", 1)
     )
-    paths["out_schema"].write_text(
-        paths["out_schema"].read_text().replace("describe_label_drift", "yfoo", 1)
+    expected = (
+        paths["out_schema"]
+        .read_text()
+        .replace('              "', '                 "')
+        .replace("            ]", "               ]")
+        .replace("\n", "\r")
+        .encode()
     )
+    paths["out_schema"].write_bytes(expected.replace(b"describe_label_drift", b"yfoo", 1))
     paths["skill"].write_text(paths["skill"].read_text().replace("testid_unmounted", "zfoo", 1))
     tests_text = paths["tests_md"].read_text()
     idx = tests_text.rfind("conditional_unmounted")
@@ -280,6 +286,7 @@ def test_write_repairs_drift_across_all_surfaces(tmp_path: Path) -> None:
     write = _run(paths, "--write", "--out-of-region-root", str(tmp_path))
     assert write.returncode == 0, write.stderr
     assert paths["state_schema"].stat().st_mode & 0o7777 == 0o755
+    assert paths["out_schema"].read_bytes() == expected
     state = json.loads(paths["state_schema"].read_text())
     assert (
         state["properties"]["history"]["items"]["properties"]["findings"]["items"]["properties"][

@@ -98,3 +98,18 @@ def test_standalone_cli_reports_utf8_drift(tmp_path, script, option, source, mar
         line.startswith("-") and "café" in line
         for line in result.stderr.decode("utf-8").splitlines()
     )
+
+
+@pytest.mark.parametrize(
+    "script", ["regen_adversary_caps.py", "regen_move_a1_enum.py", "regen_dev_trees.py"]
+)
+def test_unreadable_manifest_exits_three_with_its_path(tmp_path, script) -> None:
+    entrypoint = Path(__file__).resolve().parents[1] / script
+    result = subprocess.run(
+        [sys.executable, str(entrypoint), "--check", "--manifest", str(tmp_path)],
+        capture_output=True,
+        encoding="utf-8",
+    )
+    assert result.returncode == 3
+    assert str(tmp_path) in result.stderr
+    assert "Traceback" not in result.stderr

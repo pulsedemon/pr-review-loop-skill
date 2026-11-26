@@ -119,7 +119,7 @@ def main(argv: list[str]) -> int:
     try:
         manifest = yaml.safe_load(args.manifest.read_text(encoding="utf-8"))
         cap = int(manifest["cap"])
-    except (FileNotFoundError, KeyError, TypeError, ValueError, yaml.YAMLError) as e:
+    except (OSError, KeyError, TypeError, ValueError, yaml.YAMLError) as e:
         print(f"regen_adversary_caps: manifest error: {e}", file=sys.stderr)
         return generator_io.MANIFEST_ERROR_EXIT
 

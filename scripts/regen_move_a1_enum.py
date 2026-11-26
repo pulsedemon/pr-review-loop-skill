@@ -252,8 +252,8 @@ def _scan_out_of_region(
 ) -> list[str]:
     """Return a list of "<file>:<lineno>: <line>" hits for any enum value
     occurring outside a known region in non-excluded UTF-8 text under root.
-    Manifest and mirror formats must be UTF-8. A UTF-16 or UTF-32 byte-order
-    mark identifies unsupported text. Other undecodable, NUL-bearing assets are skipped."""
+    An invalid UTF-8 input is skipped only when it contains NUL, has no Unicode
+    byte-order mark, and has neither a manifest nor a mirror suffix."""
     mirror_set = {p.resolve() for p in mirror_paths}
     manifest_resolved = manifest.resolve()
     text_suffixes = {path.suffix.lower() for path in [manifest, *mirror_paths]}
@@ -365,7 +365,7 @@ def main(argv: list[str]) -> int:
 
     try:
         values = load_values(args.manifest)
-    except (FileNotFoundError, KeyError, TypeError, ValueError, yaml.YAMLError) as e:
+    except (OSError, KeyError, TypeError, ValueError, yaml.YAMLError) as e:
         print(f"regen_move_a1_enum: manifest error: {e}", file=sys.stderr)
         return generator_io.MANIFEST_ERROR_EXIT
 

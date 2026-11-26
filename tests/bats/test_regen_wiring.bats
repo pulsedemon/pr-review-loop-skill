@@ -124,3 +124,11 @@ assert_every_generator_ran() {
   [[ "$output" == *"usage: regen_panel_counts.py"* ]]
   [[ "$output" == *"…"* ]]
 }
+
+@test "a drifted generator with closed stderr leaves stdout empty" {
+  local target="$BATS_TEST_TMPDIR/SKILL.md"
+  printf '%s\n' '<!-- regen:panel-count-total:start -->' '<!-- template: {n} personas -->' 'stale' '<!-- regen:panel-count-total:end -->' > "$target"
+  run bash -c 'exec python3 "$1" --check --corpus-root "$2" 2>&-' _ "$SCRIPTS/regen_panel_counts.py" "$BATS_TEST_TMPDIR"
+  [[ "$status" -eq 5 ]]
+  [[ -z "$output" ]]
+}
