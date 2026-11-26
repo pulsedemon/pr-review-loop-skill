@@ -449,6 +449,9 @@ def test_validate_coverage_allows_subset_phrases(tmp_path: Path) -> None:
         "agreed by 3 personas\n"
         "Of the five selected, three abstained and the other 2 personas approved.\n"
         "Five were selected and all of the 5 personas approved.\n"
+        "Enter the amount the invoices agreed by 3 personas total.\n"
+        "Find what the invoices agreed by 3 personas total, including tax.\n"
+        "We checked (how much the invoices agreed by 3 personas total) before paying.\n"
         "What do the invoices agreed by 3 personas total?\n"
         "3 personas agreed in total\n"
         "The proposal was agreed by 3 personas in total silence.\n"
@@ -474,10 +477,9 @@ def test_validate_coverage_allows_subset_phrases(tmp_path: Path) -> None:
         ("agreed by 12 personas **in total**", "12 personas **in total**"),
         ("A total of **11 personas** agreed", "A total of **11 personas**"),
         ("In total, 11 personas agreed", "In total, 11 personas"),
-        ("agreed by 12 personas total, including two new members", "12 personas total"),
         ("agreed by 12 personas in total across two rounds", "12 personas in total"),
         ("agreed by 3 personas\nTotal of 11 personas agreed", "Total of 11 personas"),
-        ("agreed by 12 personas total", "12 personas total"),
+        ("agreed by 12 personas total (panel + adversary)", "12 personas total"),
         ("agreed by 12 personas in total", "12 personas in total"),
         ("agreed by 12 personas in total, including two new members", "12 personas in total"),
     ],

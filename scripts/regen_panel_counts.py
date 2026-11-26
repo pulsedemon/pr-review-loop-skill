@@ -304,7 +304,7 @@ _COVERAGE_BROAD_RE = re.compile(
     rf"\b(?:{_TOTAL_PREFIX}\s+)?\d+\s+(?:reviewer\s+)?personas?\b"
     rf"(?:(?!\s+{_TOTAL_PREFIX}\s+\d)"
     r"(?:\s+(?i:in\s+total)(?=\s+(?i:across)\b)"
-    r"|\s+(?i:(?:in\s+total|total(?!\s*\?)))(?=\s*(?:[.;:!?)]|$|\(panel\s*\+\s*adversary\)"
+    r"|\s+(?i:total)(?=\s*\(panel\s*\+\s*adversary\))|\s+(?i:in\s+total)(?=\s*(?:[.;:!?)]|$|\(panel\s*\+\s*adversary\)"
     rf"|,\s*(?i:including|excluding)\b[^,.;!?\n]*(?:[.;!?]|$)|{_TOTAL_PREFIX}\s+\d))))?"
 )
 _PARAGRAPH_BOUNDARY = re.compile(
