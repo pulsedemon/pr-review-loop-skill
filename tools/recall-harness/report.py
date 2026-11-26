@@ -39,7 +39,9 @@ from collect_pr_corpus import (
 
 DEFAULT_LABELS = HARNESS_DIR / "labels.csv"
 
-MATCHED_FALSE_WARN_THRESHOLD = 0.10  # 10%
+MATCHED_FALSE_WARN_THRESHOLD = 0.10
+NEAR_MISS_DECISION_CUT = 0.45
+NEAR_MISS_DECISION_SHARE = 0.30
 
 # keep the on-disk scorer contract independent of matcher execution; the
 # threshold and window determine how this report interprets stored scores.
@@ -71,7 +73,7 @@ def _require_scorer(rows: list[dict], path: Path) -> None:
     The staleness check downstream compares counts, which an output from before
     the containment switch satisfies: it partitions the same corpus the same
     way. Only the scores differ, and reading jaccard scores against containment
-    bins and the 0.45 decision cut is silently wrong rather than visibly so.
+    bins and the decision cut is silently wrong rather than visibly so.
     """
     for row in rows:
         scorer = row.get("scorer")
@@ -480,9 +482,7 @@ def main() -> int:
             summary = u.get("external", {}).get("summary", "")
             miss_groups[_candidate_cause(summary)].append((owner, repo, pr, summary))
 
-    # Unanchored bucket labels are not joined to corpus items (they have no
-    # finding_id); we just surface labels.csv rows in those buckets so the
-    # protocol's promised buckets aren't silently ignored.
+    # the matcher emits no JSONL for unanchored findings, so tally their labels directly.
     for (_o, _r, _pr, bucket, _fid), (label, _notes) in labels.items():
         if bucket in ("unanchored_external", "unanchored_loop") and label:
             label_distribution[(bucket, label)] += 1
@@ -556,43 +556,17 @@ def main() -> int:
                 out.write(f"- {owner}/{repo} PR #{pr}: {summary}\n")
             out.write("\n")
 
-    # Matcher near-misses (Phase 1 diagnostic). Surfaces unmatched externals
-    # that have a same-file loop finding: i.e., the matcher is the gate that
-    # fired, not (necessarily) persona recall. The score on a near-miss row is
-    # whatever _best_near_miss computed: containment, the same scorer the match
-    # gate uses. It is typically below CONTAINMENT_THRESHOLD (because anything
-    # at or above it within ±HARNESS_LINE_WINDOW would have matched), but can
-    # also be at or above when the line-window gate rather than the overlap gate
-    # blocked the match: _best_near_miss intentionally applies no line window
-    # so the diagnostic distinguishes the two.
-    #
-    # Sort key is (is_real_miss desc, score desc): labeled real_miss rows
-    # always float above the 25-row visual cap so the section never drops
-    # them silently. The current REPORT.md has 10 labeled real_miss in
-    # `test coverage` alone, so without this sort key a cap-of-25 dominated
-    # by 51 unlabeled rows would push real_miss off the visible list and
-    # the Phase 1 decision rule's input would be corrupted.
-    #
-    # The decision-rule statistic (count of real_miss with score >= 0.45,
-    # divided by total real_miss with non-null near-miss) is computed from
-    # the FULL near_miss_rows list (uncapped) and emitted on its own line
-    # above the capped section. Phase 1's 30%/0.45 threshold is read from
-    # this single source: never hand-counted from the rendered rows.
-    #
-    # Section is omitted entirely if no unmatched record carried a
-    # same-file loop finding (all scores null): that's a different signal
-    # (no co-location at all) and the cap-at-25 list would be empty noise.
     if near_miss_rows:
         out.write("## Matcher near-misses (unmatched externals with a same-file loop finding)\n\n")
         real_miss_with_score = [r for r in near_miss_rows if r.is_real_miss]
         rm_total = len(real_miss_with_score)
-        rm_ge_045 = sum(1 for r in real_miss_with_score if r.score >= 0.45)
+        rm_at_cut = sum(1 for r in real_miss_with_score if r.score >= NEAR_MISS_DECISION_CUT)
         if rm_total:
-            pct = 100.0 * rm_ge_045 / rm_total
+            pct = 100.0 * rm_at_cut / rm_total
             out.write(
-                f"Near-miss diagnostic: {rm_ge_045} of {rm_total} real_miss rows "
-                f"have score >= 0.45 ({pct:.1f}%). "
-                "Phase 1 decision rule (spec §1, decision rule): >= 30% => matcher recall is "
+                f"Near-miss diagnostic: {rm_at_cut} of {rm_total} real_miss rows "
+                f"have score >= {NEAR_MISS_DECISION_CUT:.2f} ({pct:.1f}%). "
+                f"Decision rule: >= {NEAR_MISS_DECISION_SHARE:.0%} => matcher recall is "
                 "meaningfully limiting.\n\n"
             )
         else:
@@ -604,29 +578,15 @@ def main() -> int:
                 "Near-miss diagnostic: no real_miss labels on rows with a same-file "
                 "loop finding yet: decision-rule statistic is not computable.\n\n"
             )
-        # Histogram over real_miss near-miss scores. Spec calls the 30%/0.45
-        # thresholds "starting points, not load-bearing"; surfacing the full
-        # distribution lets the reader spot a bimodal cut elsewhere without
-        # re-running. Bins are half-open [lo, hi); the final bin's upper bound
-        # is 1.01 (exclusive) so a score of exactly 1.0 lands in it. The
-        # [0.50-1.01) bins capture line-gate-only near-misses (same-file loop
-        # finding far from the external line with high summary overlap); these
-        # are unmatched not because the overlap was too low but because the line
-        # window blocked the match: _best_near_miss applies no line gate so
-        # they show up here. The boundary is CONTAINMENT_THRESHOLD: below it the
-        # overlap gate fired, at or above it the line gate did. Bin counts must
-        # sum to n; without the final bins those rows would be silently dropped
-        # from the distribution. 0.45 is an explicit bin edge so the
-        # decision-rule cut is visible at a glance: the rows in [0.45, 0.50)
-        # are the marginal ones that flip the matcher-recall verdict.
+        # the final upper bound includes scores of exactly one in half-open bins.
         if rm_total:
             bins = [
                 (0.00, 0.10),
                 (0.10, 0.20),
                 (0.20, 0.30),
                 (0.30, 0.40),
-                (0.40, 0.45),
-                (0.45, 0.50),
+                (0.40, NEAR_MISS_DECISION_CUT),
+                (NEAR_MISS_DECISION_CUT, 0.50),
                 (0.50, 0.75),
                 (0.75, 1.01),
             ]
@@ -635,16 +595,12 @@ def main() -> int:
             for (lo, hi), c in zip(bins, counts, strict=True):
                 out.write(f"  [{lo:.2f}-{hi:.2f}): {c}\n")
             out.write(
-                "Histogram is the source of truth if the 30%/0.45 statistic looks "
-                "borderline: the spec explicitly calls the thresholds starting points.\n\n"
+                "Histogram is the source of truth if the "
+                f"{NEAR_MISS_DECISION_SHARE:.0%}/{NEAR_MISS_DECISION_CUT:.2f} statistic looks "
+                "borderline: both thresholds are starting points.\n\n"
             )
-        # Sort key prioritizes labeled real_miss above the 25-row visual cap; see
-        # comment block above.
+        # keep labeled misses visible above the display limit.
         near_miss_rows.sort(key=lambda r: (-int(r.is_real_miss), -r.score))
-        # 200-char truncation matches the finding_evidence.snippet convention
-        # used elsewhere in the codebase (reviewers/output.schema.json); keeps
-        # REPORT.md readable while preserving enough context to identify the
-        # underlying finding.
         for r in near_miss_rows[:25]:
             tag = " [real_miss]" if r.is_real_miss else ""
             # line_delta_str surfaces when summary similarity is high but the same-file
@@ -697,7 +653,8 @@ def main() -> int:
         if rate > MATCHED_FALSE_WARN_THRESHOLD:
             out.write(f"matched_false rate: {rate:.1%}\n\n")
             out.write(
-                f"**MATCHER QUALITY WARNING**: matched_false rate {rate:.1%} is above 10%. "
+                f"**MATCHER QUALITY WARNING**: matched_false rate {rate:.1%} is above "
+                f"{MATCHED_FALSE_WARN_THRESHOLD:.0%}. "
                 "Tune `scripts/finding_matcher.py` before trusting unmatched-driven groups.\n"
             )
         else:

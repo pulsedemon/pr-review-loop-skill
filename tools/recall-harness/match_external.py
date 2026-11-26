@@ -112,13 +112,6 @@ def _best_near_miss(
     """Return (best_overlap_score, best_loop_summary, line_delta) over same-file
     loop findings.
 
-    `ext_for_matcher` is the same trimmed `{file, line, summary}` dict that
-    `_run_matcher` validates at match_external.py:100-128 (all three keys
-    present, correct types). Do not pass a raw external: `ext["summary"]`
-    and `ext["line"]` below are unchecked accesses, by design, because the
-    caller is responsible for trimming. Passing a raw external will KeyError
-    silently at runtime, not at test time.
-
     Scores containment, the same scorer `_run_matcher` gates on, so a near-miss
     number is directly comparable to the threshold it fell short of.
 
