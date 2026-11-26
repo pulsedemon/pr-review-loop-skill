@@ -117,7 +117,7 @@ def main(argv: list[str]) -> int:
         args.check = True
 
     try:
-        manifest = yaml.safe_load(args.manifest.read_text())
+        manifest = yaml.safe_load(args.manifest.read_text(encoding="utf-8"))
         cap = int(manifest["cap"])
     except (FileNotFoundError, KeyError, TypeError, ValueError, yaml.YAMLError) as e:
         print(f"regen_adversary_caps: manifest error: {e}", file=sys.stderr)

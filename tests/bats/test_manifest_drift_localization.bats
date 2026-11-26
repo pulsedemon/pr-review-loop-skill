@@ -4,6 +4,7 @@ load test_helper
 
 # keep the real flags and addendums so phantom is the only drift.
 setup() {
+  export LC_ALL=C PYTHONUTF8=0 PYTHONCOERCECLOCALE=0
   SKILL="${BATS_TEST_TMPDIR}/skill"
   copy_skill_tree --git "$SKILL"
   python3 - "${SKILL}/reviewers/personas.yaml" <<'PY'
@@ -13,9 +14,9 @@ from pathlib import Path
 import yaml
 
 path = Path(sys.argv[1])
-manifest = yaml.safe_load(path.read_text())
+manifest = yaml.safe_load(path.read_text(encoding="utf-8"))
 manifest["panel"].append({"name": "phantom", "description": "fixture stub", "move_c": True})
-path.write_text(yaml.safe_dump(manifest, sort_keys=False))
+path.write_text(yaml.safe_dump(manifest, sort_keys=False), encoding="utf-8")
 PY
 }
 
@@ -69,12 +70,12 @@ from pathlib import Path
 
 import yaml
 
-original, mutated = (yaml.safe_load(Path(path).read_text()) for path in sys.argv[1:3])
+original, mutated = (yaml.safe_load(Path(path).read_text(encoding="utf-8")) for path in sys.argv[1:3])
 phantom = mutated["panel"].pop()
 if phantom != {"name": "phantom", "description": "fixture stub", "move_c": True} or mutated != original:
     raise SystemExit("expected the manifest to differ only by the appended phantom persona")
 
-lines = Path(sys.argv[3]).read_text().splitlines()
+lines = Path(sys.argv[3]).read_text(encoding="utf-8").splitlines()
 lines.remove("--- current SKILL.md")
 lines.remove("+++ changed SKILL.md")
 added = [line[1:] for line in lines if line.startswith("+")]

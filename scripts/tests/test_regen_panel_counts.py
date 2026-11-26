@@ -154,6 +154,8 @@ def test_subset_phrases_outside_regions_are_not_touched(
     that legitimately names a subset, must be left byte-identical.
     """
     manifest = write_personas_yaml(tmp_path, ["a", "b", "c"])  # n = 3
+    with manifest.open("a", encoding="utf-8") as stream:
+        stream.write("# UTF-8 fixture: ā\n")
     root = _make_corpus(tmp_path)
     f = root / "tests" / "scenarios" / "08.md"
     body = (
@@ -447,6 +449,7 @@ def test_validate_coverage_allows_subset_phrases(tmp_path: Path) -> None:
         "agreed by 3 personas\n"
         "3 personas agreed in total\n"
         "The revisions agreed by 3 personas total five pages.\n"
+        "The revisions agreed by 3 personas total (on average) five pages.\n"
         "4 Move C personas link to docs/procedure-moves.md\n"
     )
     rc = _run(["--validate-coverage", "--corpus-root", str(root)])
@@ -458,6 +461,7 @@ def test_validate_coverage_allows_subset_phrases(tmp_path: Path) -> None:
     [
         ("The panel of 999 personas agreed", "panel of 999 personas"),
         ("A total of 11 personas agreed", "A total of 11 personas"),
+        ("A total of **11 personas agreed**", "A total of **11 personas"),
         ("agreed by 3 personas\nTotal of 11 personas agreed", "Total of 11 personas"),
         ("The other 10 personas agreed", "The other 10 personas"),
         ("agreed by 12 personas total", "12 personas total"),

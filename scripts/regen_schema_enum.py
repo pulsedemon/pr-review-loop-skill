@@ -104,7 +104,7 @@ def main(argv: list[str]) -> int:
 
     names = [p.name for p in manifest.panel] + [manifest.adversary.name]
     try:
-        current = args.schema.read_text()
+        current = args.schema.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as e:
         print(f"regen_schema_enum: failed to read {args.schema}: {e}", file=sys.stderr)
         return generator_io.MANIFEST_ERROR_EXIT

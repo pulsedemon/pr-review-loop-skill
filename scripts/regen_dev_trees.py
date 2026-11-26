@@ -114,7 +114,7 @@ def main(argv: list[str]) -> int:
         args.check = True
 
     try:
-        manifest = yaml.safe_load(args.manifest.read_text())
+        manifest = yaml.safe_load(args.manifest.read_text(encoding="utf-8"))
         raw = manifest["dev_trees"]
         # Check the type before list(): a bare string would become its
         # characters and a mapping its keys, either of which can pass every

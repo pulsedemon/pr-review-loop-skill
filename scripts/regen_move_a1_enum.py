@@ -66,7 +66,7 @@ _OUT_ENUM_SLICE = re.compile(
 
 def load_values(path: Path) -> list[str]:
     """return the manifest's enum values; raise on a missing key or malformed list."""
-    values = yaml.safe_load(path.read_text())["move_a1_pattern"]
+    values = yaml.safe_load(path.read_text(encoding="utf-8"))["move_a1_pattern"]
     # check the type first: a bare string would iterate as its characters.
     if (
         not isinstance(values, list)
@@ -271,7 +271,7 @@ def _scan_out_of_region(
             if resolved in mirror_set:
                 continue
             try:
-                text = path.read_text()
+                text = path.read_text(encoding="utf-8")
             except (OSError, UnicodeDecodeError):
                 continue
             for lineno, line in enumerate(text.splitlines(), start=1):
@@ -305,7 +305,7 @@ def _scan_tests_md_bullet_drift(path: Path, values: list[str]) -> list[str]:
     reviewers/adversary.md the same ``**snake_case**`` syntax is used
     for unrelated parameter names and would produce false positives.
     """
-    text = path.read_text()
+    text = path.read_text(encoding="utf-8")
     region_spans = [(m.start(), m.end()) for m in _REGION.finditer(text)]
     value_set = set(values)
     hits: list[str] = []

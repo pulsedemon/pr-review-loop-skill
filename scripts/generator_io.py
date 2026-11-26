@@ -20,7 +20,7 @@ def atomic_write(path: Path, content: str | bytes) -> None:
         if isinstance(content, bytes):
             tmp.write_bytes(content)
         else:
-            tmp.write_text(content)
+            tmp.write_text(content, encoding="utf-8")
         os.chmod(tmp, path.stat().st_mode & 0o7777)
         os.replace(tmp, path)
     except Exception:
@@ -72,7 +72,7 @@ def sync(targets: Iterable[tuple[Path, Callable[[str], str]]], *, check: bool) -
     drifted = False
     for path, regen in targets:
         try:
-            current = path.read_text()
+            current = path.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError) as e:
             fail(f"failed to read {path}: {e}")
         regenerated = regen(current)
