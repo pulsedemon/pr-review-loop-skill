@@ -1,4 +1,4 @@
-"""Tests for scripts.personas_manifest — the persona-manifest loader."""
+"""tests for the persona-manifest loader."""
 
 from __future__ import annotations
 
@@ -24,12 +24,10 @@ def _write(tmp_path: Path, body: str) -> Path:
 _MINIMAL_VALID = """
 panel:
   - name: alpha
-    file: alpha.md
     description: alpha persona
     owns_schema_constraint_blocker: true
 adversary:
   name: adversary
-  file: adversary.md
   description: adversary persona
 addendums: []
 """
@@ -50,17 +48,14 @@ def test_panel_persona_basic_fields(tmp_path: Path) -> None:
         """
         panel:
           - name: alpha
-            file: alpha.md
             description: alpha persona
             move_c: false
           - name: beta
-            file: beta.md
             description: beta persona
             move_c: true
             owns_schema_constraint_blocker: true
         adversary:
           name: adversary
-          file: adversary.md
           description: adversary persona
         addendums: []
         """,
@@ -71,40 +66,19 @@ def test_panel_persona_basic_fields(tmp_path: Path) -> None:
     assert m.panel[0].owns_schema_constraint_blocker is False
 
 
-def test_file_must_equal_name_dot_md(tmp_path: Path) -> None:
-    p = _write(
-        tmp_path,
-        """
-        panel:
-          - name: alpha
-            file: wrong_name.md
-            move_c: false
-        adversary:
-          name: adversary
-          file: adversary.md
-        addendums: []
-        """,
-    )
-    with pytest.raises(ManifestError, match=r"file.*must equal.*alpha\.md"):
-        load_manifest(p)
-
-
 def test_duplicate_panel_names_rejected(tmp_path: Path) -> None:
     p = _write(
         tmp_path,
         """
         panel:
           - name: alpha
-            file: alpha.md
             description: alpha persona
             move_c: false
           - name: alpha
-            file: alpha.md
             description: alpha duplicate
             move_c: false
         adversary:
           name: adversary
-          file: adversary.md
           description: adversary persona
         addendums: []
         """,
@@ -119,12 +93,10 @@ def test_exactly_one_schema_constraint_owner_required(tmp_path: Path) -> None:
         """
         panel:
           - name: alpha
-            file: alpha.md
             description: alpha persona
             move_c: false
         adversary:
           name: adversary
-          file: adversary.md
           description: adversary persona
         addendums: []
         """,
@@ -139,18 +111,15 @@ def test_more_than_one_schema_constraint_owner_rejected(tmp_path: Path) -> None:
         """
         panel:
           - name: alpha
-            file: alpha.md
             description: alpha persona
             move_c: false
             owns_schema_constraint_blocker: true
           - name: beta
-            file: beta.md
             description: beta persona
             move_c: false
             owns_schema_constraint_blocker: true
         adversary:
           name: adversary
-          file: adversary.md
           description: adversary persona
         addendums: []
         """,
@@ -165,21 +134,17 @@ def test_move_c_files_returns_only_move_c_personas(tmp_path: Path) -> None:
         """
         panel:
           - name: alpha
-            file: alpha.md
             description: alpha persona
             move_c: true
           - name: beta
-            file: beta.md
             description: beta persona
             move_c: false
             owns_schema_constraint_blocker: true
           - name: gamma
-            file: gamma.md
             description: gamma persona
             move_c: true
         adversary:
           name: adversary
-          file: adversary.md
           description: adversary persona
         addendums: []
         """,
@@ -194,17 +159,14 @@ def test_schema_constraint_owner_helper(tmp_path: Path) -> None:
         """
         panel:
           - name: alpha
-            file: alpha.md
             description: alpha persona
             move_c: false
             owns_schema_constraint_blocker: true
           - name: beta
-            file: beta.md
             description: beta persona
             move_c: true
         adversary:
           name: adversary
-          file: adversary.md
           description: adversary persona
         addendums: []
         """,
@@ -223,7 +185,6 @@ def test_non_dict_panel_entry_rejected(tmp_path: Path) -> None:
           - "not a dict"
         adversary:
           name: adversary
-          file: adversary.md
         addendums: []
         """,
     )
@@ -236,15 +197,15 @@ def test_panel_entry_missing_required_key_rejected(tmp_path: Path) -> None:
         tmp_path,
         """
         panel:
-          - name: alpha
-            move_c: false
+          - description: alpha persona
+            owns_schema_constraint_blocker: true
         adversary:
           name: adversary
-          file: adversary.md
+          description: adversary persona
         addendums: []
         """,
     )
-    with pytest.raises(ManifestError, match=r"panel\[0\] missing required key 'file'"):
+    with pytest.raises(ManifestError, match=r"panel\[0\] missing required key 'name'"):
         load_manifest(p)
 
 
@@ -266,7 +227,6 @@ def test_panel_missing_rejected(tmp_path: Path) -> None:
         """
         adversary:
           name: adversary
-          file: adversary.md
         addendums: []
         """,
     )
@@ -281,7 +241,6 @@ def test_panel_empty_rejected(tmp_path: Path) -> None:
         panel: []
         adversary:
           name: adversary
-          file: adversary.md
         addendums: []
         """,
     )
@@ -295,7 +254,6 @@ def test_adversary_not_a_mapping_rejected(tmp_path: Path) -> None:
         """
         panel:
           - name: alpha
-            file: alpha.md
             owns_schema_constraint_blocker: true
         adversary: "just a string"
         addendums: []
@@ -311,53 +269,13 @@ def test_addendums_not_a_list_rejected(tmp_path: Path) -> None:
         """
         panel:
           - name: alpha
-            file: alpha.md
             owns_schema_constraint_blocker: true
         adversary:
           name: adversary
-          file: adversary.md
         addendums: "foo"
         """,
     )
     with pytest.raises(ManifestError, match=r"'addendums' must be a list"):
-        load_manifest(p)
-
-
-def test_adversary_missing_required_key_rejected(tmp_path: Path) -> None:
-    p = _write(
-        tmp_path,
-        """
-        panel:
-          - name: alpha
-            file: alpha.md
-            description: alpha persona
-            owns_schema_constraint_blocker: true
-        adversary:
-          name: adversary
-        addendums: []
-        """,
-    )
-    with pytest.raises(ManifestError, match=r"adversary missing required key 'file'"):
-        load_manifest(p)
-
-
-def test_adversary_file_must_match_name(tmp_path: Path) -> None:
-    p = _write(
-        tmp_path,
-        """
-        panel:
-          - name: alpha
-            file: alpha.md
-            description: alpha persona
-            owns_schema_constraint_blocker: true
-        adversary:
-          name: adversary
-          file: wrong.md
-          description: adversary persona
-        addendums: []
-        """,
-    )
-    with pytest.raises(ManifestError, match=r"file 'wrong\.md' must equal 'adversary\.md'"):
         load_manifest(p)
 
 
@@ -377,12 +295,10 @@ def test_unknown_panel_key_rejected(tmp_path: Path) -> None:
         """
         panel:
           - name: alpha
-            file: alpha.md
             mov_c: true
             owns_schema_constraint_blocker: true
         adversary:
           name: adversary
-          file: adversary.md
         addendums: []
         """,
     )
@@ -396,12 +312,10 @@ def test_unknown_adversary_key_rejected(tmp_path: Path) -> None:
         """
         panel:
           - name: alpha
-            file: alpha.md
             description: alpha persona
             owns_schema_constraint_blocker: true
         adversary:
           name: adversary
-          file: adversary.md
           description: adversary persona
           rol: panel
         addendums: []
@@ -419,13 +333,11 @@ def test_panel_move_c_must_be_bool_not_string(tmp_path: Path) -> None:
         """
         panel:
           - name: alpha
-            file: alpha.md
             description: alpha persona
             move_c: "false"
             owns_schema_constraint_blocker: true
         adversary:
           name: adversary
-          file: adversary.md
           description: adversary persona
         addendums: []
         """,
@@ -440,12 +352,10 @@ def test_panel_owns_schema_constraint_blocker_must_be_bool(tmp_path: Path) -> No
         """
         panel:
           - name: alpha
-            file: alpha.md
             description: alpha persona
             owns_schema_constraint_blocker: "true"
         adversary:
           name: adversary
-          file: adversary.md
           description: adversary persona
         addendums: []
         """,
@@ -463,11 +373,9 @@ def test_panel_name_must_be_string(tmp_path: Path) -> None:
         """
         panel:
           - name: 123
-            file: 123.md
             owns_schema_constraint_blocker: true
         adversary:
           name: adversary
-          file: adversary.md
         addendums: []
         """,
     )
@@ -481,12 +389,10 @@ def test_addendum_must_be_string(tmp_path: Path) -> None:
         """
         panel:
           - name: alpha
-            file: alpha.md
             description: alpha persona
             owns_schema_constraint_blocker: true
         adversary:
           name: adversary
-          file: adversary.md
           description: adversary persona
         addendums:
           - key: val
@@ -509,12 +415,10 @@ def test_addendum_collides_with_panel_file_rejected(tmp_path: Path) -> None:
         """
         panel:
           - name: alpha
-            file: alpha.md
             description: alpha persona
             owns_schema_constraint_blocker: true
         adversary:
           name: adversary
-          file: adversary.md
           description: adversary persona
         addendums:
           - alpha.md
@@ -530,12 +434,10 @@ def test_addendum_collides_with_adversary_file_rejected(tmp_path: Path) -> None:
         """
         panel:
           - name: alpha
-            file: alpha.md
             description: alpha persona
             owns_schema_constraint_blocker: true
         adversary:
           name: adversary
-          file: adversary.md
           description: adversary persona
         addendums:
           - adversary.md
@@ -633,11 +535,9 @@ def test_panel_description_missing_rejected(tmp_path: Path) -> None:
         """
         panel:
           - name: alpha
-            file: alpha.md
             owns_schema_constraint_blocker: true
         adversary:
           name: adversary
-          file: adversary.md
           description: adversary persona
         addendums: []
         """,
@@ -654,12 +554,10 @@ def test_panel_description_not_string_rejected(tmp_path: Path) -> None:
         """
         panel:
           - name: alpha
-            file: alpha.md
             description: 42
             owns_schema_constraint_blocker: true
         adversary:
           name: adversary
-          file: adversary.md
           description: adversary persona
         addendums: []
         """,
@@ -674,12 +572,10 @@ def test_panel_description_empty_rejected(tmp_path: Path) -> None:
         """
         panel:
           - name: alpha
-            file: alpha.md
             description: "   "
             owns_schema_constraint_blocker: true
         adversary:
           name: adversary
-          file: adversary.md
           description: adversary persona
         addendums: []
         """,
@@ -694,12 +590,10 @@ def test_panel_description_leading_hyphen_rejected(tmp_path: Path) -> None:
         """
         panel:
           - name: alpha
-            file: alpha.md
             description: "- alpha persona"
             owns_schema_constraint_blocker: true
         adversary:
           name: adversary
-          file: adversary.md
           description: adversary persona
         addendums: []
         """,
@@ -720,12 +614,10 @@ def test_adversary_description_missing_rejected(tmp_path: Path) -> None:
         """
         panel:
           - name: alpha
-            file: alpha.md
             description: alpha persona
             owns_schema_constraint_blocker: true
         adversary:
           name: adversary
-          file: adversary.md
         addendums: []
         """,
     )
@@ -741,12 +633,10 @@ def test_adversary_description_not_string_rejected(tmp_path: Path) -> None:
         """
         panel:
           - name: alpha
-            file: alpha.md
             description: alpha persona
             owns_schema_constraint_blocker: true
         adversary:
           name: adversary
-          file: adversary.md
           description: [list, not, string]
         addendums: []
         """,
@@ -763,12 +653,10 @@ def test_adversary_description_empty_rejected(tmp_path: Path) -> None:
         """
         panel:
           - name: alpha
-            file: alpha.md
             description: alpha persona
             owns_schema_constraint_blocker: true
         adversary:
           name: adversary
-          file: adversary.md
           description: ""
         addendums: []
         """,
@@ -785,12 +673,10 @@ def test_adversary_description_leading_hyphen_rejected(tmp_path: Path) -> None:
         """
         panel:
           - name: alpha
-            file: alpha.md
             description: alpha persona
             owns_schema_constraint_blocker: true
         adversary:
           name: adversary
-          file: adversary.md
           description: "- adversary persona"
         addendums: []
         """,
@@ -812,12 +698,10 @@ def test_persona_name_with_bracket_rejected(tmp_path: Path) -> None:
         """
         panel:
           - name: 'bad]name'
-            file: 'bad]name.md'
             description: some persona
             owns_schema_constraint_blocker: true
         adversary:
           name: adversary
-          file: adversary.md
           description: adversary persona
         addendums: []
         """,
@@ -833,12 +717,10 @@ def test_persona_name_uppercase_rejected(tmp_path: Path) -> None:
         """
         panel:
           - name: BadName
-            file: BadName.md
             description: some persona
             owns_schema_constraint_blocker: true
         adversary:
           name: adversary
-          file: adversary.md
           description: adversary persona
         addendums: []
         """,
@@ -854,12 +736,10 @@ def test_adversary_name_uppercase_rejected(tmp_path: Path) -> None:
         """
         panel:
           - name: alpha
-            file: alpha.md
             description: alpha persona
             owns_schema_constraint_blocker: true
         adversary:
           name: Adversary
-          file: Adversary.md
           description: adversary persona
         addendums: []
         """,
@@ -875,13 +755,11 @@ def test_move_flag_must_be_boolean(tmp_path: Path, key: str) -> None:
         f"""
         panel:
           - name: alpha
-            file: alpha.md
             description: "alpha persona"
             {key}: "yes"
             owns_schema_constraint_blocker: true
         adversary:
           name: adversary
-          file: adversary.md
         addendums: []
         """,
     )
@@ -895,12 +773,10 @@ def test_move_flags_default_to_false_when_absent(tmp_path: Path) -> None:
         """
         panel:
           - name: alpha
-            file: alpha.md
             description: "alpha persona"
             owns_schema_constraint_blocker: true
         adversary:
           name: adversary
-          file: adversary.md
           description: "adversary persona"
         addendums: []
         """,
@@ -920,19 +796,16 @@ def test_move_accessors_select_the_flagged_personas(tmp_path: Path) -> None:
         """
         panel:
           - name: alpha
-            file: alpha.md
             description: "alpha persona"
             move_a: true
             move_b: true
             owns_schema_constraint_blocker: true
           - name: beta
-            file: beta.md
             description: "beta persona"
             move_a1: true
             move_c: true
         adversary:
           name: adversary
-          file: adversary.md
           description: "adversary persona"
         addendums: []
         """,
@@ -951,12 +824,10 @@ def test_unknown_adversary_move_key_rejected(tmp_path: Path, key: str) -> None:
         f"""
         panel:
           - name: alpha
-            file: alpha.md
             description: "alpha persona"
             owns_schema_constraint_blocker: true
         adversary:
           name: adversary
-          file: adversary.md
           {key}: true
         addendums: []
         """,

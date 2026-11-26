@@ -14,7 +14,7 @@ import yaml
 
 path = Path(sys.argv[1])
 manifest = yaml.safe_load(path.read_text())
-manifest["panel"].append({"name": "phantom", "file": "phantom.md", "description": "fixture stub", "move_c": True})
+manifest["panel"].append({"name": "phantom", "description": "fixture stub", "move_c": True})
 path.write_text(yaml.safe_dump(manifest, sort_keys=False))
 PY
 }

@@ -11,8 +11,8 @@ their wording is tuned to each persona's domain. See
 
 ## Add, remove, or rename a persona
 
-1. Edit `reviewers/personas.yaml`. Each persona needs `name`, `file` (must
-   equal `<name>.md`), and a one-line `description` (the bullet text shown
+1. Edit `reviewers/personas.yaml`. Each persona needs `name` (its prompt file is
+   `reviewers/<name>.md`) and a one-line `description` (the bullet text shown
    in SKILL.md's "Reviewer personas" section). Use a YAML folded scalar
    (`>-`) for multi-sentence descriptions.
 2. Run `scripts/regen.sh`. This regenerates the surfaces the

@@ -10,9 +10,7 @@ def write_personas_yaml(
     """the first persona owns the schema constraint and carriers enable the chosen flag."""
     lines = ["panel:"]
     for index, name in enumerate(panel):
-        lines.extend(
-            [f"  - name: {name}", f"    file: {name}.md", f"    description: {name} persona"]
-        )
+        lines.extend([f"  - name: {name}", f"    description: {name} persona"])
         if name in carriers:
             lines.append(f"    {flag}: true")
         if index == 0:
@@ -21,7 +19,6 @@ def write_personas_yaml(
         [
             "adversary:",
             "  name: adversary",
-            "  file: adversary.md",
             "  description: adversary persona",
             "addendums: []",
         ]

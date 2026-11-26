@@ -7,7 +7,7 @@
 #
 # Workflow when adding, removing, or reordering a persona:
 #   1. Edit this file (panel: list and/or adversary:). Each entry needs
-#      name, file (must equal `<name>.md`), and a one-line description.
+#      name and a one-line description. The prompt file is `<name>.md`.
 #   2. run scripts/regen.sh to regenerate the SKILL.md
 #      "Reviewer personas" bullet list and the reviewers/output.schema.json
 #      `reviewer` enum.
@@ -21,42 +21,36 @@
 
 panel:
   - name: correctness
-    file: correctness.md
     description: "logic bugs, edge cases, error handling"
     move_a: true
     move_a1: false
     move_b: true
     move_c: false
   - name: tests
-    file: tests.md
     description: "coverage of changed code, missing test cases"
     move_a: true
     move_a1: true
     move_b: true
     move_c: false
   - name: security
-    file: security.md
     description: "injection, auth, secrets, unsafe deserialization"
     move_a: false
     move_a1: false
     move_b: true
     move_c: false
   - name: performance
-    file: performance.md
     description: "complexity regressions, N+1, unbounded loops"
     move_a: false
     move_a1: false
     move_b: false
     move_c: false
   - name: readability
-    file: readability.md
     description: "naming, cohesion, obvious dead code (scope-strict)"
     move_a: false
     move_a1: false
     move_b: false
     move_c: true
   - name: yagni
-    file: yagni.md
     description: >-
       YAGNI: unused behavior, redundant responsibilities, or violated
       requirements in abstractions introduced by the PR. Traces surrounding
@@ -66,14 +60,12 @@ panel:
     move_b: false
     move_c: false
   - name: requirements
-    file: requirements.md
     description: "reads linked ticket, checks each stated requirement"
     move_a: false
     move_a1: false
     move_b: false
     move_c: true
   - name: comments
-    file: comments.md
     description: >-
       comment accuracy and rot on PR-changed comments only (load-bearing
       doc-comment drift). Default severity `suggestion`; promotes to
@@ -84,7 +76,6 @@ panel:
     move_b: false
     move_c: true
   - name: error_handling
-    file: error_handling.md
     description: >-
       silent failures introduced by the PR (bare catches that continue,
       fallback-to-mock on production paths, discarded errors, overly
@@ -96,7 +87,6 @@ panel:
     move_b: true
     move_c: false
   - name: type_design
-    file: type_design.md
     description: >-
       type-design invariants on types the PR adds or modifies
       (applicability-gated: returns immediately if the diff has no type
@@ -110,7 +100,6 @@ panel:
     move_c: false
     owns_schema_constraint_blocker: true
   - name: blind_spots
-    file: blind_spots.md
     description: >-
       gap-filler for three categories the panel under-covers: (a)
       concurrency / ordering hazards in new async code or shared-state
@@ -126,7 +115,6 @@ panel:
 
 adversary:
   name: adversary
-  file: adversary.md
   description: >-
     separate second-pass reviewer, **not** part of the §4b parallel panel.
     Invoked from §4d.0 (after the panel synthesizes) on the approval path

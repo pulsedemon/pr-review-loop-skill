@@ -97,7 +97,7 @@ def test_returns_3_when_manifest_is_malformed(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     manifest = tmp_path / "personas.yaml"
-    manifest.write_text("panel: []\nadversary:\n  name: x\n  file: x.md\n  description: x\n")
+    manifest.write_text("panel: []\nadversary:\n  name: x\n  description: x\n")
     schema = _write_schema(tmp_path, ["alpha"])
     rc = _run(["--check", "--manifest", str(manifest), "--schema", str(schema)])
     assert rc == generator_io.MANIFEST_ERROR_EXIT == 3
