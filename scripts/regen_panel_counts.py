@@ -299,14 +299,12 @@ def _run_validate_markers(*, corpus_root: Path) -> int:
 
 
 # match punctuation-led and wrapped counts without matching tokens such as B2.
-_TOTAL_PREFIX = (
-    r"(?i:(?:a\s+)?total\s+of|in\s+total,|panel\s+of|the\s+other|all(?:\s+of)?(?:\s+the)?)"
-)
+_TOTAL_PREFIX = r"(?i:(?:a\s+)?total\s+of|in\s+total,|panel\s+of)"
 _COVERAGE_BROAD_RE = re.compile(
     rf"\b(?:{_TOTAL_PREFIX}\s+)?\d+\s+(?:reviewer\s+)?personas?\b"
     rf"(?:(?!\s+{_TOTAL_PREFIX}\s+\d)"
     r"(?:\s+(?i:in\s+total)(?=\s+(?i:across)\b)"
-    r"|\s+(?i:(?:in\s+)?total)(?=\s*(?:[.;:!?)]|$|\(panel\s*\+\s*adversary\)"
+    r"|\s+(?i:(?:in\s+total|total(?!\s*\?)))(?=\s*(?:[.;:!?)]|$|\(panel\s*\+\s*adversary\)"
     rf"|,\s*(?i:including|excluding)\b[^,.;!?\n]*(?:[.;!?]|$)|{_TOTAL_PREFIX}\s+\d))))?"
 )
 _PARAGRAPH_BOUNDARY = re.compile(
@@ -336,13 +334,19 @@ def _mask_word_markup(match: re.Match[str]) -> str:
 
 def _unwrapped_counts(paragraph: str) -> Iterator[re.Match[str]]:
     paragraph = _WORD_MARKUP.sub(_mask_word_markup, paragraph)
-    allowed_spans = [
-        match.span()
-        for pattern in _COVERAGE_ALLOW_PATTERNS
-        for match in pattern.finditer(paragraph)
-    ]
+    allowed_spans = sorted(
+        (
+            match.span()
+            for pattern in _COVERAGE_ALLOW_PATTERNS
+            for match in pattern.finditer(paragraph)
+        ),
+        reverse=True,
+    )
+    allowed_end = -1
     for match in _COVERAGE_BROAD_RE.finditer(paragraph):
-        if not any(start <= match.start() and match.end() <= end for start, end in allowed_spans):
+        while allowed_spans and allowed_spans[-1][0] <= match.start():
+            allowed_end = max(allowed_end, allowed_spans.pop()[1])
+        if match.end() > allowed_end:
             yield match
 
 

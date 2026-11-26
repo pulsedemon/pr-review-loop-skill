@@ -447,6 +447,9 @@ def test_validate_coverage_allows_subset_phrases(tmp_path: Path) -> None:
     (root / "SKILL.md").write_text(
         "after the round, 2 personas approved and 1 persona objected\n"
         "agreed by 3 personas\n"
+        "Of the five selected, three abstained and the other 2 personas approved.\n"
+        "Five were selected and all of the 5 personas approved.\n"
+        "What do the invoices agreed by 3 personas total?\n"
         "3 personas agreed in total\n"
         "The proposal was agreed by 3 personas in total silence.\n"
         "The revisions agreed by 3 personas total, on average, five pages.\n"
@@ -474,10 +477,7 @@ def test_validate_coverage_allows_subset_phrases(tmp_path: Path) -> None:
         ("agreed by 12 personas total, including two new members", "12 personas total"),
         ("agreed by 12 personas in total across two rounds", "12 personas in total"),
         ("agreed by 3 personas\nTotal of 11 personas agreed", "Total of 11 personas"),
-        ("The other 10 personas agreed", "The other 10 personas"),
         ("agreed by 12 personas total", "12 personas total"),
-        ("All 11 personas agreed", "All 11 personas"),
-        ("All of the 11 personas agreed", "All of the 11 personas"),
         ("agreed by 12 personas in total", "12 personas in total"),
         ("agreed by 12 personas in total, including two new members", "12 personas in total"),
     ],
@@ -524,10 +524,10 @@ def test_headings_and_blank_lines_separate_total_qualifiers_from_allowed_subsets
 ) -> None:
     root = _make_corpus(tmp_path)
     (root / "SKILL.md").write_text(
-        "## The Other\n \n2 personas approved.\n\nagreed by 3 personas\n\nTotal elapsed time.\n"
+        "## A total of\n \n2 personas approved.\n\nagreed by 3 personas\n\nTotal elapsed time.\n"
         "A total of\n\n11 personas agreed.\n"
-        "## The Other\n2 personas approved.\n"
-        "> ## The Other\n3 personas agreed.\n"
+        "## A total of\n2 personas approved.\n"
+        "> ## A total of\n3 personas agreed.\n"
     )
     assert _run(["--validate-coverage", "--corpus-root", str(root)]) == 0
 
@@ -536,7 +536,7 @@ def test_headings_and_blank_lines_separate_total_qualifiers_from_allowed_subsets
 def test_list_headings_keep_their_own_counts(tmp_path: Path, capsys, container: str) -> None:
     root = _make_corpus(tmp_path)
     (root / "SKILL.md").write_text(
-        f"{container}## 99 personas: The Other\n  2 personas approved.\n"
+        f"{container}## 99 personas: A total of\n  2 personas approved.\n"
     )
     assert _run(["--validate-coverage", "--corpus-root", str(root)]) == 5
     label = "unhandled numbered persona-count phrase: "
