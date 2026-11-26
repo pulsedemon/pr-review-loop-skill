@@ -61,17 +61,37 @@ PY
     echo "$output"
     return 1
   }
-  [[ "$output" == *'+- `phantom.md`: fixture stub'* ]]
-  python3 - "$REPO_ROOT/reviewers/personas.yaml" "$SKILL/reviewers/personas.yaml" <<'PY'
+  printf '%s\n' "$output" >"$BATS_TEST_TMPDIR/regen.log"
+  python3 - "$REPO_ROOT/reviewers/personas.yaml" "$SKILL/reviewers/personas.yaml" "$BATS_TEST_TMPDIR/regen.log" <<'PY'
 import sys
 from pathlib import Path
 
 import yaml
 
-original, mutated = (yaml.safe_load(Path(path).read_text()) for path in sys.argv[1:])
+original, mutated = (yaml.safe_load(Path(path).read_text()) for path in sys.argv[1:3])
 phantom = mutated["panel"].pop()
 assert phantom == {"name": "phantom", "description": "fixture stub", "move_c": True}
 assert mutated == original
+
+lines = Path(sys.argv[3]).read_text().splitlines()
+added = [line[1:] for line in lines if line.startswith("+- ")]
+removed = [line[1:] for line in lines if line.startswith("-- ")]
+added.remove("- `phantom.md`: fixture stub")
+move, = added
+heading, body = move.split(": ", 1)
+prefix = "- **Move C (cross-doc consistency)**, "
+names = [
+    p["name"] for p in original["panel"]
+    if p.get("move_c") and p["name"] != original["adversary"]["name"]
+]
+
+
+def move_heading(carriers):
+    label = ", ".join(f"`{name}`" for name in sorted(carriers))
+    return prefix + label + (" only" if len(carriers) == 1 else "")
+
+assert heading == move_heading([*names, "phantom"])
+assert removed == ([f"{move_heading(names)}: {body}"] if names else [])
 PY
 }
 

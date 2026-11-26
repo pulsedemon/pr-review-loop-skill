@@ -101,9 +101,15 @@ def test_write_repairs_drift_across_all_surfaces(tmp_path: Path) -> None:
     rc = _run(["--write", "--manifest", str(manifest), "--corpus-root", str(root)])
     assert rc == 0
     assert skill.stat().st_mode & 0o7777 == 0o755
-    assert "panel of 4 reviewer personas" in skill.read_text()
-    assert "5 personas total (panel + adversary)" in scen.read_text()
-    assert "the other 4 personas" in rev.read_text()
+    assert skill.read_text() == _total_region(
+        "panel of {n} reviewer {personas|persona}", "panel of 4 reviewer personas"
+    )
+    assert scen.read_text() == _total_plus_1_region(
+        "{n} personas total (panel + adversary)", "5 personas total (panel + adversary)"
+    )
+    assert rev.read_text() == _total_region(
+        "the other {n} {personas|persona}", "the other 4 personas"
+    )
     rc = _run(["--check", "--manifest", str(manifest), "--corpus-root", str(root)])
     assert rc == 0
 
