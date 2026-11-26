@@ -19,7 +19,6 @@ jobs:
         with:
           scandir: '.'
           severity: warning
-          additional_files: install.sh
 
   markdown:
     runs-on: ubuntu-latest
