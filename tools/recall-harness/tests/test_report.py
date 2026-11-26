@@ -1237,3 +1237,29 @@ def test_matched_false_label_does_not_trip_the_loop_invariant(tmp_path):
     _write_labels(tmp_path / "labels.csv", [(1, "matched_sample", "bbb", "matched_false", "")])
     out = _run(tmp_path)
     assert "stale loop-side matcher outputs" not in out
+
+
+def test_empty_file_external_counts_as_anchored_in_matcher_and_report(tmp_path):
+    external = {"file": "", "line": 5, "summary": "an external finding", "source": "copilot"}
+    _corpus_path(tmp_path, 1).write_text(
+        json.dumps(_corpus_record(1, external_findings=[external]))
+    )
+    subprocess.run(
+        [
+            sys.executable,
+            HARNESS / "match_external.py",
+            "--corpus-dir",
+            tmp_path / "corpus",
+            "--matched-dir",
+            tmp_path / "matched",
+            "--unmatched-dir",
+            tmp_path / "unmatched",
+            "--loop-unmatched-dir",
+            tmp_path / "loop_unmatched",
+        ],
+        check=True,
+    )
+    _write_labels(tmp_path / "labels.csv", [])
+    out = _run(tmp_path)
+    assert "PIPELINE WARNING" not in out
+    assert "External findings: 1 (1 anchored, 0 unanchored)" in out
