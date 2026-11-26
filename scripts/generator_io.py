@@ -76,7 +76,7 @@ _LINE_ENDING = re.compile(r"\r\n|\r|\n")
 
 
 def splice_body(match: re.Match[str], body: str) -> str:
-    """replace group two, retaining existing line endings by position within the region."""
+    """splice an LF-rendered body into group two, preserving line endings by position."""
     if "\n" in body:
         endings = iter(_LINE_ENDING.findall(match[2]))
         nearby = _LINE_ENDING.search(match[0]) or _LINE_ENDING.search(match.string)

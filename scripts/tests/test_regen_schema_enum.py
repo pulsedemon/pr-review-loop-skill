@@ -174,12 +174,9 @@ def test_exits_3_when_reviewer_enum_path_is_missing(
 def test_exits_3_when_slice_regex_cannot_match_despite_valid_path(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    # Valid JSON, valid path, but inline single-line enum that the multi-line
-    # slice locator cannot match (no whitespace around the colons/braces).
     manifest = write_personas_yaml(tmp_path, ["alpha"])
     schema = tmp_path / "output.schema.json"
-    # Use a JSON shape where the regex's whitespace/order expectations are violated.
-    # The regex requires "type":"string","enum":[...] in that order; we put enum first.
+    # the locator expects type before enum.
     schema.write_text('{"properties":{"reviewer":{"enum":["alpha"],"type":"string"}}}')
     with pytest.raises(SystemExit) as exc_info:
         _run(["--check", "--manifest", str(manifest), "--schema", str(schema)])

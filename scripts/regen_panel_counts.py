@@ -86,7 +86,6 @@ import re
 import sys
 from collections.abc import Iterator
 from dataclasses import dataclass
-from itertools import groupby
 from pathlib import Path
 
 import generator_io
@@ -295,16 +294,12 @@ _PANEL_LABEL = r"(?i:\(panel\s*\+\s*adversary\))"
 # match wrapped counts while excluding embedded digits such as B2.
 _COVERAGE_BROAD_RE = re.compile(
     rf"\b(?:{_TOTAL_PREFIX}\s+)?\d+\s+(?:reviewer\s+)?personas?\b"
-    rf"(?:(?!\s+{_TOTAL_PREFIX}\s+\d)"
-    r"(?:\s+(?i:in\s+total)(?=,?\s+(?i:across)\b)"
-    rf"|\s+(?i:total)(?=\s*{_PANEL_LABEL})|\s+(?i:in\s+total)(?=\s*(?:[.;:!?)]|$|{_PANEL_LABEL}"
-    rf"|,\s*(?i:including|excluding)\b[^,.;!?\n]*(?:[.;!?]|$)|{_TOTAL_PREFIX}\s+\d))))?"
+    rf"(?:(?!,?\s+{_TOTAL_PREFIX}\s+\d),?\s+"
+    rf"(?:(?i:total)(?=\s*{_PANEL_LABEL})|(?i:in\s+total)(?=,?\s+(?i:across)\b"
+    rf"|\s*(?:[.;:!?)]|$|{_PANEL_LABEL}|,\s*(?i:including|excluding)\b[^,.;!?\n]*(?:[.;!?]|$)"
+    rf"|{_TOTAL_PREFIX}\s+\d))))?"
 )
-_PARAGRAPH_BOUNDARY = re.compile(
-    r"(\n[^\S\n]*\n|^[ \t]*(?:>[ \t]*|(?:[-+*]|\d{1,9}[.)])[ \t]+)*"
-    r"#{1,6}(?:[ \t]+[^\n]*)?$)",
-    re.MULTILINE,
-)
+_HEADING = re.compile(r"^[ \t]*(?:>[ \t]*|(?:[-+*]|\d{1,9}[.)])[ \t]+)*#{1,6}(?:[ \t]+.*)?$")
 _WORD_MARKUP = re.compile(r"\*+|_+|`+")
 
 # total-shaped phrases must stay generated even when their counts currently match.
@@ -385,18 +380,34 @@ _QUOTE_PREFIX = re.compile(r"^(?: {0,3}>[ \t]?)+", re.MULTILINE)
 
 
 def _coverage_paragraphs(lines: list[str]) -> Iterator[tuple[int, str, str]]:
-    offset = 0
-    for _, group in groupby(
-        lines, key=lambda line: m[0].count(">") if (m := _QUOTE_PREFIX.match(line)) else 0
-    ):
-        source = "".join(line + "\n" for line in group)
-        scan = _QUOTE_PREFIX.sub(lambda m: " " * len(m[0]), source)
-        pos = 0
-        for paragraph in _PARAGRAPH_BOUNDARY.split(scan):
-            end = pos + len(paragraph)
-            yield offset + 1, source[pos:end], paragraph
-            offset += paragraph.count("\n")
-            pos = end
+    paragraph_start = 0
+    normalized: list[str] = []
+    quote_depth = 0
+    for index, line in enumerate(lines):
+        prefix = _QUOTE_PREFIX.match(line)
+        width = prefix.end() if prefix else 0
+        depth = line[:width].count(">")
+        content = line[width:]
+        separate = not content.strip() or _HEADING.fullmatch(content)
+        if normalized and (separate or depth > quote_depth):
+            yield (
+                paragraph_start + 1,
+                "\n".join(lines[paragraph_start:index]),
+                "\n".join(normalized),
+            )
+            normalized.clear()
+        masked = " " * width + content
+        if separate:
+            if content.strip():
+                yield index + 1, line, masked
+            quote_depth = 0
+            continue
+        if not normalized:
+            paragraph_start = index
+            quote_depth = depth
+        normalized.append(masked)
+    if normalized:
+        yield paragraph_start + 1, "\n".join(lines[paragraph_start:]), "\n".join(normalized)
 
 
 def _run_validate_coverage(*, corpus_root: Path) -> int:
@@ -421,14 +432,16 @@ def _run_validate_coverage(*, corpus_root: Path) -> int:
             "" if idx in region_lines else line.rstrip("\r\n") for idx, line in enumerate(lines)
         ]
         for line_number, source, paragraph in _coverage_paragraphs(scan_lines):
+            previous = 0
             for m in _unwrapped_counts(paragraph):
-                start_line = line_number + paragraph.count("\n", 0, m.start())
+                line_number += paragraph.count("\n", previous, m.start())
+                previous = m.start()
                 phrase = source[m.start() : m.end()]
                 closing = _WORD_MARKUP.match(paragraph, m.end())
                 if closing and _WORD_MARKUP.findall(phrase).count(closing[0]) % 2:
                     phrase += closing[0]
                 failures.append(
-                    f"{path}: line {start_line}: unhandled numbered persona-count phrase: "
+                    f"{path}: line {line_number}: unhandled numbered persona-count phrase: "
                     f"{phrase!r}\n"
                     f"    fix: wrap the phrase in a regen:panel-count region, OR add an "
                     f"allowlist pattern to _COVERAGE_ALLOW_PATTERNS in "
