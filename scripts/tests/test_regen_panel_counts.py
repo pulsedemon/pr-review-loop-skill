@@ -139,8 +139,13 @@ def test_plural_agreement_n_greater_than_1(tmp_path: Path) -> None:
     assert rc == 0
 
 
+@pytest.mark.parametrize(
+    ("intro_ending", "ending"),
+    [("\n", "\n"), ("\r\n", "\r\n"), ("\r", "\r"), ("\n", "\r\n")],
+    ids=["lf", "crlf", "cr", "mixed"],
+)
 def test_subset_phrases_outside_regions_are_not_touched(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, intro_ending: str, ending: str
 ) -> None:
     """A wrapped total phrase coexists with an unwrapped subset phrase.
 
@@ -159,7 +164,7 @@ def test_subset_phrases_outside_regions_are_not_touched(
         )
         + "\nPost-text: 1 persona objected, 2 personas approved.\n"
     )
-    original = body.replace("\n", "\r\n").replace("Pre-text: ", "intro\nPre-text: ").encode()
+    original = ("intro" + intro_ending + body.replace("\n", ending)).encode()
     f.write_bytes(original)
 
     # exercise the Windows text-write default on every test host.
@@ -174,6 +179,7 @@ def test_subset_phrases_outside_regions_are_not_touched(
     assert f.read_bytes() == original.replace(
         b"the panel of 99 personas", b"the panel of 3 personas"
     )
+    assert _run(["--check", "--manifest", str(manifest), "--corpus-root", str(root)]) == 0
 
 
 def test_validate_markers_passes_on_balanced_tree(tmp_path: Path) -> None:

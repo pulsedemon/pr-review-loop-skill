@@ -1,6 +1,7 @@
 """shared file output for manifest-driven generators."""
 
 import difflib
+import io
 import os
 import re
 import sys
@@ -31,16 +32,14 @@ def atomic_write(path: Path, content: str, *, newline: str | None = None) -> Non
 
 def emit_drift_diff(path: Path, current: str, regenerated: str) -> None:
     diff = difflib.unified_diff(
-        current.splitlines(keepends=True),
-        regenerated.splitlines(keepends=True),
+        io.StringIO(current, newline="").readlines(),
+        io.StringIO(regenerated, newline="").readlines(),
         fromfile=str(path),
         tofile=f"{path} (regenerated)",
     )
     for line in diff:
-        if line.endswith("\r"):
-            print(line[:-1], file=sys.stderr)
-        elif line.endswith("\n"):
-            sys.stderr.write(line)
+        if line.endswith(("\r", "\n")):
+            print(line.removesuffix("\n").removesuffix("\r"), file=sys.stderr)
         else:
             print(line, r"\ No newline at end of file", sep="\n", file=sys.stderr)
 
