@@ -8,26 +8,7 @@ from pathlib import Path
 import generator_io
 import pytest
 import regen_schema_enum  # type: ignore[import-not-found]  # sibling module made importable by conftest.py
-
-
-def _write_manifest(
-    tmp_path: Path, panel_names: list[str], adversary_name: str = "adversary"
-) -> Path:
-    lines = ["panel:"]
-    for i, name in enumerate(panel_names):
-        owns = "true" if i == 0 else "false"
-        lines.append(f"  - name: {name}")
-        lines.append(f"    file: {name}.md")
-        lines.append(f"    description: {name} persona")
-        lines.append(f"    owns_schema_constraint_blocker: {owns}")
-    lines.append("adversary:")
-    lines.append(f"  name: {adversary_name}")
-    lines.append(f"  file: {adversary_name}.md")
-    lines.append(f"  description: {adversary_name} persona")
-    lines.append("addendums: []")
-    p = tmp_path / "personas.yaml"
-    p.write_text("\n".join(lines) + "\n")
-    return p
+from personas_fixture import write_personas_yaml  # type: ignore[import-not-found]
 
 
 def _write_schema(tmp_path: Path, enum_items: list[str]) -> Path:
@@ -64,14 +45,14 @@ def _run(args: list[str]) -> int:
 
 
 def test_check_returns_0_when_schema_matches_manifest(tmp_path: Path) -> None:
-    manifest = _write_manifest(tmp_path, ["alpha", "beta"])
+    manifest = write_personas_yaml(tmp_path, ["alpha", "beta"])
     schema = _write_schema(tmp_path, ["alpha", "beta", "adversary"])
     rc = _run(["--check", "--manifest", str(manifest), "--schema", str(schema)])
     assert rc == 0
 
 
 def test_write_rewrites_drifted_schema(tmp_path: Path) -> None:
-    manifest = _write_manifest(tmp_path, ["alpha", "beta", "gamma"])
+    manifest = write_personas_yaml(tmp_path, ["alpha", "beta", "gamma"])
     schema = _write_schema(tmp_path, ["alpha"])  # drifted: missing beta, gamma, adversary
     schema.chmod(0o755)
     rc = _run(["--write", "--manifest", str(manifest), "--schema", str(schema)])
@@ -82,7 +63,7 @@ def test_write_rewrites_drifted_schema(tmp_path: Path) -> None:
 
 
 def test_write_on_matching_schema_is_a_noop(tmp_path: Path) -> None:
-    manifest = _write_manifest(tmp_path, ["alpha"])
+    manifest = write_personas_yaml(tmp_path, ["alpha"])
     schema = _write_schema(tmp_path, ["alpha", "adversary"])
     before = schema.read_text()
     before_stat = schema.stat()
@@ -96,7 +77,7 @@ def test_write_on_matching_schema_is_a_noop(tmp_path: Path) -> None:
 def test_check_returns_5_with_diff_on_drift(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    manifest = _write_manifest(tmp_path, ["alpha", "beta"])
+    manifest = write_personas_yaml(tmp_path, ["alpha", "beta"])
     schema = _write_schema(tmp_path, ["alpha"])  # missing beta + adversary
     before = schema.read_bytes()
     rc = _run(["--check", "--manifest", str(manifest), "--schema", str(schema)])
@@ -127,7 +108,7 @@ def test_returns_3_when_manifest_is_malformed(
 def test_returns_3_when_schema_is_missing(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    manifest = _write_manifest(tmp_path, ["alpha"])
+    manifest = write_personas_yaml(tmp_path, ["alpha"])
     missing = tmp_path / "nonexistent.json"
     rc = _run(["--check", "--manifest", str(manifest), "--schema", str(missing)])
     assert rc == generator_io.MANIFEST_ERROR_EXIT == 3
@@ -138,7 +119,7 @@ def test_returns_3_when_schema_is_missing(
 def test_returns_3_when_schema_is_unreadable(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    manifest = _write_manifest(tmp_path, ["alpha"])
+    manifest = write_personas_yaml(tmp_path, ["alpha"])
     schema = tmp_path / "output.schema.json"
     schema.write_bytes(b"\xff\xfe\xfd")
     rc = _run(["--check", "--manifest", str(manifest), "--schema", str(schema)])
@@ -150,7 +131,7 @@ def test_returns_3_when_schema_is_unreadable(
 def test_exits_3_when_schema_is_not_valid_json(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    manifest = _write_manifest(tmp_path, ["alpha"])
+    manifest = write_personas_yaml(tmp_path, ["alpha"])
     schema = tmp_path / "output.schema.json"
     schema.write_text("{ this is not valid json")
     with pytest.raises(SystemExit) as exc_info:
@@ -162,7 +143,7 @@ def test_exits_3_when_schema_is_not_valid_json(
 def test_exits_3_when_reviewer_enum_path_is_missing(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    manifest = _write_manifest(tmp_path, ["alpha"])
+    manifest = write_personas_yaml(tmp_path, ["alpha"])
     schema = tmp_path / "output.schema.json"
     schema.write_text(json.dumps({"properties": {"other": {}}}, indent=2))
     with pytest.raises(SystemExit) as exc_info:
@@ -176,7 +157,7 @@ def test_exits_3_when_slice_regex_cannot_match_despite_valid_path(
 ) -> None:
     # Valid JSON, valid path, but inline single-line enum that the multi-line
     # slice locator cannot match (no whitespace around the colons/braces).
-    manifest = _write_manifest(tmp_path, ["alpha"])
+    manifest = write_personas_yaml(tmp_path, ["alpha"])
     schema = tmp_path / "output.schema.json"
     # Use a JSON shape where the regex's whitespace/order expectations are violated.
     # The regex requires "type":"string","enum":[...] in that order; we put enum first.

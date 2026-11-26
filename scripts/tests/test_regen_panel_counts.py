@@ -7,26 +7,7 @@ from pathlib import Path
 import generator_io
 import pytest
 import regen_panel_counts  # type: ignore[import-not-found]  # sibling module made importable by conftest.py
-
-
-def _write_manifest(
-    tmp_path: Path, panel_names: list[str], adversary_name: str = "adversary"
-) -> Path:
-    lines = ["panel:"]
-    for i, name in enumerate(panel_names):
-        owns = "true" if i == 0 else "false"
-        lines.append(f"  - name: {name}")
-        lines.append(f"    file: {name}.md")
-        lines.append(f"    description: {name} persona")
-        lines.append(f"    owns_schema_constraint_blocker: {owns}")
-    lines.append("adversary:")
-    lines.append(f"  name: {adversary_name}")
-    lines.append(f"  file: {adversary_name}.md")
-    lines.append(f"  description: {adversary_name} persona")
-    lines.append("addendums: []")
-    p = tmp_path / "personas.yaml"
-    p.write_text("\n".join(lines) + "\n")
-    return p
+from personas_fixture import write_personas_yaml  # type: ignore[import-not-found]
 
 
 def _make_corpus(tmp_path: Path) -> Path:
@@ -60,7 +41,7 @@ def _total_plus_1_region(template: str, rendered: str) -> str:
 
 
 def test_check_returns_0_on_clean_tree(tmp_path: Path) -> None:
-    manifest = _write_manifest(tmp_path, ["a", "b", "c", "d", "e"])  # n = 5
+    manifest = write_personas_yaml(tmp_path, ["a", "b", "c", "d", "e"])  # n = 5
     root = _make_corpus(tmp_path)
     (root / "SKILL.md").write_text(
         "Heading\n\n"
@@ -79,7 +60,7 @@ def test_check_returns_0_on_clean_tree(tmp_path: Path) -> None:
 def test_check_returns_5_on_drift_in_any_one_surface(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    manifest = _write_manifest(tmp_path, ["a", "b", "c"])  # n = 3
+    manifest = write_personas_yaml(tmp_path, ["a", "b", "c"])  # n = 3
     root = _make_corpus(tmp_path)
     drifted = (
         "<!-- regen:panel-count-total:start -->\n"
@@ -96,7 +77,7 @@ def test_check_returns_5_on_drift_in_any_one_surface(
 
 
 def test_write_repairs_drift_across_all_surfaces(tmp_path: Path) -> None:
-    manifest = _write_manifest(tmp_path, ["a", "b", "c", "d"])  # n = 4
+    manifest = write_personas_yaml(tmp_path, ["a", "b", "c", "d"])  # n = 4
     root = _make_corpus(tmp_path)
     skill = root / "SKILL.md"
     scen = root / "tests" / "scenarios" / "01.md"
@@ -127,7 +108,7 @@ def test_write_repairs_drift_across_all_surfaces(tmp_path: Path) -> None:
 
 
 def test_plural_agreement_n_equals_1(tmp_path: Path) -> None:
-    manifest = _write_manifest(tmp_path, ["solo"])  # n = 1
+    manifest = write_personas_yaml(tmp_path, ["solo"])  # n = 1
     root = _make_corpus(tmp_path)
     (root / "SKILL.md").write_text(
         _total_region("the panel of {n} {personas|persona}", "the panel of 1 persona")
@@ -137,7 +118,7 @@ def test_plural_agreement_n_equals_1(tmp_path: Path) -> None:
 
 
 def test_plural_agreement_n_greater_than_1(tmp_path: Path) -> None:
-    manifest = _write_manifest(tmp_path, ["a", "b"])  # n = 2
+    manifest = write_personas_yaml(tmp_path, ["a", "b"])  # n = 2
     root = _make_corpus(tmp_path)
     (root / "SKILL.md").write_text(
         _total_region("the panel of {n} {personas|persona}", "the panel of 2 personas")
@@ -153,7 +134,7 @@ def test_subset_phrases_outside_regions_are_not_touched(tmp_path: Path) -> None:
     text, including a numbered subset phrase like "1 persona objected"
     that legitimately names a subset, must be left byte-identical.
     """
-    manifest = _write_manifest(tmp_path, ["a", "b", "c"])  # n = 3
+    manifest = write_personas_yaml(tmp_path, ["a", "b", "c"])  # n = 3
     root = _make_corpus(tmp_path)
     f = root / "tests" / "scenarios" / "08.md"
     body = (
@@ -175,7 +156,7 @@ def test_subset_phrases_outside_regions_are_not_touched(tmp_path: Path) -> None:
 
 
 def test_validate_markers_passes_on_balanced_tree(tmp_path: Path) -> None:
-    manifest = _write_manifest(tmp_path, ["a", "b"])  # n = 2 (irrelevant for marker validation)
+    manifest = write_personas_yaml(tmp_path, ["a", "b"])  # n = 2 (irrelevant for marker validation)
     root = _make_corpus(tmp_path)
     (root / "SKILL.md").write_text(
         _total_region("{n} {personas|persona}", "2 personas")
@@ -188,7 +169,7 @@ def test_validate_markers_passes_on_balanced_tree(tmp_path: Path) -> None:
 def test_validate_markers_fails_on_unbalanced_start(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    manifest = _write_manifest(tmp_path, ["a", "b"])
+    manifest = write_personas_yaml(tmp_path, ["a", "b"])
     root = _make_corpus(tmp_path)
     bad = root / "reviewers" / "broken.md"
     bad.write_text(
@@ -206,7 +187,7 @@ def test_validate_markers_fails_on_unbalanced_start(
 def test_validate_markers_fails_on_orphan_end(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    manifest = _write_manifest(tmp_path, ["a", "b"])
+    manifest = write_personas_yaml(tmp_path, ["a", "b"])
     root = _make_corpus(tmp_path)
     bad = root / "reviewers" / "orphan.md"
     bad.write_text("intro\n<!-- regen:panel-count-total:end -->\n")
@@ -240,7 +221,7 @@ def test_render_supports_markdown_formatting_around_n(tmp_path: Path) -> None:
 
 
 def test_write_atomically_creates_no_tmp_files(tmp_path: Path) -> None:
-    manifest = _write_manifest(tmp_path, ["a", "b"])  # n = 2
+    manifest = write_personas_yaml(tmp_path, ["a", "b"])  # n = 2
     root = _make_corpus(tmp_path)
     (root / "SKILL.md").write_text(_total_region("{n} {personas|persona}", "99 personas"))
     rc = _run(["--write", "--manifest", str(manifest), "--corpus-root", str(root)])
@@ -251,7 +232,7 @@ def test_write_atomically_creates_no_tmp_files(tmp_path: Path) -> None:
 
 def test_validate_coverage_passes_on_empty_corpus(tmp_path: Path) -> None:
     """A corpus with no numbered persona-count phrases is trivially covered."""
-    manifest = _write_manifest(tmp_path, ["a", "b"])
+    manifest = write_personas_yaml(tmp_path, ["a", "b"])
     root = _make_corpus(tmp_path)
     (root / "SKILL.md").write_text("intro paragraph\n\nno counts here\n")
     rc = _run(["--validate-coverage", "--manifest", str(manifest), "--corpus-root", str(root)])
@@ -262,7 +243,7 @@ def test_validate_coverage_fails_on_unhandled_unwrapped_phrase(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """An unwrapped panel-count phrase that doesn't match the allowlist fails."""
-    manifest = _write_manifest(tmp_path, ["a", "b"])
+    manifest = write_personas_yaml(tmp_path, ["a", "b"])
     root = _make_corpus(tmp_path)
     (root / "SKILL.md").write_text("the spec mentions 11 reviewer personas reviewing this PR\n")
     rc = _run(["--validate-coverage", "--manifest", str(manifest), "--corpus-root", str(root)])
@@ -281,7 +262,7 @@ def test_validate_coverage_allows_phrases_inside_regions(tmp_path: Path) -> None
     flip the verdict, isolating the region-exemption code path from
     the allowlist-exemption path.
     """
-    manifest = _write_manifest(tmp_path, ["a", "b"])
+    manifest = write_personas_yaml(tmp_path, ["a", "b"])
     root = _make_corpus(tmp_path)
     (root / "SKILL.md").write_text(
         _total_region(
@@ -303,7 +284,7 @@ def test_validate_coverage_rejects_unwrapped_total_shaped_phrases(
     silently accept any digit (the gap the deleted bats first/second
     @test blocks previously closed).
     """
-    manifest = _write_manifest(tmp_path, ["a", "b"])
+    manifest = write_personas_yaml(tmp_path, ["a", "b"])
     root = _make_corpus(tmp_path)
     (root / "SKILL.md").write_text(
         "the panel of 11 reviewer personas runs in parallel\n"
@@ -327,7 +308,7 @@ def test_validate_coverage_rejects_unwrapped_total_regardless_of_number(
     rejects unwrapped total shapes outright. Wrapping is the only way to
     pass, which then routes the numeric check to --check.
     """
-    manifest = _write_manifest(tmp_path, ["a", "b"])  # len(panel) = 2
+    manifest = write_personas_yaml(tmp_path, ["a", "b"])  # len(panel) = 2
 
     # Wrong number (clearly drifted): must fail.
     wrong_root = _make_corpus(tmp_path / "wrong")
@@ -352,7 +333,7 @@ def test_validate_coverage_rejects_unwrapped_total_regardless_of_number(
 
 def test_validate_coverage_allows_subset_phrases(tmp_path: Path) -> None:
     """Subset-of-panel phrases (e.g. '2 personas approved') are allowlisted."""
-    manifest = _write_manifest(tmp_path, ["a", "b"])
+    manifest = write_personas_yaml(tmp_path, ["a", "b"])
     root = _make_corpus(tmp_path)
     (root / "SKILL.md").write_text(
         "after the round, 2 personas approved and 1 persona objected\n"
@@ -377,7 +358,7 @@ def test_validate_coverage_catches_phrase_split_across_lines(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """A numbered persona-count phrase wrapped across a line break still fails."""
-    manifest = _write_manifest(tmp_path, ["a", "b"])
+    manifest = write_personas_yaml(tmp_path, ["a", "b"])
     root = _make_corpus(tmp_path)
     (root / "SKILL.md").write_text("the spec mentions 11\nreviewer personas reviewing this PR\n")
     rc = _run(["--validate-coverage", "--manifest", str(manifest), "--corpus-root", str(root)])
@@ -390,7 +371,7 @@ def test_validate_coverage_catches_parenthesized_phrase(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """A persona-count phrase led by punctuation (no whitespace) still fails."""
-    manifest = _write_manifest(tmp_path, ["a", "b"])
+    manifest = write_personas_yaml(tmp_path, ["a", "b"])
     root = _make_corpus(tmp_path)
     (root / "SKILL.md").write_text("(11 reviewer personas reviewing this PR)\n")
     rc = _run(["--validate-coverage", "--manifest", str(manifest), "--corpus-root", str(root)])
@@ -401,7 +382,7 @@ def test_validate_coverage_catches_parenthesized_phrase(
 
 def test_validate_coverage_ignores_non_persona_numbers(tmp_path: Path) -> None:
     """Numbered tokens that aren't persona-counts (e.g. '5 minutes') are not flagged."""
-    manifest = _write_manifest(tmp_path, ["a", "b"])
+    manifest = write_personas_yaml(tmp_path, ["a", "b"])
     root = _make_corpus(tmp_path)
     (root / "SKILL.md").write_text(
         "wait 5 minutes for CI\n"
