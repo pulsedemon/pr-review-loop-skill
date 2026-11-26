@@ -223,7 +223,7 @@ class _MarkerError(Exception):
 
 
 def _read_lines(path: Path) -> list[str]:
-    with path.open(newline="") as source:
+    with path.open(encoding="utf-8", newline="") as source:
         return source.readlines()
 
 
@@ -262,7 +262,7 @@ def _run_check_or_write(*, write: bool, manifest_path: Path, corpus_root: Path) 
         if current == regenerated:
             continue
         if write:
-            generator_io.atomic_write(path, regenerated, newline="")
+            generator_io.atomic_write(path, regenerated.encode("utf-8"))
         else:
             generator_io.emit_drift_diff(path, current, regenerated)
             drifted.append(path)
@@ -301,7 +301,8 @@ def _run_validate_markers(*, corpus_root: Path) -> int:
 # match punctuation-led and wrapped counts without matching tokens such as B2.
 _COVERAGE_BROAD_RE = re.compile(
     r"\b(?:(?i:(?:a\s+)?total\s+of|panel\s+of|the\s+other|all(?:\s+of)?(?:\s+the)?)\s+)?"
-    r"\d+\s+(?:reviewer\s+)?personas?\b(?:\s+(?i:(?:in\s+)?total)\b)?"
+    r"\d+\s+(?:reviewer\s+)?personas?\b"
+    r"(?:\s+(?i:in\s+total)\b|\s+(?i:total)(?=\s*(?:[.,;:!?()]|$)))?"
 )
 
 # total-shaped phrases must stay generated even when their counts currently match.

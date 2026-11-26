@@ -157,7 +157,7 @@ def test_subset_phrases_outside_regions_are_not_touched(
     root = _make_corpus(tmp_path)
     f = root / "tests" / "scenarios" / "08.md"
     body = (
-        "Pre-text: 1 persona objected,\u20282 personas approved.\n\n"
+        "ā: 1 persona objected,\u20282 personas approved.\n\n"
         + _total_region(
             "the panel of {n} {personas|persona}",
             "the panel of 99 personas",  # drifted
@@ -171,13 +171,20 @@ def test_subset_phrases_outside_regions_are_not_touched(
     )
     f.write_bytes(original)
 
-    # exercise the Windows text-write default on every test host.
-    write_text = Path.write_text
+    # apply Windows text defaults on every host. UTF-8 ā contains a byte undefined in cp1252.
+    open_path = Path.open
 
-    def write_with_crlf_default(path: Path, data: str, *, newline: str | None = None) -> int:
-        return write_text(path, data, newline="\r\n" if newline is None else newline)
+    def open_with_windows_defaults(
+        path: Path, mode="r", buffering=-1, encoding=None, errors=None, newline=None
+    ):
+        if "b" not in mode:
+            if encoding in (None, "locale"):
+                encoding = "cp1252"
+            if "w" in mode and newline is None:
+                newline = "\r\n"
+        return open_path(path, mode, buffering, encoding, errors, newline)
 
-    monkeypatch.setattr(Path, "write_text", write_with_crlf_default)
+    monkeypatch.setattr(Path, "open", open_with_windows_defaults)
     rc = _run(["--write", "--manifest", str(manifest), "--corpus-root", str(root)])
     assert rc == 0
     assert f.read_bytes() == original.replace(
@@ -439,6 +446,7 @@ def test_validate_coverage_allows_subset_phrases(tmp_path: Path) -> None:
         "after the round, 2 personas approved and 1 persona objected\n"
         "agreed by 3 personas\n"
         "3 personas agreed in total\n"
+        "The revisions agreed by 3 personas total five pages.\n"
         "4 Move C personas link to docs/procedure-moves.md\n"
     )
     rc = _run(["--validate-coverage", "--corpus-root", str(root)])
@@ -450,6 +458,7 @@ def test_validate_coverage_allows_subset_phrases(tmp_path: Path) -> None:
     [
         ("The panel of 999 personas agreed", "panel of 999 personas"),
         ("A total of 11 personas agreed", "A total of 11 personas"),
+        ("agreed by 3 personas\nTotal of 11 personas agreed", "Total of 11 personas"),
         ("The other 10 personas agreed", "The other 10 personas"),
         ("agreed by 12 personas total", "12 personas total"),
         ("All 11 personas agreed", "All 11 personas"),

@@ -172,7 +172,7 @@ def _parse_persona(path: Path, label: str, raw: object, allowed_keys: frozenset[
 
 def load_manifest(path: Path) -> Manifest:
     try:
-        text = path.read_text()
+        text = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as e:
         raise ManifestError(f"failed to read {path}: {e}") from e
     try:
