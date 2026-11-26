@@ -21,6 +21,7 @@ from match_external import (  # type: ignore[import-not-found]  # noqa: E402  â€
     _run_matcher,
     process_corpus_file,
 )
+from report import EXPECTED_SCORER  # noqa: E402
 
 
 def _run(corpus: dict, tmp_path: Path) -> dict:
@@ -341,7 +342,7 @@ def test_emitted_records_carry_the_scorer_stamp(tmp_path):
     assert len(out["unmatched"]) == 1
     for bucket in ("matched", "unmatched"):
         for rec in out[bucket]:
-            assert rec.get("scorer") == "token_containment@0.5/win15", (
+            assert rec.get("scorer") == EXPECTED_SCORER, (
                 f"{bucket} record missing the scorer stamp; report.py's guard "
                 "cannot tell this output from pre-containment output"
             )
@@ -385,7 +386,7 @@ def test_loop_unmatched_records_carry_finding_id_and_scorer(tmp_path):
     out = _run(_corpus(loop, []), tmp_path)
     (record,) = out["loop_unmatched"]
     assert len(record["finding_id"]) == 12
-    assert record["scorer"] == "token_containment@0.5/win15"
+    assert record["scorer"] == EXPECTED_SCORER
 
 
 def test_unanchored_loop_finding_absent_from_loop_unmatched(tmp_path):

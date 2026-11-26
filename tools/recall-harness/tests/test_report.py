@@ -2,6 +2,7 @@
 
 import csv
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -14,6 +15,8 @@ from collect_pr_corpus import (  # type: ignore[import-not-found]  # noqa: E402 
     matched_filename,
 )
 from report import (
+    _BUCKET_LABELS,
+    EXPECTED_SCORER,
     _candidate_cause,  # type: ignore[import-not-found]  # noqa: E402 : sibling module made importable by conftest.py
 )
 
@@ -33,7 +36,7 @@ def _write_jsonl(path: Path, rows):
     leaves it alone.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
-    stamped = [{"scorer": "token_containment@0.5/win15", **r} for r in rows]
+    stamped = [{"scorer": EXPECTED_SCORER, **r} for r in rows]
     path.write_text(
         "\n".join(json.dumps(r, sort_keys=True) for r in stamped) + ("\n" if stamped else "")
     )
@@ -231,6 +234,7 @@ def test_report_flags_high_matched_false_rate(tmp_path):
 
     out = _run(tmp_path)
     assert "MATCHER QUALITY WARNING" in out
+    assert "matched_false rate 80.0% is above 10%." in out
 
 
 @pytest.mark.parametrize(
@@ -507,13 +511,12 @@ def test_report_separates_unanchored(tmp_path):
     _write_labels(tmp_path / "labels.csv", [])
 
     out = _run(tmp_path)
-    assert "Unanchored" in out
-    # Unanchored externals counted in totals
-    assert "1 unanchored" in out or "unanchored, 1" in out or "unanchored" in out
+    assert "External findings: 1 (0 anchored, 1 unanchored)" in out
+    assert "Loop unanchored: 1" in out
 
 
 def test_report_includes_near_miss_section_sorted_desc_and_capped(tmp_path):
-    """Phase 1 diagnostic: REPORT.md surfaces unmatched externals whose
+    """REPORT.md surfaces unmatched externals whose
     same-file loop finding scored highest, sorted desc, capped at 25."""
     output = _render_with_unmatched_records(
         tmp_path,
@@ -656,7 +659,8 @@ def test_report_near_miss_section_renders_decision_rule_statistic_and_histogram(
         labels_rows=[(1, "unmatched", f"rm_{i:02d}", "real_miss", "") for i in range(5)],
     )
     near_miss_section = output.split("## Matcher near-misses", 1)[1].split("## ", 1)[0]
-    # Decision-rule statistic line.
+    assert "Decision rule: >= 30% => matcher recall is meaningfully limiting." in near_miss_section
+    assert "30%/0.45 statistic looks borderline" in near_miss_section
     assert "3 of 5 real_miss rows have score >= 0.45 (60.0%)" in near_miss_section, (
         f"decision-rule line missing or wrong; section:\n{near_miss_section}"
     )
@@ -736,7 +740,7 @@ def test_report_near_miss_diagnostic_suppressed_when_no_real_miss_labels(tmp_pat
     """When near_miss_rows is non-empty but no rows are labeled real_miss, the
     decision-rule sentence must NOT claim a verdict on a zero denominator.
 
-    Pins report.py:419: rendering "0 of 0 real_miss rows ... (0.0%) ... matcher
+    rendering "0 of 0 real_miss rows ... (0.0%) ... matcher
     recall is meaningfully limiting" reads as a falsified verdict on an
     unlabeled corpus. The "not computable" message must appear instead.
     """
@@ -903,7 +907,7 @@ def _loop_record(fid, summary="a loop finding nobody else raised"):
     return {
         "finding_id": fid,
         "loop_finding": {"file": "a.ts", "line": 1, "summary": summary},
-        "scorer": "token_containment@0.5/win15",
+        "scorer": EXPECTED_SCORER,
     }
 
 
@@ -1016,7 +1020,7 @@ def test_precision_counts_corroborated_and_hand_labeled(tmp_path):
                 "finding_id": "aaa",
                 "external": {"file": "a.ts", "line": 1, "summary": "s"},
                 "matched_loop": {"file": "a.ts", "line": 1, "summary": "s"},
-                "scorer": "token_containment@0.5/win15",
+                "scorer": EXPECTED_SCORER,
             },
             sort_keys=True,
         )
@@ -1096,7 +1100,7 @@ def test_corroborated_counts_loop_findings_not_matched_pairs(tmp_path, rejected_
                     "finding_id": fid,
                     "external": {"file": "a.ts", "line": 1, "summary": fid},
                     "matched_loop": loop_finding,
-                    "scorer": "token_containment@0.5/win15",
+                    "scorer": EXPECTED_SCORER,
                 },
                 sort_keys=True,
             )
@@ -1177,7 +1181,7 @@ def test_rejected_pair_remains_in_the_precision_population(
                     "finding_id": fid,
                     "external": {"file": lf["file"], "line": lf["line"], "summary": fid},
                     "matched_loop": lf,
-                    "scorer": "token_containment@0.5/win15",
+                    "scorer": EXPECTED_SCORER,
                 },
                 sort_keys=True,
             )
@@ -1225,7 +1229,7 @@ def test_matched_false_label_does_not_trip_the_loop_invariant(tmp_path):
                 "finding_id": "bbb",
                 "external": {"file": "b.ts", "line": 2, "summary": "y"},
                 "matched_loop": loop_finding,
-                "scorer": "token_containment@0.5/win15",
+                "scorer": EXPECTED_SCORER,
             },
             sort_keys=True,
         )
@@ -1263,3 +1267,12 @@ def test_empty_file_external_counts_as_anchored_in_matcher_and_report(tmp_path):
     out = _run(tmp_path)
     assert "PIPELINE WARNING" not in out
     assert "External findings: 1 (1 anchored, 0 unanchored)" in out
+
+
+def test_bucket_labels_match_the_labeling_protocol():
+    sections = re.split(r"^### ", (HARNESS / "label.md").read_text(), flags=re.MULTILINE)
+    documented = {}
+    for section in sections:
+        if heading := re.match(r"`bucket = (\w+)`", section):
+            documented[heading[1]] = frozenset(re.findall(r"^- `(\w+)`:", section, re.MULTILINE))
+    assert documented == _BUCKET_LABELS

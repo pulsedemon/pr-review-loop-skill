@@ -1,6 +1,6 @@
 """Tests for the best_near_miss_score field on unmatched records.
 
-Phase 1 of the recall-loop diagnostic. The matcher buckets findings as
+The matcher buckets findings as
 matched/unmatched at CONTAINMENT_THRESHOLD against same-file loop findings
 within HARNESS_LINE_WINDOW. This adds, for each unmatched record, the
 highest-scoring same-file loop finding's overlap, so REPORT.md can surface
@@ -9,8 +9,7 @@ fell below threshold. Highest-scoring, not nearest by line: `line_delta` is
 reported for whichever finding wins on score.
 
 Fixtures here carry summaries long enough to clear MIN_CONTAINMENT_TOKENS.
-Containment reports 0.0 below that floor, so the four-word summaries these
-tests used to carry would score every pair identically and pass vacuously.
+Containment reports 0.0 below that floor, so four-word summaries score zero against every candidate.
 
 The `_best_near_miss` helper deliberately applies no line gate at all — the
 whole point of the diagnostic is to see whether the line gate or the overlap
@@ -181,7 +180,7 @@ def test_best_near_miss_includes_loop_findings_beyond_line_window(tmp_path):
     diagnostic distinguishes "matcher overlap gate fired" from "matcher line
     gate fired". If a future refactor reintroduced a line-window filter in
     _best_near_miss, score would come back None and this test would fail.
-    Pins the docstring contract at match_external.py:140-148.
+    checks the same-file rule in _best_near_miss.
     """
     corpus = _corpus(
         externals=[

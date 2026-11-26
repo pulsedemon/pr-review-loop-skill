@@ -1,6 +1,7 @@
 """Tests for collect_pr_corpus normalization helpers."""
 
 import time
+from pathlib import Path
 
 import pytest
 from collect_pr_corpus import (  # type: ignore[import-not-found]  # noqa: E402  — sibling module made importable by conftest.py
@@ -96,7 +97,7 @@ def test_parse_summary_bullets_keeps_parenthetical_in_summary():
 
 
 def test_parse_summary_bullets_extensionless_path_anchors_on_em_dash():
-    """The colon branch needs a `.` or `/` to keep prose out, but the em dash was
+    """The colon branch needs a `/` to keep prose out, but the em dash was
     never ambiguous. Requiring it on both demoted real top-level paths that
     already anchored."""
     body = (
@@ -384,3 +385,12 @@ def test_parse_summary_bullets_keeps_deferred_wording_outside_reviewer_section()
             "summary": "deferred cleanup of temp dirs never runs on the error path",
         }
     ]
+
+
+@pytest.mark.parametrize("template", ["summary_ready.md", "summary_needs_attention.md"])
+def test_parse_summary_bullets_reads_the_loop_templates(template):
+    body = (Path(__file__).resolve().parents[3] / "templates" / template).read_text()
+    placeholder = "<file:line> \u2014 <summary>"
+    expected = [{"summary": placeholder}] * body.count("\n- " + placeholder)
+    assert expected
+    assert parse_summary_bullets(body) == ([], expected)
