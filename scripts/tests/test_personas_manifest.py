@@ -128,7 +128,7 @@ def test_more_than_one_schema_constraint_owner_rejected(tmp_path: Path) -> None:
         load_manifest(p_two)
 
 
-def test_move_c_files_returns_only_move_c_personas(tmp_path: Path) -> None:
+def test_move_c_personas_selects_multiple_carriers(tmp_path: Path) -> None:
     p = _write(
         tmp_path,
         """
@@ -325,27 +325,6 @@ def test_unknown_adversary_key_rejected(tmp_path: Path) -> None:
         load_manifest(p)
 
 
-def test_panel_move_c_must_be_bool_not_string(tmp_path: Path) -> None:
-    # bool("false") is True in Python, so silent coercion would flip the
-    # persona into Move C. Quoted bools are a likely YAML typo and must fail loudly.
-    p = _write(
-        tmp_path,
-        """
-        panel:
-          - name: alpha
-            description: alpha persona
-            move_c: "false"
-            owns_schema_constraint_blocker: true
-        adversary:
-          name: adversary
-          description: adversary persona
-        addendums: []
-        """,
-    )
-    with pytest.raises(ManifestError, match=r"'move_c' must be a boolean, got str"):
-        load_manifest(p)
-
-
 def test_panel_owns_schema_constraint_blocker_must_be_bool(tmp_path: Path) -> None:
     p = _write(
         tmp_path,
@@ -471,13 +450,6 @@ def test_direct_manifest_construction_validates_duplicate_names() -> None:
     )
     with pytest.raises(ManifestError, match=r"duplicate panel persona name: a"):
         Manifest(panel=panel, adversary=adv)
-
-
-def test_direct_manifest_construction_rejects_adversary_with_move_c() -> None:
-    bad_adv = Persona(name="adversary", description="adversary persona", move_c=True)
-    panel = (Persona(name="a", description="a persona", owns_schema_constraint_blocker=True),)
-    with pytest.raises(ManifestError, match=r"adversary 'adversary' must not set"):
-        Manifest(panel=panel, adversary=bad_adv)
 
 
 def test_persona_file_is_derived() -> None:
@@ -756,10 +728,11 @@ def test_move_flag_must_be_boolean(tmp_path: Path, key: str) -> None:
         panel:
           - name: alpha
             description: "alpha persona"
-            {key}: "yes"
+            {key}: "false"
             owns_schema_constraint_blocker: true
         adversary:
           name: adversary
+          description: adversary persona
         addendums: []
         """,
     )
