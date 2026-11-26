@@ -75,11 +75,10 @@ def test_only_the_carried_moves_render(tmp_path: Path) -> None:
     assert "**, :" not in out
 
 
-def test_default_manifest_path() -> None:
-    """Calling render() with no argument uses the real personas.yaml."""
-    out = render()
-    assert out
-    assert "Move C" in out
+def test_default_manifest_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    path = write_personas_yaml(tmp_path, ["alpha"], carriers=["alpha"])
+    monkeypatch.setattr(_move_c_bullet_for_cog, "_DEFAULT_MANIFEST", path)
+    assert render().startswith("- **Move C (cross-doc consistency)**, `alpha` only:")
 
 
 def test_move_c_uses_the_configured_schema_constraint_owner(tmp_path: Path) -> None:
