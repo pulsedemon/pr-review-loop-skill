@@ -163,8 +163,8 @@ receives its path. Record the pin and file hashes instead.
 
 ## Mutation-test the contract
 
-`tests/bats/test_manifest_drift_localization.bats` swaps a fixture manifest
-with an extra `phantom` persona into place, then runs every dependent sync
+`tests/bats/test_manifest_drift_localization.bats` adds an extra `phantom`
+persona to a copy of the manifest, then runs every dependent sync
 test and asserts each fails with a message naming a specific surface. If the
 acceptance criterion ever regresses (one manifest edit no longer surfaces
 every drifted surface by name), that test catches it.
