@@ -19,7 +19,7 @@ from collect_pr_corpus import (  # type: ignore[import-not-found]  # noqa: E402 
 )
 from match_external import (  # type: ignore[import-not-found]  # noqa: E402  — sibling made importable by conftest.py
     _load_matcher,
-    _run_matcher,
+    _require_matcher_fields,
     process_corpus_file,
 )
 from report import EXPECTED_SCORER  # noqa: E402
@@ -261,51 +261,20 @@ def matcher_module():
     return _load_matcher(MATCH_SCRIPT)
 
 
-def _good():
-    return {"file": "src/a.ts", "line": 10, "summary": "missing audit log"}
-
-
-def test_run_matcher_raises_when_field_missing(matcher_module):
-    bad = {"file": "src/a.ts", "line": 10}  # missing summary
-    with pytest.raises(RuntimeError, match="missing required field 'summary'"):
-        _run_matcher(matcher_module, _good(), bad)
-
-
-def test_run_matcher_raises_when_line_is_string(matcher_module):
-    bad = {"file": "src/a.ts", "line": "10", "summary": "x"}
-    with pytest.raises(RuntimeError, match="field 'line' has wrong type"):
-        _run_matcher(matcher_module, _good(), bad)
-
-
-def test_run_matcher_raises_when_line_is_bool(matcher_module):
-    """bool is a subclass of int in Python; the matcher explicitly excludes it
-    so `True` doesn't sneak through as line number 1."""
-    bad = {"file": "src/a.ts", "line": True, "summary": "x"}
-    with pytest.raises(RuntimeError, match="field 'line' has wrong type"):
-        _run_matcher(matcher_module, _good(), bad)
-
-
-def test_run_matcher_raises_when_summary_is_not_string(matcher_module):
-    bad = {"file": "src/a.ts", "line": 10, "summary": 42}
-    with pytest.raises(RuntimeError, match="field 'summary' has wrong type"):
-        _run_matcher(matcher_module, _good(), bad)
-
-
-def test_run_matcher_raises_when_file_is_not_string(matcher_module):
-    bad = {"file": 42, "line": 10, "summary": "x"}
-    with pytest.raises(RuntimeError, match="field 'file' has wrong type"):
-        _run_matcher(matcher_module, _good(), bad)
-
-
-def test_run_matcher_validates_both_operands(matcher_module):
-    """Each operand is validated independently — a malformed `a` raises with
-    label 'a', a malformed `b` raises with label 'b'. Pins the label so a
-    refactor that drops the per-operand naming would fail."""
-    bad = {"file": "src/a.ts", "line": 10}  # missing summary
-    with pytest.raises(RuntimeError, match="^matcher input a:"):
-        _run_matcher(matcher_module, bad, _good())
-    with pytest.raises(RuntimeError, match="^matcher input b:"):
-        _run_matcher(matcher_module, _good(), bad)
+@pytest.mark.parametrize(
+    ("finding", "diagnostic"),
+    [
+        ({"file": "a", "line": 1}, "missing required field 'summary'"),
+        ({"file": "a", "line": "1", "summary": "x"}, "field 'line' has wrong type"),
+        ({"file": "a", "line": True, "summary": "x"}, "field 'line' has wrong type"),
+        ({"file": "a", "line": 1, "summary": 42}, "field 'summary' has wrong type"),
+        ({"file": 42, "line": 1, "summary": "x"}, "field 'file' has wrong type"),
+    ],
+)
+def test_invalid_matcher_field_reports_source(finding, diagnostic):
+    with pytest.raises(RuntimeError) as error:
+        _require_matcher_fields("external", finding, "example")
+    assert str(error.value) == f"matcher input external: {diagnostic} on example"
 
 
 def test_emitted_records_carry_the_scorer_stamp(tmp_path):

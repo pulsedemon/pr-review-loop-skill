@@ -193,11 +193,11 @@ def test_loop_validation_preserves_outputs_without_any_external(tmp_path):
     outputs = [tmp_path / name for name in ("unmatched", "matched", "loop_unmatched")]
     for output in outputs:
         output.mkdir()
-        (output / "prior").write_text(output.name)
+        (output / "prior.jsonl").write_text(output.name)
     result = _run_match(corpus, *outputs)
     assert result.returncode != 0
     assert "loop_findings[0]" in result.stderr
-    assert all((output / "prior").read_text() == output.name for output in outputs)
+    assert all((output / "prior.jsonl").read_text() == output.name for output in outputs)
 
 
 def test_failed_publication_restores_previous_buckets(tmp_path, monkeypatch):
@@ -225,7 +225,7 @@ def test_failed_publication_restores_previous_buckets(tmp_path, monkeypatch):
 def test_failed_restore_retains_the_backup(tmp_path, monkeypatch, capsys):
     dest = tmp_path / "matched"
     dest.mkdir()
-    (dest / "prior").write_text("prior")
+    (dest / "prior.jsonl").write_text("prior")
     rename = Path.rename
 
     def unavailable_destination(source, target):
@@ -239,7 +239,7 @@ def test_failed_restore_retains_the_backup(tmp_path, monkeypatch, capsys):
             pass
     (backup,) = tmp_path.glob(".recall-*/previous")
     assert str(backup) in capsys.readouterr().err
-    assert (backup / "prior").read_text() == "prior"
+    assert (backup / "prior.jsonl").read_text() == "prior"
 
 
 def test_rebuild_refuses_output_containing_a_corpus_record(tmp_path):
@@ -267,7 +267,7 @@ def test_rebuild_rejects_conflicting_corpus_identity(tmp_path):
 def test_duplicate_buckets_cannot_replace_existing_output(tmp_path):
     output = tmp_path / "bucket"
     output.mkdir()
-    marker = output / "prior"
+    marker = output / "prior.jsonl"
     marker.write_text("keep")
     with pytest.raises(ValueError, match="own directory"):
         with _stage_outputs((output, output), []):
@@ -287,3 +287,64 @@ def test_nested_output_symlink_is_rejected_before_staging(tmp_path):
             pytest.fail("invalid destinations entered the publish stage")
     assert alias.is_symlink()
     assert not (target / "bucket").exists()
+
+
+@pytest.mark.parametrize("skipped", [False, True])
+def test_both_readers_reject_wrong_pr_identity(tmp_path, skipped):
+    corpus = tmp_path / "corpus"
+    _write_nested(corpus, "o", "r", 1)
+    path = corpus / "o/r/pr-1.json"
+    record = json.loads(path.read_text())
+    if skipped:
+        record = {"pr": 2, "corpus_version": CORPUS_VERSION, "skipped": "not merged"}
+    else:
+        record["pr"] = 2
+    path.write_text(json.dumps(record))
+    for script in [MATCH_SCRIPT_PATH, REPORT_SCRIPT_PATH]:
+        result = subprocess.run(
+            [
+                sys.executable,
+                script,
+                "--corpus-dir",
+                corpus,
+                "--matched-dir",
+                tmp_path / "matched",
+                "--unmatched-dir",
+                tmp_path / "unmatched",
+                "--loop-unmatched-dir",
+                tmp_path / "lu",
+            ],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode != 0
+        assert "identity does not match" in result.stderr
+    assert not (tmp_path / "matched").exists()
+
+
+def test_reserved_publication_preserves_output(tmp_path):
+    out = tmp_path / "matched"
+    out.mkdir()
+    (out / "prior.jsonl").write_text("previous")
+    lock = tmp_path / ".matched.recall-lock"
+    lock.mkdir()
+    with pytest.raises(RuntimeError, match="reserved"):
+        with _stage_outputs((out,), []):
+            pass
+    assert (out / "prior.jsonl").read_text() == "previous"
+    assert lock.is_dir()
+
+
+def test_cleanup_failure_reports_retained_staging_after_publication(tmp_path, monkeypatch, capsys):
+    import match_external
+
+    dest = tmp_path / "matched"
+
+    def unavailable(path):
+        raise PermissionError("cleanup denied")
+
+    monkeypatch.setattr(match_external.shutil, "rmtree", unavailable)
+    with _stage_outputs((dest,), []) as staged:
+        (staged[0] / "current.jsonl").write_text("published")
+    assert (dest / "current.jsonl").read_text() == "published"
+    assert "cleanup denied" in capsys.readouterr().err

@@ -355,6 +355,7 @@ def test_drift_check_exits_2_on_unparseable_manifest(tmp_path, monkeypatch, caps
     [
         (["--pr-list", "1", "--merged-since", "2026-01-01"], "mutually exclusive"),
         (["--pr-list", "nope"], "argument --pr-list"),
+        (["--pr-list", "1,0"], "argument --pr-list"),
     ],
 )
 def test_invalid_selectors_exit_before_fetch(tmp_path, selectors, message):
@@ -424,10 +425,15 @@ def test_missing_gh_reports_the_failed_repository(tmp_path, use_manifest):
     assert "Traceback" not in result.stderr
 
 
+@pytest.mark.parametrize(
+    "response, error", [("invalid json", "JSONDecodeError"), ("{}", "FetchResponseError")]
+)
 @pytest.mark.parametrize("manifest_mode", [True, False])
-def test_malformed_fetch_identifies_the_operation_without_pruning(tmp_path, manifest_mode):
+def test_malformed_fetch_identifies_the_operation_without_pruning(
+    tmp_path, manifest_mode, response, error
+):
     gh = tmp_path / "gh"
-    gh.write_text("#!/bin/sh\nprintf 'invalid json'\n")
+    gh.write_text(f"#!/bin/sh\nprintf '%s\n' '{response}'\n")
     gh.chmod(0o755)
     corpus = tmp_path / "corpus"
     stale = corpus / "o/r/pr-99.json"
@@ -449,7 +455,7 @@ def test_malformed_fetch_identifies_the_operation_without_pruning(tmp_path, mani
     )
     assert result.returncode == 1
     assert context in result.stderr
-    assert "JSONDecodeError" in result.stderr
+    assert error in result.stderr
     assert "Traceback" not in result.stderr
     assert stale.read_text() == '{"pr":99}\n'
 

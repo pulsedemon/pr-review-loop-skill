@@ -541,9 +541,7 @@ def test_report_includes_near_miss_section_sorted_desc_and_capped(tmp_path):
     # Sorted descending: extract scores from rendered rows (format is parser's choice;
     # this test asserts on monotonicity, not exact format).
     scores = [float(ln.split("score=")[1].split()[0]) for ln in rows]
-    assert scores == sorted(scores, reverse=True), (
-        f"near-miss section not sorted desc; scores: {scores}"
-    )
+    assert scores == [round(i / 30, 2) for i in range(29, 4, -1)]
 
 
 def test_report_near_miss_section_flags_real_miss_labels(tmp_path):
