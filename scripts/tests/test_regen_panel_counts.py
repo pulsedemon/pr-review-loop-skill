@@ -220,9 +220,13 @@ def test_render_supports_markdown_formatting_around_n(tmp_path: Path) -> None:
 def test_write_atomically_creates_no_tmp_files(tmp_path: Path) -> None:
     manifest = write_personas_yaml(tmp_path, ["a", "b"])  # n = 2
     root = _make_corpus(tmp_path)
-    (root / "SKILL.md").write_text(_total_region("{n} {personas|persona}", "99 personas"))
+    target = root / "SKILL.md"
+    target.write_text(_total_region("{n} {personas|persona}", "99 personas"))
+    original_inode = target.stat().st_ino
     rc = _run(["--write", "--manifest", str(manifest), "--corpus-root", str(root)])
     assert rc == 0
+    assert target.read_text() == _total_region("{n} {personas|persona}", "2 personas")
+    assert target.stat().st_ino != original_inode
     leftover = list(root.rglob("*.tmp"))
     assert leftover == []
 
@@ -295,16 +299,21 @@ def test_validate_coverage_rejects_unwrapped_total_shaped_phrases(
 def test_validate_coverage_rejects_unwrapped_total_regardless_of_number(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    manifest = write_personas_yaml(tmp_path, ["a", "b"])
     wrong_root = _make_corpus(tmp_path / "wrong")
     (wrong_root / "SKILL.md").write_text("panel of 999 reviewer personas\n")
-    rc = _run(["--validate-coverage", "--corpus-root", str(wrong_root)])
+    rc = _run(
+        ["--validate-coverage", "--manifest", str(manifest), "--corpus-root", str(wrong_root)]
+    )
     assert rc == generator_io.DRIFT_EXIT == 5
     err = capsys.readouterr().err
     assert "999 reviewer personas" in err
 
     match_root = _make_corpus(tmp_path / "match")
     (match_root / "SKILL.md").write_text("panel of 2 reviewer personas\n")
-    rc = _run(["--validate-coverage", "--corpus-root", str(match_root)])
+    rc = _run(
+        ["--validate-coverage", "--manifest", str(manifest), "--corpus-root", str(match_root)]
+    )
     assert rc == generator_io.DRIFT_EXIT == 5
     err = capsys.readouterr().err
     assert "2 reviewer personas" in err

@@ -45,7 +45,7 @@ def test_alphabetical_order(tmp_path: Path) -> None:
         carriers=["zeta", "alpha"],
     )
     out = render(yaml_path)
-    assert out.index("alpha") < out.index("zeta")
+    assert out.startswith("- **Move C (cross-doc consistency)**, `alpha`, `zeta`:")
 
 
 def test_no_bullet_when_no_persona_carries_the_move(tmp_path: Path) -> None:
@@ -81,7 +81,7 @@ def test_default_manifest_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
 
 def test_move_c_uses_the_configured_schema_constraint_owner(tmp_path: Path) -> None:
     manifest = write_personas_yaml(
-        tmp_path, ["requirements", "type_design"], carriers=["type_design"]
+        tmp_path, ["type_design", "requirements"], carriers=["type_design"], owner_index=1
     )
     out = render(manifest)
     assert "cross-reference `requirements` in `detail`" in out

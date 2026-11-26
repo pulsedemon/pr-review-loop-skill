@@ -165,5 +165,5 @@ receives its path. Record the pin and file hashes instead.
 
 `tests/bats/test_manifest_drift_localization.bats` adds an extra `phantom`
 persona to a copy of the manifest. It checks that the filesystem and Move C
-guards identify the missing prompt, and that the regeneration diff names
-the extra persona and points to `scripts/regen.sh`.
+guards identify the missing prompt. The regeneration check shows the extra
+persona in the diff and recommends `scripts/regen.sh` in its diagnostic.

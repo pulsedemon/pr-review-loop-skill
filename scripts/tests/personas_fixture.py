@@ -5,15 +5,20 @@ from pathlib import Path
 
 
 def write_personas_yaml(
-    tmp_path: Path, panel: list[str], carriers: Collection[str] = (), flag: str = "move_c"
+    tmp_path: Path,
+    panel: list[str],
+    carriers: Collection[str] = (),
+    flag: str = "move_c",
+    *,
+    owner_index: int = 0,
 ) -> Path:
-    """the first persona owns the schema constraint and carriers enable the chosen flag."""
+    """write an ordered panel with one schema owner and the requested move carriers."""
     lines = ["panel:"]
     for index, name in enumerate(panel):
         lines.extend([f"  - name: {name}", f"    description: {name} persona"])
         if name in carriers:
             lines.append(f"    {flag}: true")
-        if index == 0:
+        if index == owner_index:
             lines.append("    owns_schema_constraint_blocker: true")
     lines.extend(
         [

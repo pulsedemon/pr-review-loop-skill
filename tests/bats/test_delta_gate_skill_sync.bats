@@ -12,8 +12,8 @@ load test_helper
 @test "gate.schema.json reviewer enum matches the personas.yaml panel" {
   local panel
   panel=$(python3 "${SCRIPTS}/personas_manifest.py" --list panel-names)
-  jq -e --arg panel "$panel" \
-    '(.properties.reviewer.enum | sort) == ($panel | split("\n") | sort)' \
+  jq -se --arg panel "$panel" \
+    'length == 1 and ((.[0].properties.reviewer.enum | sort) == ($panel | split("\n") | sort))' \
     "${REPO_ROOT}/reviewers/gate.schema.json"
 }
 

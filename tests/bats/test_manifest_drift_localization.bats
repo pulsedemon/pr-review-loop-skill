@@ -48,7 +48,17 @@ PY
 }
 
 @test "scripts/regen-check.sh fails with exit 5 and surfaces phantom in the diff" {
-  # regen-check resolves its root from the current directory.
+  # When the manifest gains phantom, cog regenerates the SKILL.md
+  # "Reviewer personas" section to include a phantom bullet — which
+  # then diffs against the on-disk SKILL.md (which doesn't have one).
+  # Likewise scripts/regen_schema_enum.py regenerates the enum to
+  # include phantom and diffs against the on-disk schema. Either
+  # failure exits non-zero with a unified diff containing the literal
+  # 'phantom'.
+  #
+  # regen-check.sh resolves its root via `git rev-parse --show-toplevel`,
+  # which follows cwd — not the script's own location. Run it with cwd
+  # inside $SKILL so it checks the fixture manifest, not the real repo.
   run bash -c "cd '${SKILL}' && bash scripts/regen-check.sh"
   [[ "$status" -eq 5 ]] || {
     echo "expected scripts/regen-check.sh to fail with exit 5 (drift) given the fixture manifest;"
@@ -56,14 +66,26 @@ PY
     echo "$output"
     return 1
   }
-  echo "$output" | grep -q "phantom" || {
-    echo "expected scripts/regen-check.sh output to mention 'phantom' in the diff; got:"
-    echo "$output"
-    return 1
-  }
+  [[ "$output" == *'+- `phantom.md`: fixture stub'* ]]
+  python3 - "$REPO_ROOT/reviewers/personas.yaml" "$SKILL/reviewers/personas.yaml" <<'PY'
+import sys
+from pathlib import Path
+
+import yaml
+
+original, mutated = (yaml.safe_load(Path(path).read_text()) for path in sys.argv[1:])
+phantom = mutated["panel"].pop()
+assert phantom == {"name": "phantom", "description": "fixture stub", "move_c": True}
+assert mutated == original
+PY
 }
 
 @test "scripts/regen-check.sh failure message points at scripts/regen.sh" {
+  # The cog --check-fail-msg and regen_schema_enum.py both must point
+  # the operator at the one-command fix. This guards against a future
+  # refactor that drops the hint or replaces it with a generic 'check
+  # failed' diagnostic that hides where to recover.
+  # cwd must be inside $SKILL — see the note in the exit-5 test above.
   run bash -c "cd '${SKILL}' && bash scripts/regen-check.sh"
   [[ "$status" -ne 0 ]] || return 1
   echo "$output" | grep -q "scripts/regen.sh" || {

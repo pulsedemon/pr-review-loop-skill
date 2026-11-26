@@ -832,7 +832,6 @@ def test_unknown_adversary_move_key_rejected(tmp_path: Path, key: str) -> None:
         f"""
         panel:
           - name: alpha
-            description: alpha persona
             description: "alpha persona"
             owns_schema_constraint_blocker: true
         adversary:
