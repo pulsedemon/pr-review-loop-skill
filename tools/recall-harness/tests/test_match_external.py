@@ -414,7 +414,8 @@ def test_match_script_uses_the_supplied_scorer(tmp_path):
         "CONTAINMENT_THRESHOLD = 0.2\nMIN_CONTAINMENT_TOKENS = 1\n"
         "def tokens(s): return s.split()\n"
         "def token_containment(a, b): return 1.0\n"
-        "def is_match(a, b, **options): return True\n"
+        "def is_match(a, b, *, scorer, threshold, line_window):\n"
+        "    return scorer(a['summary'], b['summary']) >= threshold and line_window == 15\n"
     )
     loop = {"file": "a", "line": 1, "summary": "one"}
     external = {"file": "b", "line": 2, "summary": "two"}

@@ -173,15 +173,7 @@ def test_best_near_miss_uses_max_across_multiple_same_file_loop_findings(tmp_pat
 
 
 def test_best_near_miss_includes_loop_findings_beyond_line_window(tmp_path):
-    """_best_near_miss intentionally applies no line window at all.
-
-    A same-file loop finding 90 lines away with a high-overlap summary must
-    still be scored (with line_delta recording the spatial distance) so the
-    diagnostic distinguishes "matcher overlap gate fired" from "matcher line
-    gate fired". If a future refactor reintroduced a line-window filter in
-    _best_near_miss, score would come back None and this test would fail.
-    checks the same-file rule in _best_near_miss.
-    """
+    """line-window misses still need an overlap score for diagnosis."""
     corpus = _corpus(
         externals=[
             {

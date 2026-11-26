@@ -539,7 +539,7 @@ def test_report_includes_near_miss_section_sorted_desc_and_capped(tmp_path):
     assert len(rows) == 25, f"expected 25 rows (cap), got {len(rows)}"
     # Sorted descending: extract scores from rendered rows (format is parser's choice;
     # this test asserts on monotonicity, not exact format).
-    scores = [float(ln.split("score=")[1].split()[0]) for ln in rows if "score=" in ln]
+    scores = [float(ln.split("score=")[1].split()[0]) for ln in rows]
     assert scores == sorted(scores, reverse=True), (
         f"near-miss section not sorted desc; scores: {scores}"
     )

@@ -422,3 +422,33 @@ def test_missing_gh_reports_the_failed_repository(tmp_path, use_manifest):
     assert "cannot collect acme/api" in result.stderr
     assert "FileNotFoundError" in result.stderr
     assert "Traceback" not in result.stderr
+
+
+@pytest.mark.parametrize("manifest_mode", [True, False])
+def test_malformed_fetch_identifies_the_operation_without_pruning(tmp_path, manifest_mode):
+    gh = tmp_path / "gh"
+    gh.write_text("#!/bin/sh\nprintf 'invalid json'\n")
+    gh.chmod(0o755)
+    corpus = tmp_path / "corpus"
+    stale = corpus / "o/r/pr-99.json"
+    stale.parent.mkdir(parents=True)
+    stale.write_text('{"pr":99}\n')
+    if manifest_mode:
+        manifest = tmp_path / "manifest.csv"
+        manifest.write_text("owner,repo,pr\no,r,7\n")
+        args = ["--manifest", manifest]
+        context = "o/r PR #7"
+    else:
+        args = ["--owner", "o", "--repo", "r", "--merged-since", "2026-01-01"]
+        context = "listing merged PRs since 2026-01-01"
+    result = subprocess.run(
+        [sys.executable, COLLECT_SCRIPT, *args, "--out-dir", corpus],
+        env={"PATH": str(tmp_path)},
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 1
+    assert context in result.stderr
+    assert "JSONDecodeError" in result.stderr
+    assert "Traceback" not in result.stderr
+    assert stale.read_text() == '{"pr":99}\n'

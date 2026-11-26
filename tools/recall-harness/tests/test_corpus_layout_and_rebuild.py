@@ -147,3 +147,23 @@ def test_guard_failure_preserves_existing_outputs(tmp_path):
     assert (unmatched / "keep.jsonl").exists()
     assert (loop_unmatched / "keep.jsonl").exists()
     assert (matched / "keep.jsonl").exists()
+
+
+def test_malformed_later_record_preserves_all_matcher_outputs(tmp_path):
+    corpus = tmp_path / "corpus"
+    _write_nested(corpus, "o", "r", 1)
+    _write_nested(corpus, "o", "r", 2)
+    path = corpus / "o/r/pr-2.json"
+    record = json.loads(path.read_text())
+    record["external_findings"] = [{"file": "a", "line": "bad", "summary": "example"}]
+    path.write_text(json.dumps(record))
+    outputs = [tmp_path / name for name in ("unmatched", "matched", "loop_unmatched")]
+    for directory in outputs:
+        directory.mkdir()
+        (directory / "previous.jsonl").write_text("previous\n")
+    result = _run_match(corpus, *outputs)
+    assert result.returncode != 0
+    assert "o/r PR #2 external_findings[0]" in result.stderr
+    for directory in outputs:
+        assert list(directory.iterdir()) == [directory / "previous.jsonl"]
+        assert (directory / "previous.jsonl").read_text() == "previous\n"
