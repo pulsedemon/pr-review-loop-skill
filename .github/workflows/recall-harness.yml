@@ -18,6 +18,8 @@ jobs:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      MERGED_SINCE: '2026-01-01'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -39,7 +41,7 @@ jobs:
           python3 tools/recall-harness/collect_pr_corpus.py \
             --owner "$OWNER" \
             --repo "$REPO" \
-            --merged-since 2026-01-01
+            --merged-since "$MERGED_SINCE"
 
       - name: check manifest drift
         env:
@@ -51,7 +53,7 @@ jobs:
           python3 tools/recall-harness/check_manifest_drift.py \
             --owner "$OWNER" \
             --repo "$REPO" \
-            --merged-since 2026-01-01 \
+            --merged-since "$MERGED_SINCE" \
             --manifest tools/recall-harness/corpus-manifest.csv
 
       - name: match external findings
