@@ -667,9 +667,9 @@ def main() -> int:
                 _collect_and_write(owner, repo, prs, args.out_dir, include_open=False)
             except _FETCH_ERRORS as e:
                 print(
-                    f"collect_pr_corpus: cannot collect {owner}/{repo} "
-                    "--manifest needs access to every "
-                    "listed repo; use --owner/--repo/--pr-list to collect a subset.\n"
+                    f"collect_pr_corpus: cannot collect {owner}/{repo}. "
+                    "Manifest collection needs access to every listed repository. "
+                    "Use --owner/--repo/--pr-list to collect a subset.\n"
                     f"{_fetch_error_detail(e)}",
                     file=sys.stderr,
                 )

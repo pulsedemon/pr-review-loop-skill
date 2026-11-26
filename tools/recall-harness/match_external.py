@@ -263,6 +263,7 @@ def main() -> int:
         "--match-script",
         type=Path,
         default=DEFAULT_MATCH_SCRIPT,
+        help="Path to a matcher module (default: scripts/finding_matcher.py).",
     )
     args = parser.parse_args()
 
