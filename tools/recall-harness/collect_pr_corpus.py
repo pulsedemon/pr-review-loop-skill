@@ -587,20 +587,29 @@ _FETCH_ERRORS = (subprocess.CalledProcessError, FileNotFoundError, json.JSONDeco
 def _fetch_error_detail(error: Exception) -> str:
     detail = f"{type(error).__name__}: {error}"
     if isinstance(error, subprocess.CalledProcessError) and error.stderr:
-        return f"{detail}\nstderr: {error.stderr}"
+        detail += f"\nstderr: {error.stderr}"
     return detail
 
 
 def _collect_and_write(
     owner: str, repo: str, pr_numbers: list[int], out_dir: Path, include_open: bool
-) -> None:
+) -> bool:
     out_dir.mkdir(parents=True, exist_ok=True)
     for pr in pr_numbers:
-        record = collect_pr(owner, repo, pr, include_open=include_open)
+        try:
+            record = collect_pr(owner, repo, pr, include_open=include_open)
+        except _FETCH_ERRORS as error:
+            print(
+                f"collect_pr_corpus: cannot collect {owner}/{repo} PR #{pr}\n"
+                f"{_fetch_error_detail(error)}",
+                file=sys.stderr,
+            )
+            return False
         out_path = out_dir / corpus_filename(owner, repo, pr)
         out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n")
         print(f"wrote {out_path}", file=sys.stderr)
+    return True
 
 
 def main() -> int:
@@ -666,16 +675,8 @@ def main() -> int:
             grouped.setdefault((owner, repo), []).append(pr)
             expected_paths.add(args.out_dir / corpus_filename(owner, repo, pr))
         for (owner, repo), prs in grouped.items():
-            try:
-                _collect_and_write(owner, repo, prs, args.out_dir, include_open=False)
-            except _FETCH_ERRORS as e:
-                print(
-                    f"collect_pr_corpus: cannot collect {owner}/{repo}. "
-                    "Manifest collection needs access to every listed repository. "
-                    "Use --owner/--repo/--pr-list to collect a subset.\n"
-                    f"{_fetch_error_detail(e)}",
-                    file=sys.stderr,
-                )
+            if not _collect_and_write(owner, repo, prs, args.out_dir, include_open=False):
+                print("Manifest collection stopped before pruning.", file=sys.stderr)
                 return 1
         args.out_dir.mkdir(parents=True, exist_ok=True)
         # prune only after every requested record was collected successfully.
@@ -702,20 +703,21 @@ def main() -> int:
             "(gh pr list is invoked with --state merged)"
         )
 
-    try:
-        if args.pr_list:
-            pr_numbers = args.pr_list
-        else:
+    if args.pr_list:
+        pr_numbers = args.pr_list
+    else:
+        try:
             pr_numbers = list_merged_prs(args.owner, args.repo, args.merged_since)
-
-        _collect_and_write(
-            args.owner, args.repo, pr_numbers, args.out_dir, include_open=args.include_open
-        )
-    except _FETCH_ERRORS as e:
-        print(
-            f"collect_pr_corpus: cannot collect {args.owner}/{args.repo}\n{_fetch_error_detail(e)}",
-            file=sys.stderr,
-        )
+        except _FETCH_ERRORS as error:
+            print(
+                f"collect_pr_corpus: cannot collect {args.owner}/{args.repo}: "
+                f"listing merged PRs since {args.merged_since}\n{_fetch_error_detail(error)}",
+                file=sys.stderr,
+            )
+            return 1
+    if not _collect_and_write(
+        args.owner, args.repo, pr_numbers, args.out_dir, include_open=args.include_open
+    ):
         return 1
     return 0
 
