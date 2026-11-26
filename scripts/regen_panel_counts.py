@@ -291,10 +291,12 @@ def _run_validate_markers(*, corpus_root: Path) -> int:
 
 _TOTAL_PREFIX = r"(?i:(?:a\s+)?total\s+of|in\s+total,?|total:|panel\s+of)"
 _PANEL_LABEL = r"(?i:\(panel\s*\+\s*adversary\))"
+_PERSONA_COUNT = r"\d+\s+(?:reviewer\s+)?personas?\b"
 # match wrapped counts while excluding embedded digits such as B2.
 _COVERAGE_BROAD_RE = re.compile(
-    rf"\b(?:{_TOTAL_PREFIX}\s+)?\d+\s+(?:reviewer\s+)?personas?\b"
-    r"(?:(?:,?\s+(?i:in\s+total)(?= {2,}\n))|"
+    rf"\b(?:{_TOTAL_PREFIX}\s+)?{_PERSONA_COUNT}"
+    r"(?:,\s+(?i:in\s+total)(?=,)|"
+    rf",?\s+(?i:in\s+total)(?=\t* {{2,}}\n[ \t]*{_PERSONA_COUNT})|"
     rf"(?:(?!,?\s+{_TOTAL_PREFIX}\s+\d),?\s+"
     rf"(?:(?i:total)(?=\s*{_PANEL_LABEL})|(?i:in\s+total)(?=,?\s+(?i:across)(?=\s)"
     rf"|\s*(?:[.;:!?)]|$|{_PANEL_LABEL}|,\s*(?i:including|excluding)\b"
@@ -345,14 +347,14 @@ def _mask_word_markup(text: str) -> str:
             if start in closes_at:
                 close = closes_at[start]
                 code_end = close + len(delimiter)
-                chars[start:end] = chars[close:code_end] = " " * len(delimiter)
+                chars[start:end] = chars[close:code_end] = "\t" * len(delimiter)
             continue
         left = text[start - 1] if start else " "
         right = text[end] if end < len(text) else " "
         pending = openings[delimiter[0]]
         if not left.isspace() and not right.isalnum():
             while start < end and pending:
-                chars[pending.pop()] = chars[start] = " "
+                chars[pending.pop()] = chars[start] = "\t"
                 start += 1
         if not right.isspace() and not left.isalnum():
             pending.extend(range(start, end))
