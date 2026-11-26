@@ -175,10 +175,6 @@ def load_manifest(path: Path) -> Manifest:
     return Manifest(scenarios=scenarios)
 
 
-def _default_manifest_path() -> Path:
-    return Path(__file__).resolve().parents[1] / "tests" / "scenarios" / "manifest.yaml"
-
-
 def _list_output(manifest: Manifest, list_name: str) -> Iterable[str]:
     if list_name == "all-files":
         return (scenario.file for scenario in manifest.scenarios)
@@ -200,7 +196,7 @@ def _main(argv: list[str]) -> int:
     parser.add_argument(
         "--manifest",
         type=Path,
-        default=_default_manifest_path(),
+        default=REPO_ROOT / "tests" / "scenarios" / "manifest.yaml",
         help="path to tests/scenarios/manifest.yaml",
     )
     group = parser.add_mutually_exclusive_group(required=True)
