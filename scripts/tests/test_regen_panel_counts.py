@@ -134,7 +134,9 @@ def test_plural_agreement_n_greater_than_1(tmp_path: Path) -> None:
     assert rc == 0
 
 
-def test_subset_phrases_outside_regions_are_not_touched(tmp_path: Path) -> None:
+def test_subset_phrases_outside_regions_are_not_touched(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """A wrapped total phrase coexists with an unwrapped subset phrase.
 
     The generator must rewrite only the wrapped phrase; the surrounding
@@ -154,6 +156,14 @@ def test_subset_phrases_outside_regions_are_not_touched(tmp_path: Path) -> None:
     )
     original = body.replace("\n", "\r\n").replace("Pre-text: ", "intro\nPre-text: ").encode()
     f.write_bytes(original)
+
+    # exercise the Windows text-write default on every test host.
+    write_text = Path.write_text
+
+    def write_with_crlf_default(path: Path, data: str, *, newline: str | None = None) -> int:
+        return write_text(path, data, newline="\r\n" if newline is None else newline)
+
+    monkeypatch.setattr(Path, "write_text", write_with_crlf_default)
     rc = _run(["--write", "--manifest", str(manifest), "--corpus-root", str(root)])
     assert rc == 0
     assert f.read_bytes() == original.replace(

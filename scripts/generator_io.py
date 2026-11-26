@@ -12,11 +12,11 @@ DRIFT_EXIT = 5
 MANIFEST_ERROR_EXIT = 3
 
 
-def atomic_write(path: Path, content: str) -> None:
+def atomic_write(path: Path, content: str, *, newline: str | None = None) -> None:
     """preserve target permissions when replacing generated content."""
     tmp = path.with_suffix(path.suffix + ".tmp")
     try:
-        tmp.write_text(content)
+        tmp.write_text(content, newline=newline)
         os.chmod(tmp, path.stat().st_mode & 0o7777)
         os.replace(tmp, path)
     except Exception:

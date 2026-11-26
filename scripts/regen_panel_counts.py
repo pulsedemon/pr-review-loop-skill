@@ -240,7 +240,7 @@ def _run_check_or_write(*, write: bool, manifest_path: Path, corpus_root: Path) 
         if current == regenerated:
             continue
         if write:
-            generator_io.atomic_write(path, regenerated)
+            generator_io.atomic_write(path, regenerated, newline="")
         else:
             generator_io.emit_drift_diff(path, current, regenerated)
             drifted.append(path)
