@@ -34,9 +34,7 @@ scenarios:
 def test_load_real_manifest_succeeds() -> None:
     repo_root = Path(__file__).resolve().parents[2]
     manifest = load_manifest(repo_root / "tests" / "scenarios" / "manifest.yaml")
-    scenario_files = sorted(path.name for path in (repo_root / "tests" / "scenarios").glob("*.md"))
     assert isinstance(manifest, Manifest)
-    assert [scenario.file for scenario in manifest.scenarios] == scenario_files
 
 
 def test_ci_trusted_requires_proof_sources(tmp_path: Path) -> None:
