@@ -78,6 +78,15 @@ def _load_matcher(match_script: Path) -> ModuleType:
     return module
 
 
+def _require_matcher_fields(label: str, obj: dict, where: str) -> None:
+    for key, typ in (("file", str), ("line", int), ("summary", str)):
+        if key not in obj:
+            raise RuntimeError(f"matcher input {label}: missing required field '{key}' on {where}")
+        value = obj[key]
+        if not isinstance(value, typ) or (typ is int and isinstance(value, bool)):
+            raise RuntimeError(f"matcher input {label}: field '{key}' has wrong type on {where}")
+
+
 def _run_matcher(matcher: ModuleType, a: dict, b: dict) -> bool:
     """return whether a and b match under the harness's containment scorer.
 
@@ -85,19 +94,9 @@ def _run_matcher(matcher: ModuleType, a: dict, b: dict) -> bool:
     bot comments. malformed inputs raise RuntimeError so validation failures
     cannot inflate the candidate-miss bucket.
     """
-    for label, obj in (("a", a), ("b", b)):
-        for key, typ in (("file", str), ("line", int), ("summary", str)):
-            if key not in obj:
-                raise RuntimeError(
-                    f"matcher input {label}: missing required field '{key}' on "
-                    f"{a.get('file')}:{a.get('line')} vs {b.get('file')}:{b.get('line')}"
-                )
-            value = obj[key]
-            if not isinstance(value, typ) or (typ is int and isinstance(value, bool)):
-                raise RuntimeError(
-                    f"matcher input {label}: field '{key}' has wrong type on "
-                    f"{a.get('file')}:{a.get('line')} vs {b.get('file')}:{b.get('line')}"
-                )
+    where = f"{a.get('file')}:{a.get('line')} vs {b.get('file')}:{b.get('line')}"
+    _require_matcher_fields("a", a, where)
+    _require_matcher_fields("b", b, where)
     return matcher.is_match(
         a,
         b,
@@ -196,6 +195,7 @@ def process_corpus_file(
     for ext in external:
         if not is_anchored(ext):
             continue  # Unanchored externals never feed the matcher.
+        _require_matcher_fields("external", ext, f"{owner}/{repo} PR #{pr}")
         ext_for_matcher = {
             "file": ext["file"],
             "line": ext["line"],
