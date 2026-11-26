@@ -89,7 +89,7 @@ jobs:
           curl -fsSL -o /usr/local/bin/shfmt \
             "https://github.com/mvdan/sh/releases/download/${SHFMT_VERSION}/shfmt_${SHFMT_VERSION}_linux_amd64"
           chmod +x /usr/local/bin/shfmt
-      - run: shfmt -d -i 2 -ci scripts/ install.sh tests/run.sh
+      - run: shfmt -d -i 2 -ci scripts/ install.sh tests/run.sh tests/bats/test_helper.bash
 
   bats:
     runs-on: ubuntu-latest
