@@ -467,3 +467,43 @@ def test_empty_comment_response_is_a_fetch_failure(tmp_path, monkeypatch):
     monkeypatch.setenv("PATH", str(tmp_path))
     with pytest.raises(json.JSONDecodeError, match="empty gh response for comments"):
         collect_pr_corpus._gh_api("comments")
+
+
+@pytest.mark.parametrize("contents", ["", "unexpected,column\n"])
+def test_headerless_manifest_cannot_prune_existing_records(tmp_path, contents):
+    manifest = tmp_path / "manifest.csv"
+    manifest.write_text(contents)
+    corpus = tmp_path / "corpus"
+    prior = corpus / "o/r/pr-9.json"
+    prior.parent.mkdir(parents=True)
+    prior.write_text('{"pr":9}')
+    result = subprocess.run(
+        [sys.executable, COLLECT_SCRIPT, "--manifest", manifest, "--out-dir", corpus],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 2
+    assert "manifest header" in result.stderr
+    assert prior.read_text() == '{"pr":9}'
+
+
+def test_malformed_page_after_metadata_does_not_write_a_skipped_record(tmp_path, monkeypatch):
+    def gh(cmd, **kwargs):
+        data = {"mergedAt": "2026-01-01T00:00:00Z"} if "view" in cmd else {}
+        return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps(data))
+
+    monkeypatch.setattr(subprocess, "run", gh)
+    with pytest.raises(collect_pr_corpus.FetchResponseError, match="page of comments or reviews"):
+        collect_pr_corpus.collect_pr("o", "r", 7)
+
+
+def test_drift_check_rejects_wrong_json_shape(tmp_path, monkeypatch, capsys):
+    manifest = tmp_path / "manifest.csv"
+    manifest.write_text("owner,repo,pr\n")
+
+    def gh(cmd, **kwargs):
+        return subprocess.CompletedProcess(cmd, 0, stdout="{}")
+
+    monkeypatch.setattr(subprocess, "run", gh)
+    assert _drift(monkeypatch, manifest, fetch=collect_pr_corpus.list_merged_prs) == 2
+    assert "expected a list of merged PRs" in capsys.readouterr().err

@@ -1318,3 +1318,27 @@ def test_tuned_decision_cut_counts_each_persisted_score_once(tmp_path, monkeypat
     out = capsys.readouterr().out
     assert "[0.35-0.40): 1" in out
     assert sum(map(int, re.findall(r"^  \[.*?\): (\d+)$", out, re.MULTILINE))) == 1
+
+
+def test_empty_file_loop_counts_as_anchored(tmp_path):
+    loop = {"file": "", "line": 1, "summary": "loop finding"}
+    _corpus_path(tmp_path, 1).write_text(json.dumps(_corpus_record(1, loop_findings=[loop])))
+    _write_jsonl(
+        _jsonl_path(tmp_path, "loop_unmatched", 1),
+        [{"loop_finding": loop, "finding_id": finding_id(loop)}],
+    )
+    out = _run(tmp_path)
+    assert "PIPELINE WARNING" not in out
+    assert "Manual judgment coverage: 0.0% (0/1)" in out.splitlines()
+
+
+def test_report_refuses_output_replaced_after_read(tmp_path):
+    output = tmp_path / "matched.jsonl"
+    output.touch()
+    observed = {}
+    report._load_jsonl(output, observed)
+    replacement = tmp_path / "next.jsonl"
+    replacement.touch()
+    replacement.replace(output)
+    with pytest.raises(RuntimeError, match="changed while reporting"):
+        report._check_observed_outputs(observed)

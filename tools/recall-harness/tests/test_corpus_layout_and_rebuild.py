@@ -174,11 +174,22 @@ def test_malformed_later_record_preserves_all_matcher_outputs(tmp_path):
 def test_nested_output_directories_publish_all_buckets(tmp_path):
     corpus = tmp_path / "corpus"
     _write_nested(corpus, "o", "r", 1)
+    path = corpus / "o/r/pr-1.json"
+    record = json.loads(path.read_text())
+    external = {"file": "a.py", "line": 7, "summary": "external finding"}
+    loop = {"file": "b.py", "line": 8, "summary": "loop finding"}
+    record.update(loop_findings=[loop], external_findings=[external])
+    path.write_text(json.dumps(record))
     outer = tmp_path / "derived"
     outputs = [outer / "unmatched", outer, outer / "loop_unmatched"]
     result = _run_match(corpus, *outputs)
     assert result.returncode == 0, result.stderr
-    assert all((output / "o/r/pr-1.jsonl").is_file() for output in outputs)
+    unmatched, matched, loop_unmatched = [
+        (output / "o/r/pr-1.jsonl").read_text() for output in outputs
+    ]
+    assert json.loads(unmatched)["external"] == external
+    assert matched == ""
+    assert json.loads(loop_unmatched)["loop_finding"] == loop
 
 
 def test_loop_validation_preserves_outputs_without_any_external(tmp_path):
@@ -289,16 +300,16 @@ def test_nested_output_symlink_is_rejected_before_staging(tmp_path):
     assert not (target / "bucket").exists()
 
 
-@pytest.mark.parametrize("skipped", [False, True])
-def test_both_readers_reject_wrong_pr_identity(tmp_path, skipped):
+@pytest.mark.parametrize("field", ["pr", "owner", "repo", "skipped_pr"])
+def test_both_readers_reject_wrong_pr_identity(tmp_path, field):
     corpus = tmp_path / "corpus"
     _write_nested(corpus, "o", "r", 1)
     path = corpus / "o/r/pr-1.json"
     record = json.loads(path.read_text())
-    if skipped:
+    if field == "skipped_pr":
         record = {"pr": 2, "corpus_version": CORPUS_VERSION, "skipped": "not merged"}
     else:
-        record["pr"] = 2
+        record[field] = 2 if field == "pr" else "other"
     path.write_text(json.dumps(record))
     for script in [MATCH_SCRIPT_PATH, REPORT_SCRIPT_PATH]:
         result = subprocess.run(
@@ -347,4 +358,7 @@ def test_cleanup_failure_reports_retained_staging_after_publication(tmp_path, mo
     with _stage_outputs((dest,), []) as staged:
         (staged[0] / "current.jsonl").write_text("published")
     assert (dest / "current.jsonl").read_text() == "published"
-    assert "cleanup denied" in capsys.readouterr().err
+    (retained,) = tmp_path.glob(".recall-*")
+    assert (
+        f"could not clean staging directory {retained}: cleanup denied" in capsys.readouterr().err
+    )
