@@ -164,7 +164,6 @@ receives its path. Record the pin and file hashes instead.
 ## Mutation-test the contract
 
 `tests/bats/test_manifest_drift_localization.bats` adds an extra `phantom`
-persona to a copy of the manifest, then runs every dependent sync
-test and asserts each fails with a message naming a specific surface. If the
-acceptance criterion ever regresses (one manifest edit no longer surfaces
-every drifted surface by name), that test catches it.
+persona to a copy of the manifest. It checks that the filesystem and Move C
+guards identify the missing prompt, and that the regeneration diff names
+the extra persona and points to `scripts/regen.sh`.

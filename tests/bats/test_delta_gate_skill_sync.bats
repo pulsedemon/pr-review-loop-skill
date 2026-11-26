@@ -10,10 +10,11 @@
 load test_helper
 
 @test "gate.schema.json reviewer enum matches the personas.yaml panel" {
-  local enum panel
-  enum=$(python3 -c "import json;print(','.join(sorted(json.load(open('${REPO_ROOT}/reviewers/gate.schema.json'))['properties']['reviewer']['enum'])))")
-  panel=$(python3 "${SCRIPTS}/personas_manifest.py" --list panel-names | LC_ALL=C sort | paste -sd, -)
-  [ "$enum" = "$panel" ]
+  local panel
+  panel=$(python3 "${SCRIPTS}/personas_manifest.py" --list panel-names)
+  jq -e --arg panel "$panel" \
+    '(.properties.reviewer.enum | sort) == ($panel | split("\n") | sort)' \
+    "${REPO_ROOT}/reviewers/gate.schema.json"
 }
 
 @test "gate.schema.json does not list the adversary" {
