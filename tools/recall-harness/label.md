@@ -96,7 +96,7 @@ The useful rate covers manually judged, uncorroborated loop findings: `loop_true
 | Style nit Copilot loves and the panel is right to skip | `noise` |
 | "Consider refactoring this unrelated file" | `out_of_scope` |
 | "This is slow in prod" | `unrecoverable` |
-| Two findings about the same line via shared vocabulary | `matched_false` |
+| Unrelated findings on the same line that share vocabulary | `matched_false` |
 | Loop side is an `addressed:` / `deferred:` disposition line | `matched_false` |
 | Same issue, but the loop bullet postdates the comment | `matched_true` + note |
 | Two findings genuinely about the same issue | `matched_true` |

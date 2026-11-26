@@ -191,10 +191,13 @@ def test_loop_validation_preserves_outputs_without_any_external(tmp_path):
     )
     path.write_text(json.dumps(record))
     outputs = [tmp_path / name for name in ("unmatched", "matched", "loop_unmatched")]
+    for output in outputs:
+        output.mkdir()
+        (output / "prior").write_text(output.name)
     result = _run_match(corpus, *outputs)
     assert result.returncode != 0
     assert "loop_findings[0]" in result.stderr
-    assert all(not output.exists() for output in outputs)
+    assert all((output / "prior").read_text() == output.name for output in outputs)
 
 
 def test_failed_publication_restores_previous_buckets(tmp_path, monkeypatch):
@@ -211,9 +214,76 @@ def test_failed_publication_restores_previous_buckets(tmp_path, monkeypatch):
 
     monkeypatch.setattr(Path, "rename", refuse_second_install)
     with pytest.raises(OSError, match="cannot install second bucket"):
-        with _stage_outputs(outputs, tmp_path / "corpus") as staged:
+        with _stage_outputs(outputs, [tmp_path / "corpus"]) as staged:
             for directory in staged:
                 (directory / "next.jsonl").write_text("new")
     for output in outputs:
         assert (output / "previous.jsonl").read_text() == output.name
         assert not (output / "next.jsonl").exists()
+
+
+def test_failed_restore_retains_the_backup(tmp_path, monkeypatch, capsys):
+    dest = tmp_path / "matched"
+    dest.mkdir()
+    (dest / "prior").write_text("prior")
+    rename = Path.rename
+
+    def unavailable_destination(source, target):
+        if target == dest:
+            raise OSError("destination unavailable")
+        return rename(source, target)
+
+    monkeypatch.setattr(Path, "rename", unavailable_destination)
+    with pytest.raises(OSError, match="destination unavailable"):
+        with _stage_outputs((dest,), [tmp_path / "corpus"]):
+            pass
+    (backup,) = tmp_path.glob(".recall-*/previous")
+    assert str(backup) in capsys.readouterr().err
+    assert (backup / "prior").read_text() == "prior"
+
+
+def test_rebuild_refuses_output_containing_a_corpus_record(tmp_path):
+    corpus = tmp_path / "corpus"
+    _write_nested(corpus, "o", "r", 1)
+    path = corpus / "o/r/pr-1.json"
+    before = path.read_bytes()
+    result = _run_match(corpus, corpus / "o", tmp_path / "m", tmp_path / "l")
+    assert result.returncode != 0
+    assert "overlap" in result.stderr
+    assert path.read_bytes() == before
+
+
+def test_rebuild_rejects_conflicting_corpus_identity(tmp_path):
+    corpus = tmp_path / "corpus"
+    _write_nested(corpus, "o", "r", 1)
+    record = corpus / "o/r/pr-1.json"
+    record.with_name("pr-2.json").write_bytes(record.read_bytes())
+    result = _run_match(corpus, tmp_path / "u", tmp_path / "m", tmp_path / "l")
+    assert result.returncode != 0
+    assert "identity does not match" in result.stderr
+    assert not (tmp_path / "m").exists()
+
+
+def test_duplicate_buckets_cannot_replace_existing_output(tmp_path):
+    output = tmp_path / "bucket"
+    output.mkdir()
+    marker = output / "prior"
+    marker.write_text("keep")
+    with pytest.raises(ValueError, match="own directory"):
+        with _stage_outputs((output, output), []):
+            pytest.fail("invalid destinations entered the publish stage")
+    assert marker.read_text() == "keep"
+
+
+def test_nested_output_symlink_is_rejected_before_staging(tmp_path):
+    outer = tmp_path / "outer"
+    outer.mkdir()
+    target = tmp_path / "target"
+    target.mkdir()
+    alias = outer / "alias"
+    alias.symlink_to(target, target_is_directory=True)
+    with pytest.raises(ValueError, match="symlink"):
+        with _stage_outputs((outer, alias / "bucket"), []):
+            pytest.fail("invalid destinations entered the publish stage")
+    assert alias.is_symlink()
+    assert not (target / "bucket").exists()

@@ -398,7 +398,18 @@ def test_parse_summary_bullets_reads_the_loop_templates(template):
 
 
 @pytest.mark.parametrize(
-    ("owner", "repo", "number"), [("two/parts", "r", 1), ("o", "", 1), ("o", "r", "one")]
+    ("owner", "repo", "number"),
+    [
+        ("two/parts", "r", 1),
+        ("o", "", 1),
+        ("o", "r", "one"),
+        ("o", "r", True),
+        ("o", "r", 0),
+        ("o", "r", -1),
+        (".", "r", 1),
+        ("o", "..", 1),
+        ("o", "r\x00", 1),
+    ],
 )
 def test_bucket_name_requires_repository_components_and_integer_pr(owner, repo, number):
     with pytest.raises(ValueError):

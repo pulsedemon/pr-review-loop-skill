@@ -512,8 +512,9 @@ def test_report_separates_unanchored(tmp_path):
     _write_labels(tmp_path / "labels.csv", [])
 
     out = _run(tmp_path)
-    assert "External findings: 1 (0 anchored, 1 unanchored)" in out
-    assert "Loop unanchored: 1" in out
+    totals = out.split("## Totals\n", 1)[1].split("\n## ", 1)[0].splitlines()
+    assert "- External findings: 1 (0 anchored, 1 unanchored)" in totals
+    assert "- Loop unanchored: 1" in totals
 
 
 def test_report_includes_near_miss_section_sorted_desc_and_capped(tmp_path):

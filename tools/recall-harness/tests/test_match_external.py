@@ -400,7 +400,8 @@ def test_unanchored_loop_finding_absent_from_loop_unmatched(tmp_path):
 
 def test_malformed_external_raises_without_any_loop_finding(tmp_path, matcher_module):
     corpus = _corpus(loop=[], external=[{"file": "a.ts", "line": "5", "summary": "x"}])
-    path = tmp_path / "pr-1.json"
+    path = tmp_path / corpus_filename(corpus["owner"], corpus["repo"], corpus["pr"])
+    path.parent.mkdir(parents=True)
     path.write_text(json.dumps(corpus))
     with pytest.raises(RuntimeError, match="field 'line' has wrong type"):
         process_corpus_file(

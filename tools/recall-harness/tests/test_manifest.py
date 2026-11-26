@@ -452,3 +452,12 @@ def test_malformed_fetch_identifies_the_operation_without_pruning(tmp_path, mani
     assert "JSONDecodeError" in result.stderr
     assert "Traceback" not in result.stderr
     assert stale.read_text() == '{"pr":99}\n'
+
+
+def test_empty_comment_response_is_a_fetch_failure(tmp_path, monkeypatch):
+    gh = tmp_path / "gh"
+    gh.write_text("#!/bin/sh\nexit 0\n")
+    gh.chmod(0o755)
+    monkeypatch.setenv("PATH", str(tmp_path))
+    with pytest.raises(json.JSONDecodeError, match="empty gh response for comments"):
+        collect_pr_corpus._gh_api("comments")
