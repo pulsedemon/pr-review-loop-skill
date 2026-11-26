@@ -296,9 +296,9 @@ _PERSONA_COUNT = r"\d+\s+(?:reviewer\s+)?personas?\b"
 _COVERAGE_BROAD_RE = re.compile(
     rf"\b(?:{_TOTAL_PREFIX}\s+)?{_PERSONA_COUNT}"
     r"(?:,\s+(?i:in\s+total)(?=,)|"
-    rf",?\s+(?i:in\s+total)(?=\t* {{2,}}\n[ \t]*{_PERSONA_COUNT})|"
+    rf",?\s+(?i:in\s+total)(?=\t*(?: {{2,}}|\r)\n[ \t]*{_PERSONA_COUNT})|"
     rf"(?:(?!,?\s+{_TOTAL_PREFIX}\s+\d),?\s+"
-    rf"(?:(?i:total)(?=\s*{_PANEL_LABEL})|(?i:in\s+total)(?=,?\s+(?i:across)(?=\s)"
+    rf"(?:(?i:total)(?=\s*{_PANEL_LABEL})|(?i:in\s+total)(?=,?\s+(?i:across|after)(?=\s)"
     rf"|\s*(?:[.;:!?)]|$|{_PANEL_LABEL}|,\s*(?i:including|excluding)\b"
     rf"|{_TOTAL_PREFIX}\s+\d)))))?"
 )
@@ -400,6 +400,9 @@ def _coverage_paragraphs(lines: list[str]) -> Iterator[tuple[int, str, str]]:
             )
             normalized.clear()
         masked = " " * width + content
+        if (len(content) - len(content.rstrip("\\"))) % 2:
+            # a stripped CR can stand in for the backslash without shifting source offsets.
+            masked = masked[:-1] + "\r"
         if separate:
             if content.strip():
                 yield index + 1, line, masked

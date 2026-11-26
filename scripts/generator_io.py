@@ -86,10 +86,7 @@ def splice_body(match: re.Match[str], body: str) -> str:
 
 
 def sub_region(region: re.Pattern[str], text: str, body: str, error: str) -> str:
-    """replace the middle of the first match of ``region``'s three groups with ``body``.
-
-    exits with ``error`` when the region does not match.
-    """
+    """splice an LF-rendered body into the first matched region or exit with error."""
     match = region.search(text)
     if match is None:
         fail(error)
