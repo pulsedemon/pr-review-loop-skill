@@ -609,6 +609,7 @@ def main() -> int:
     parser.add_argument("--repo")
     parser.add_argument(
         "--pr-list",
+        type=parse_pr_list,
         help="Comma-separated PR numbers. Mutually exclusive with --merged-since.",
     )
     parser.add_argument(
@@ -640,7 +641,9 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    single_repo_mode = bool(args.owner or args.repo or args.pr_list or args.merged_since)
+    single_repo_mode = any(
+        value is not None for value in (args.owner, args.repo, args.pr_list, args.merged_since)
+    )
     if args.manifest and single_repo_mode:
         parser.error(
             "--manifest is mutually exclusive with --owner/--repo/--pr-list/--merged-since"
@@ -701,7 +704,7 @@ def main() -> int:
 
     try:
         if args.pr_list:
-            pr_numbers = parse_pr_list(args.pr_list)
+            pr_numbers = args.pr_list
         else:
             pr_numbers = list_merged_prs(args.owner, args.repo, args.merged_since)
 
