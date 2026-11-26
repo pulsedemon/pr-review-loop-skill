@@ -11,7 +11,7 @@
 #        but the required toolchain is not on PATH. Treated as SETUP_ERROR by
 #        the caller: a false-green is worse than a clear failure.
 #   2  - no recognized stack (treat as soft pass; skill should log and continue)
-#   3+ - a validator failed; tail of its output is on stderr
+#   3  - a validator failed; tail of its output is on stderr
 #
 # stderr carries a "# stack: <name>" line per detected stack, then either
 # "# pass: <command>" per success or "# fail: <command> (exit <N>)" plus the
