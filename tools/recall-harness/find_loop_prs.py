@@ -145,7 +145,7 @@ def archived_state_prs(checkout: Path) -> set[int]:
         if state.get("status") in _NO_COMMENT_STATUSES:
             continue
         pr = state.get("pr_number")
-        if isinstance(pr, int):
+        if type(pr) is int:
             found.add(pr)
     return found
 

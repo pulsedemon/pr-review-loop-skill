@@ -251,9 +251,11 @@ def _scan_out_of_region(
 ) -> list[str]:
     """Return a list of "<file>:<lineno>: <line>" hits for any enum value
     occurring outside a known region in non-excluded UTF-8 text under root.
-    A NUL byte identifies binary input. Unreadable text makes the scan incomplete."""
+    Manifest and mirror formats must be UTF-8. Undecodable files in other
+    formats containing NUL bytes are treated as binary."""
     mirror_set = {p.resolve() for p in mirror_paths}
     manifest_resolved = manifest.resolve()
+    text_suffixes = {path.suffix.lower() for path in [manifest, *mirror_paths]}
     hits: list[str] = []
 
     def fail_walk(error: OSError) -> None:
@@ -275,10 +277,13 @@ def _scan_out_of_region(
                 continue
             try:
                 data = path.read_bytes()
-                if b"\0" in data:
-                    continue
+            except OSError as error:
+                generator_io.fail(f"cannot scan {path}: {error}")
+            try:
                 text = data.decode("utf-8")
-            except (OSError, UnicodeDecodeError) as error:
+            except UnicodeDecodeError as error:
+                if path.suffix.lower() not in text_suffixes and b"\0" in data:
+                    continue
                 generator_io.fail(f"cannot scan {path}: {error}")
             for lineno, line in enumerate(text.splitlines(), start=1):
                 for v in values:
@@ -409,4 +414,4 @@ def main(argv: list[str]) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    generator_io.run(main)

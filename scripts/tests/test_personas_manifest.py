@@ -766,6 +766,7 @@ def test_adversary_name_uppercase_rejected(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize("key", ["move_a", "move_a1", "move_b", "move_c"])
 def test_move_flag_must_be_boolean(tmp_path: Path, key: str) -> None:
+    # a quoted "false" is truthy if the loader coerces it.
     p = _write(
         tmp_path,
         f"""

@@ -314,9 +314,40 @@ def test_out_of_region_scan_rejects_undecodable_text_and_skips_binary(tmp_path: 
     result = _run(paths, "--check", "--out-of-region-root", str(tmp_path))
     assert result.returncode == 3
     assert f"cannot scan {source}" in result.stderr
+    source.write_bytes(b"\x00cross_fixture")
+    result = _run(paths, "--check", "--out-of-region-root", str(tmp_path))
+    assert result.returncode == 5 and str(source) in result.stderr
     source.write_bytes(b"\x00\xffcross_fixture")
     result = _run(paths, "--check", "--out-of-region-root", str(tmp_path))
+    assert result.returncode == 3 and str(source) in result.stderr
+    source.rename(tmp_path / "asset.bin")
+    result = _run(paths, "--check", "--out-of-region-root", str(tmp_path))
     assert result.returncode == 0, result.stderr
+
+
+def test_missing_scan_root_reports_incomplete_discovery(tmp_path: Path) -> None:
+    paths = _seed(tmp_path)
+    missing = tmp_path / "missing"
+    result = _run(paths, "--check", "--out-of-region-root", str(missing))
+    assert result.returncode == 3
+    assert f"cannot scan {missing}" in result.stderr
+
+
+def test_discovery_read_error_names_the_file(tmp_path: Path, monkeypatch, capsys) -> None:
+    source = tmp_path / "source.md"
+    source.write_text("ordinary prose")
+    read = Path.read_bytes
+
+    def fail_read(path):
+        if path == source:
+            raise PermissionError("read denied")
+        return read(path)
+
+    monkeypatch.setattr(Path, "read_bytes", fail_read)
+    with pytest.raises(SystemExit) as error:
+        regen._scan_out_of_region(tmp_path, ["value"], tmp_path / "manifest.yaml", [])
+    assert error.value.code == 3
+    assert f"cannot scan {source}: read denied" in capsys.readouterr().err
 
 
 def test_out_of_region_scan_ignores_nested_worktrees(tmp_path: Path) -> None:

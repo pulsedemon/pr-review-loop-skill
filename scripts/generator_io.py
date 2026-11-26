@@ -14,6 +14,12 @@ DRIFT_EXIT = 5
 MANIFEST_ERROR_EXIT = 3
 
 
+def run(main: Callable[[list[str]], int]) -> NoReturn:
+    """emit repository text in UTF-8 when a generator runs as a command."""
+    sys.stderr.reconfigure(encoding="utf-8", errors="backslashreplace")
+    raise SystemExit(main(sys.argv[1:]))
+
+
 def atomic_write(path: Path, content: str | bytes) -> None:
     """preserve target permissions when replacing generated content."""
     binary = isinstance(content, bytes)
@@ -21,7 +27,7 @@ def atomic_write(path: Path, content: str | bytes) -> None:
         mode="wb" if binary else "w",
         encoding=None if binary else "utf-8",
         dir=path.parent,
-        prefix=f".{path.name}.",
+        prefix=".regen-",
         suffix=".tmp",
         delete=False,
     )

@@ -302,7 +302,7 @@ def _run_validate_markers(*, corpus_root: Path) -> int:
 _COVERAGE_BROAD_RE = re.compile(
     r"\b(?:(?i:(?:a\s+)?total\s+of|panel\s+of|the\s+other|all(?:\s+of)?(?:\s+the)?)\s+)?"
     r"\d+\s+(?:reviewer\s+)?personas?\b"
-    r"(?:\s+(?i:(?:in\s+)?total)(?=\s*(?:[.;:!?)]|$|\(panel\s*\+\s*adversary\))))?"
+    r"(?:\s+(?i:in\s+total)(?=\s*,)|\s+(?i:(?:in\s+)?total)(?=\s*(?:[.;:!?)]|$|\(panel\s*\+\s*adversary\))))?"
 )
 
 # total-shaped phrases must stay generated even when their counts currently match.
@@ -422,4 +422,4 @@ def main(argv: list[str]) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    generator_io.run(main)

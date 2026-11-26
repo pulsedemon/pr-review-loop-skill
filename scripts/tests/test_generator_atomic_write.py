@@ -23,6 +23,14 @@ def test_atomic_write_preserves_mode(tmp_path: Path, mode: int) -> None:
     assert target.stat().st_mode & 0o7777 == mode
 
 
+def test_atomic_write_replaces_a_target_with_a_long_basename(tmp_path: Path) -> None:
+    target = tmp_path / ("x" * 248 + ".md")
+    target.write_bytes(b"old")
+    generator_io.atomic_write(target, b"new")
+    assert target.read_bytes() == b"new"
+    assert list(tmp_path.iterdir()) == [target]
+
+
 @pytest.mark.parametrize("cleanup_failure", [False, True])
 def test_failed_replacement_preserves_target_and_original_error(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, cleanup_failure: bool

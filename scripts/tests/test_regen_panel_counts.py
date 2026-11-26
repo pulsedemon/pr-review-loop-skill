@@ -173,7 +173,7 @@ def test_subset_phrases_outside_regions_are_not_touched(
     )
     f.write_bytes(original)
 
-    # apply Windows text defaults on every host. UTF-8 ā contains a byte undefined in cp1252.
+    # model Windows defaults for Path.open. UTF-8 ā contains a byte undefined in cp1252.
     open_path = Path.open
 
     def open_with_windows_defaults(
@@ -473,6 +473,7 @@ def test_validate_coverage_allows_subset_phrases(tmp_path: Path) -> None:
         ("All 11 personas agreed", "All 11 personas"),
         ("All of the 11 personas agreed", "All of the 11 personas"),
         ("agreed by 12 personas in total", "12 personas in total"),
+        ("agreed by 12 personas in total, including two new members", "12 personas in total"),
     ],
 )
 def test_allowed_subset_does_not_hide_an_explicit_total(
