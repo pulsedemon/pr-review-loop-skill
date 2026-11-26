@@ -6,6 +6,7 @@ import textwrap
 from pathlib import Path
 
 import pytest
+import yaml
 from personas_manifest import (  # type: ignore[import-not-found]  # sibling module made importable by conftest.py
     Manifest,
     ManifestError,
@@ -34,7 +35,6 @@ addendums: []
 
 
 def test_load_real_manifest_succeeds() -> None:
-    # The real manifest at reviewers/personas.yaml must load without errors.
     repo_root = Path(__file__).resolve().parents[2]
     manifest = load_manifest(repo_root / "reviewers" / "personas.yaml")
     assert isinstance(manifest, Manifest)
@@ -186,6 +186,7 @@ def test_non_dict_panel_entry_rejected(tmp_path: Path) -> None:
           - "not a dict"
         adversary:
           name: adversary
+          description: adversary persona
         addendums: []
         """,
     )
@@ -228,6 +229,7 @@ def test_panel_missing_rejected(tmp_path: Path) -> None:
         """
         adversary:
           name: adversary
+          description: adversary persona
         addendums: []
         """,
     )
@@ -242,6 +244,7 @@ def test_panel_empty_rejected(tmp_path: Path) -> None:
         panel: []
         adversary:
           name: adversary
+          description: adversary persona
         addendums: []
         """,
     )
@@ -255,6 +258,7 @@ def test_adversary_not_a_mapping_rejected(tmp_path: Path) -> None:
         """
         panel:
           - name: alpha
+            description: alpha persona
             owns_schema_constraint_blocker: true
         adversary: "just a string"
         addendums: []
@@ -270,9 +274,11 @@ def test_addendums_not_a_list_rejected(tmp_path: Path) -> None:
         """
         panel:
           - name: alpha
+            description: alpha persona
             owns_schema_constraint_blocker: true
         adversary:
           name: adversary
+          description: adversary persona
         addendums: "foo"
         """,
     )
@@ -288,23 +294,34 @@ def test_yaml_parse_error_wrapped_in_manifest_error(tmp_path: Path) -> None:
 
 
 def test_unknown_panel_key_rejected(tmp_path: Path) -> None:
-    # A typo'd `mov_c` previously silently defaulted to False, leaving the
-    # persona out of the Move C drift guard. Loud failure is the only way the
-    # manifest can stay the single source of truth.
     p = _write(
         tmp_path,
         """
         panel:
           - name: alpha
+            description: alpha persona
             mov_c: true
             owns_schema_constraint_blocker: true
         adversary:
           name: adversary
+          description: adversary persona
         addendums: []
         """,
     )
     with pytest.raises(ManifestError, match=r"unknown key\(s\): \['mov_c'\]"):
         load_manifest(p)
+
+
+@pytest.mark.parametrize("name", ["alpha", "adversary"])
+def test_cli_rejects_legacy_file_key(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], name: str
+) -> None:
+    manifest = yaml.safe_load(_MINIMAL_VALID)
+    persona = manifest["panel"][0] if name == "alpha" else manifest["adversary"]
+    persona["file"] = f"{name}.md"
+    path = _write(tmp_path, yaml.safe_dump(manifest))
+    assert _main(["--manifest", str(path), "--list", "all-known-files"]) == 3
+    assert "unknown key(s): ['file']" in capsys.readouterr().err
 
 
 def test_unknown_adversary_key_rejected(tmp_path: Path) -> None:
@@ -353,9 +370,11 @@ def test_panel_name_must_be_string(tmp_path: Path) -> None:
         """
         panel:
           - name: 123
+            description: alpha persona
             owns_schema_constraint_blocker: true
         adversary:
           name: adversary
+          description: adversary persona
         addendums: []
         """,
     )
@@ -798,10 +817,12 @@ def test_unknown_adversary_move_key_rejected(tmp_path: Path, key: str) -> None:
         f"""
         panel:
           - name: alpha
+            description: alpha persona
             description: "alpha persona"
             owns_schema_constraint_blocker: true
         adversary:
           name: adversary
+          description: adversary persona
           {key}: true
         addendums: []
         """,
