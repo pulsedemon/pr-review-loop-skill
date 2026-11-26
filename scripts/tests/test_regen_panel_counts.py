@@ -152,10 +152,13 @@ def test_subset_phrases_outside_regions_are_not_touched(tmp_path: Path) -> None:
         )
         + "\nPost-text: 1 persona objected, 2 personas approved.\n"
     )
-    f.write_text(body)
+    original = body.replace("\n", "\r\n").replace("Pre-text: ", "intro\nPre-text: ").encode()
+    f.write_bytes(original)
     rc = _run(["--write", "--manifest", str(manifest), "--corpus-root", str(root)])
     assert rc == 0
-    assert f.read_text() == body.replace("the panel of 99 personas", "the panel of 3 personas")
+    assert f.read_bytes() == original.replace(
+        b"the panel of 99 personas", b"the panel of 3 personas"
+    )
 
 
 def test_validate_markers_passes_on_balanced_tree(tmp_path: Path) -> None:

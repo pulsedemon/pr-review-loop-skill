@@ -206,17 +206,14 @@ class _MarkerError(Exception):
 
 def _regenerate_text(text: str, panel_n: int, path: Path) -> str:
     """Return ``text`` from ``path`` with every region's body re-rendered."""
-    lines = text.splitlines(keepends=False)
-    # Track whether the original ended with a newline so writing is byte-stable.
-    ended_with_newline = text.endswith("\n")
-    regions = _parse_regions(lines, path)
-    for r in regions:
-        n = panel_n if r.kind == _KIND_TOTAL else panel_n + 1
-        lines[r.start_line + 2] = _render_template(r.template, n)
-    out = "\n".join(lines)
-    if ended_with_newline:
-        out += "\n"
-    return out
+    lines = text.splitlines(keepends=True)
+    for region in _parse_regions(lines, path):
+        n = panel_n if region.kind == _KIND_TOTAL else panel_n + 1
+        index = region.start_line + 2
+        body = lines[index]
+        ending = body.removeprefix(body.splitlines()[0])
+        lines[index] = _render_template(region.template, n) + ending
+    return "".join(lines)
 
 
 def _run_check_or_write(*, write: bool, manifest_path: Path, corpus_root: Path) -> int:
@@ -230,7 +227,8 @@ def _run_check_or_write(*, write: bool, manifest_path: Path, corpus_root: Path) 
     drifted: list[Path] = []
     for path in _corpus_files(corpus_root):
         try:
-            current = path.read_text()
+            with path.open(newline="") as source:
+                current = source.read()
         except (OSError, UnicodeDecodeError) as e:
             print(f"regen_panel_counts: failed to read {path}: {e}", file=sys.stderr)
             return generator_io.MANIFEST_ERROR_EXIT
