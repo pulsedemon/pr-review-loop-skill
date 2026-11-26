@@ -19,6 +19,7 @@ from collect_pr_corpus import (  # type: ignore[import-not-found]  # noqa: E402 
 from match_external import (  # type: ignore[import-not-found]  # noqa: E402  — sibling made importable by conftest.py
     _load_matcher,
     _run_matcher,
+    process_corpus_file,
 )
 
 
@@ -163,7 +164,7 @@ def test_anchored_external_unmatched_when_loop_is_different_file(tmp_path):
             {
                 "file": "src/a.ts",
                 "line": 10,
-                "summary": "missing audit log on login",
+                "summary": "missing audit log on login for failed auth attempts here",
                 "source": "copilot",
                 "id": 3,
                 "created_at": "2026-05-02T00:00:00Z",
@@ -171,7 +172,6 @@ def test_anchored_external_unmatched_when_loop_is_different_file(tmp_path):
         ],
     )
     out = _run(corpus, tmp_path)
-    # Same summary but different file: matcher should not match.
     assert len(out["unmatched"]) == 1
     assert out["matched"] == []
 
@@ -394,3 +394,14 @@ def test_unanchored_loop_finding_absent_from_loop_unmatched(tmp_path):
     loop = [{"summary": "a finding with no file or line anchor at all"}]
     out = _run(_corpus(loop, []), tmp_path)
     assert out["loop_unmatched"] == []
+
+
+def test_malformed_external_raises_without_any_loop_finding(tmp_path, matcher_module):
+    corpus = _corpus(loop=[], external=[{"file": "a.ts", "line": "5", "summary": "x"}])
+    path = tmp_path / "pr-1.json"
+    path.write_text(json.dumps(corpus))
+    with pytest.raises(RuntimeError, match="field 'line' has wrong type"):
+        process_corpus_file(
+            path, tmp_path / "unmatched", tmp_path / "matched", tmp_path / "lu", matcher_module
+        )
+    assert not (tmp_path / "unmatched").exists()
