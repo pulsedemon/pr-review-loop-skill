@@ -86,6 +86,7 @@ import re
 import sys
 from collections.abc import Iterator
 from dataclasses import dataclass
+from itertools import groupby
 from pathlib import Path
 
 import generator_io
@@ -136,7 +137,7 @@ def _corpus_files(root: Path) -> list[Path]:
 
 
 def _parse_regions(lines: list[str], path: Path) -> list[_Region]:
-    """extract complete regions or raise _MarkerError for malformed markers."""
+    """pair recognized control lines and validate their template and body."""
     for number, line in enumerate(lines, start=1):
         if _CONTROL_PREFIX in line:
             fragments = line.rstrip().splitlines()
@@ -295,7 +296,7 @@ _PANEL_LABEL = r"(?i:\(panel\s*\+\s*adversary\))"
 _COVERAGE_BROAD_RE = re.compile(
     rf"\b(?:{_TOTAL_PREFIX}\s+)?\d+\s+(?:reviewer\s+)?personas?\b"
     rf"(?:(?!\s+{_TOTAL_PREFIX}\s+\d)"
-    r"(?:\s+(?i:in\s+total)(?=\s+(?i:across)\b)"
+    r"(?:\s+(?i:in\s+total)(?=,?\s+(?i:across)\b)"
     rf"|\s+(?i:total)(?=\s*{_PANEL_LABEL})|\s+(?i:in\s+total)(?=\s*(?:[.;:!?)]|$|{_PANEL_LABEL}"
     rf"|,\s*(?i:including|excluding)\b[^,.;!?\n]*(?:[.;!?]|$)|{_TOTAL_PREFIX}\s+\d))))?"
 )
@@ -380,6 +381,24 @@ def _unwrapped_counts(paragraph: str) -> Iterator[re.Match[str]]:
             yield match
 
 
+_QUOTE_PREFIX = re.compile(r"^(?: {0,3}>[ \t]?)+", re.MULTILINE)
+
+
+def _coverage_paragraphs(lines: list[str]) -> Iterator[tuple[int, str, str]]:
+    offset = 0
+    for _, group in groupby(
+        lines, key=lambda line: m[0].count(">") if (m := _QUOTE_PREFIX.match(line)) else 0
+    ):
+        source = "".join(line + "\n" for line in group)
+        scan = _QUOTE_PREFIX.sub(lambda m: " " * len(m[0]), source)
+        pos = 0
+        for paragraph in _PARAGRAPH_BOUNDARY.split(scan):
+            end = pos + len(paragraph)
+            yield offset + 1, source[pos:end], paragraph
+            offset += paragraph.count("\n")
+            pos = end
+
+
 def _run_validate_coverage(*, corpus_root: Path) -> int:
     failures: list[str] = []
     for path in _corpus_files(corpus_root):
@@ -401,13 +420,10 @@ def _run_validate_coverage(*, corpus_root: Path) -> int:
         scan_lines = [
             "" if idx in region_lines else line.rstrip("\r\n") for idx, line in enumerate(lines)
         ]
-        scan_text = "\n".join(scan_lines)
-        line_number = 1
-        # isolate hash-prefixed headings and keep separators so line offsets still index the source.
-        for paragraph in _PARAGRAPH_BOUNDARY.split(scan_text):
+        for line_number, source, paragraph in _coverage_paragraphs(scan_lines):
             for m in _unwrapped_counts(paragraph):
                 start_line = line_number + paragraph.count("\n", 0, m.start())
-                phrase = paragraph[m.start() : m.end()]
+                phrase = source[m.start() : m.end()]
                 closing = _WORD_MARKUP.match(paragraph, m.end())
                 if closing and _WORD_MARKUP.findall(phrase).count(closing[0]) % 2:
                     phrase += closing[0]
@@ -418,7 +434,6 @@ def _run_validate_coverage(*, corpus_root: Path) -> int:
                     f"allowlist pattern to _COVERAGE_ALLOW_PATTERNS in "
                     f"scripts/regen_panel_counts.py."
                 )
-            line_number += paragraph.count("\n")
 
     if failures:
         print("regen_panel_counts: coverage check failed:", file=sys.stderr)

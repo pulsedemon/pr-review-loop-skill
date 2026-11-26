@@ -32,6 +32,8 @@ gate_enum_matches_panel() {
 @test "a gate enum must include every panel name and no additional names" {
   run gate_enum_matches_panel $'alpha\nbeta' <<<'{"properties":{"reviewer":{"enum":["alpha"]}}}'
   [[ "$status" -eq 1 && "$output" == false ]]
+  run gate_enum_matches_panel $'alpha\nbeta' <<<'{"properties":{"reviewer":{"enum":["alpha","gamma"]}}}'
+  [[ "$status" -eq 1 && "$output" == false ]]
   run gate_enum_matches_panel alpha <<<'{"properties":{"reviewer":{"enum":["alpha","beta"]}}}'
   [[ "$status" -eq 1 && "$output" == false ]]
 }

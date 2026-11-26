@@ -484,6 +484,8 @@ def test_validate_coverage_allows_subset_phrases(tmp_path: Path) -> None:
         ("*A total of **`11` personas agreed***.", "A total of **`11` personas"),
         ("A total of ***`11`** personas* agreed.", "A total of ***`11`** personas"),
         ("Total: 11 personas agreed", "Total: 11 personas"),
+        ("> A total of\n> 11 personas agreed", "A total of\n> 11 personas"),
+        ("agreed by 12 personas in total, across two rounds", "12 personas in total"),
         ("In total 11 personas agreed", "In total 11 personas"),
         ("In total, 11 personas agreed", "In total, 11 personas"),
         ("agreed by 12 personas in total across two rounds", "12 personas in total"),
@@ -540,6 +542,8 @@ def test_headings_and_blank_lines_separate_total_qualifiers_from_allowed_subsets
         "A total of\n\n11 personas agreed.\n"
         "## A total of\n2 personas approved.\n"
         "> ## A total of\n3 personas agreed.\n"
+        "> A total of\n>> 2 personas approved.\n"
+        "> A total of\n>\n> 3 personas agreed.\n"
     )
     assert _run(["--validate-coverage", "--corpus-root", str(root)]) == 0
 

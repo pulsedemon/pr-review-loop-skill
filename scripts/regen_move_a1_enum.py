@@ -253,10 +253,22 @@ def _scan_out_of_region(
     """Return a list of "<file>:<lineno>: <line>" hits for any enum value
     occurring outside a known region in non-excluded UTF-8 text under root.
     An invalid UTF-8 input is skipped only when it contains NUL, has no Unicode
-    byte-order mark, and its suffix does not identify a text file."""
+    byte-order mark, and its name does not identify a repository text format."""
     mirror_set = {p.resolve() for p in mirror_paths}
     manifest_resolved = manifest.resolve()
     text_suffixes = {path.suffix.lower() for path in [manifest, *mirror_paths]} | {
+        ".bash",
+        ".bats",
+        ".csv",
+        ".html",
+        ".js",
+        ".json",
+        ".lock",
+        ".md",
+        ".py",
+        ".sh",
+        ".toml",
+        ".xml",
         ".txt",
         ".yaml",
         ".yml",
@@ -289,6 +301,7 @@ def _scan_out_of_region(
             except UnicodeDecodeError as error:
                 if (
                     path.suffix.lower() not in text_suffixes
+                    and path.name not in {"LICENSE", ".gitignore"}
                     and b"\0" in data
                     and not data.startswith(
                         (
