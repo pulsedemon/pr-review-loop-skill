@@ -10,7 +10,7 @@ preserved outside the reviewer.enum body.
 Modes:
   --check   (default) exit 0 if file matches generated content; exit 5
             with a unified diff to stderr otherwise.
-  --write   rewrite the file in place (atomic via .tmp + os.replace).
+  --write   atomically replace the file.
 
 Exit codes: 0 ok, 3 manifest or target error, 5 drift detected.
 """

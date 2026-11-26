@@ -137,15 +137,7 @@ def _corpus_files(root: Path) -> list[Path]:
 
 
 def _parse_regions(lines: list[str], path: Path) -> list[_Region]:
-    """Walk a file's lines and extract every well-formed region.
-
-    Raises ``_MarkerError`` (caught by every caller and converted to
-    exit 5) if a region opens without a matching close, an end marker
-    appears outside any open region, an end marker disagrees with its
-    open marker's kind, or the line immediately after the start marker
-    is not a ``<!-- template: ... -->`` comment. Catching these in the
-    same walk keeps marker validation and drift detection on one parser.
-    """
+    """extract complete regions or raise _MarkerError for malformed markers."""
     for number, line in enumerate(lines, start=1):
         if _CONTROL_PREFIX in line:
             fragments = line.rstrip().splitlines()
@@ -329,8 +321,33 @@ def _mask_word_markup(text: str) -> str:
     """keep source offsets and literal identifiers intact when masking paired delimiters."""
     chars = list(text)
     openings: dict[str, int] = {}
-    for match in _WORD_MARKUP.finditer(text):
+    runs = list(_WORD_MARKUP.finditer(text))
+    next_tick: dict[str, int] = {}
+    closes_at: dict[int, int] = {}
+    for run in reversed(runs):
+        delimiter = run[0]
+        if delimiter.startswith("`"):
+            if delimiter in next_tick:
+                closes_at[run.start()] = next_tick[delimiter]
+            next_tick[delimiter] = run.start()
+
+    code_end = -1
+    for match in runs:
+        if match.start() <= code_end:
+            continue
         delimiter = match[0]
+        pos = match.start()
+        while pos and text[pos - 1] == "\\":
+            pos -= 1
+        if (match.start() - pos) % 2:
+            continue
+        if delimiter.startswith("`"):
+            if match.start() in closes_at:
+                code_end = closes_at[match.start()]
+                spaces = " " * len(delimiter)
+                chars[match.start() : match.end()] = spaces
+                chars[code_end : code_end + len(delimiter)] = spaces
+            continue
         left = text[max(0, match.start() - 1) : match.start()]
         right = text[match.end() : match.end() + 1]
         if right.isalnum() and not left.isalnum():

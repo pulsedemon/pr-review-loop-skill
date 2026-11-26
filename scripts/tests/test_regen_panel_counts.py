@@ -581,6 +581,8 @@ def test_validate_coverage_ignores_non_persona_numbers(tmp_path: Path) -> None:
     (root / "SKILL.md").write_text(
         "wait 5 minutes for CI\n"
         "see issue #42 for context\n"
+        "The labels are \\_11 personas and status_.\n"
+        "The code spans are `_11 personas` and `status_`.\n"
         "The review log uses the label _11 personas for the next stage.\n"
         "B2 persona is a Move A.1 sub-mechanic label\n"  # word-boundary anchor blocks this
     )
