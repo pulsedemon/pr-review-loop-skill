@@ -27,11 +27,11 @@ import generator_io
 import yaml
 
 _HELPER_REGION = re.compile(
-    r"(# \[\[\[cog: adversary_caps_sh \]\]\]\n)(.*?)(# \[\[\[end\]\]\])",
+    r"(# \[\[\[cog: adversary_caps_sh \]\]\](?:\r\n|\r|\n))(.*?)(# \[\[\[end\]\]\])",
     re.DOTALL,
 )
 _DOC_REGION = re.compile(
-    r"(<!-- regen:adversary-caps:start -->\n)(.*?)(<!-- regen:adversary-caps:end -->)",
+    r"(<!-- regen:adversary-caps:start -->(?:\r\n|\r|\n))(.*?)(<!-- regen:adversary-caps:end -->)",
     re.DOTALL,
 )
 _SCHEMA_FIELDS = ("shallow_adversary_runs", "shallow_approval_adversary_runs")

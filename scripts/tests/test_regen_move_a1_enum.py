@@ -162,7 +162,7 @@ def _run(paths: dict[str, Path], *args: str) -> subprocess.CompletedProcess[str]
             *args,
         ],
         capture_output=True,
-        text=True,
+        encoding="utf-8",
         check=False,
     )
 
@@ -304,7 +304,7 @@ def test_out_of_region_occurrence_in_sibling_file_exits_five(
     monkeypatch.setenv("PYTHONCOERCECLOCALE", "0")
     result = _run(paths, "--check", "--out-of-region-root", str(tmp_path))
     assert result.returncode == 5
-    assert "stray.md:1:" in result.stderr, result.stderr
+    assert "stray.md:1: ā mentions" in result.stderr, result.stderr
 
 
 def test_out_of_region_scan_rejects_undecodable_text_and_skips_binary(tmp_path: Path) -> None:
@@ -323,6 +323,11 @@ def test_out_of_region_scan_rejects_undecodable_text_and_skips_binary(tmp_path: 
     source.rename(tmp_path / "asset.bin")
     result = _run(paths, "--check", "--out-of-region-root", str(tmp_path))
     assert result.returncode == 0, result.stderr
+    notes = tmp_path / "notes.txt"
+    notes.write_bytes("cross_fixture".encode("utf-16"))
+    result = _run(paths, "--check", "--out-of-region-root", str(tmp_path))
+    assert result.returncode == 3
+    assert f"cannot scan {notes}" in result.stderr
 
 
 def test_missing_scan_root_reports_incomplete_discovery(tmp_path: Path) -> None:

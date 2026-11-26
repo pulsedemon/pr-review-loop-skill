@@ -74,7 +74,7 @@ def _regenerated(text: str, names: list[str]) -> str:
             "schema but the slice locator regex did not match. The schema's "
             "formatting around the reviewer.enum block may have changed."
         )
-    return text[: match.start(2)] + body + text[match.end(2) :]
+    return generator_io.splice_body(match, body)
 
 
 def main(argv: list[str]) -> int:
@@ -104,7 +104,7 @@ def main(argv: list[str]) -> int:
 
     names = [p.name for p in manifest.panel] + [manifest.adversary.name]
     try:
-        current = args.schema.read_text(encoding="utf-8")
+        current = args.schema.read_bytes().decode("utf-8")
     except (OSError, UnicodeDecodeError) as e:
         print(f"regen_schema_enum: failed to read {args.schema}: {e}", file=sys.stderr)
         return generator_io.MANIFEST_ERROR_EXIT

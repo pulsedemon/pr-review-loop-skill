@@ -117,3 +117,10 @@ assert_every_generator_ran() {
     return 1
   }
 }
+
+@test "a generator can print UTF-8 help with stderr closed" {
+  run env LC_ALL=C PYTHONUTF8=0 PYTHONCOERCECLOCALE=0 bash -c 'exec python3 "$1" --help 2>&-' _ "$SCRIPTS/regen_panel_counts.py"
+  [[ "$status" -eq 0 ]]
+  [[ "$output" == *"usage: regen_panel_counts.py"* ]]
+  [[ "$output" == *"…"* ]]
+}

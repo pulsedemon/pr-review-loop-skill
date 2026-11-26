@@ -149,7 +149,7 @@ def test_write_preserves_the_target_file_mode(tmp_path: Path) -> None:
         start = f"{indent}# [[[cog: {marker} ]]]\n"
         end = f"{indent}# [[[end]]]\n"
         prefix = "# ā\n"
-        path.write_text(prefix + start + "stale\n" + end, encoding="utf-8")
+        path.write_bytes((prefix + start + "stale\n" + end).replace("\n", "\r\n").encode())
         path.chmod(mode)
         args.extend([option, str(path)])
         expected.append((path, prefix + start + body + end, mode))
@@ -164,7 +164,7 @@ def test_write_preserves_the_target_file_mode(tmp_path: Path) -> None:
 
     assert proc.returncode == 0, proc.stderr
     for path, content, mode in expected:
-        assert path.read_text(encoding="utf-8") == content
+        assert path.read_bytes() == content.replace("\n", "\r\n").encode()
         assert path.stat().st_mode & 0o7777 == mode
 
 

@@ -262,7 +262,7 @@ def _run_check_or_write(*, write: bool, manifest_path: Path, corpus_root: Path) 
         if current == regenerated:
             continue
         if write:
-            generator_io.atomic_write(path, regenerated.encode("utf-8"))
+            generator_io.atomic_write(path, regenerated)
         else:
             generator_io.emit_drift_diff(path, current, regenerated)
             drifted.append(path)
@@ -299,11 +299,16 @@ def _run_validate_markers(*, corpus_root: Path) -> int:
 
 
 # match punctuation-led and wrapped counts without matching tokens such as B2.
-_COVERAGE_BROAD_RE = re.compile(
-    r"\b(?:(?i:(?:a\s+)?total\s+of|panel\s+of|the\s+other|all(?:\s+of)?(?:\s+the)?)\s+)?"
-    r"\d+\s+(?:reviewer\s+)?personas?\b"
-    r"(?:\s+(?i:in\s+total)(?=\s*,)|\s+(?i:(?:in\s+)?total)(?=\s*(?:[.;:!?)]|$|\(panel\s*\+\s*adversary\))))?"
+_TOTAL_PREFIX = (
+    r"(?i:(?:a\s+)?total\s+of|in\s+total,|panel\s+of|the\s+other|all(?:\s+of)?(?:\s+the)?)"
 )
+_COVERAGE_BROAD_RE = re.compile(
+    rf"\b(?:{_TOTAL_PREFIX}\s+)?\d+\s+(?:reviewer\s+)?personas?\b"
+    r"(?:\s+(?i:in\s+total)(?=\s*(?:,|(?i:across)\b))"
+    r"|\s+(?i:(?:in\s+)?total)(?=\s*(?:[.;:!?)]|$|\(panel\s*\+\s*adversary\)"
+    rf"|,\s*(?i:including|excluding)\b|{_TOTAL_PREFIX}\s+\d)))?"
+)
+_WORD_MARKUP = re.compile(r"[*_`]+")
 
 # total-shaped phrases must stay generated even when their counts currently match.
 _COVERAGE_ALLOW_PATTERNS: tuple[re.Pattern[str], ...] = (
@@ -324,7 +329,7 @@ def _mask_word_markup(match: re.Match[str]) -> str:
 
 
 def _unwrapped_counts(paragraph: str) -> Iterator[re.Match[str]]:
-    paragraph = re.sub(r"[*_`]+", _mask_word_markup, paragraph)
+    paragraph = _WORD_MARKUP.sub(_mask_word_markup, paragraph)
     allowed_spans = [
         match.span()
         for pattern in _COVERAGE_ALLOW_PATTERNS
@@ -362,9 +367,13 @@ def _run_validate_coverage(*, corpus_root: Path) -> int:
         for paragraph in re.split(r"(\n[^\S\n]*\n)", scan_text):
             for m in _unwrapped_counts(paragraph):
                 start_line = line_number + paragraph.count("\n", 0, m.start())
+                phrase = paragraph[m.start() : m.end()]
+                closing = _WORD_MARKUP.match(paragraph, m.end())
+                if closing and _WORD_MARKUP.findall(phrase).count(closing[0]) % 2:
+                    phrase += closing[0]
                 failures.append(
                     f"{path}: line {start_line}: unhandled numbered persona-count phrase: "
-                    f"{paragraph[m.start() : m.end()]!r}\n"
+                    f"{phrase!r}\n"
                     f"    fix: wrap the phrase in a regen:panel-count region, OR add an "
                     f"allowlist pattern to _COVERAGE_ALLOW_PATTERNS in "
                     f"scripts/regen_panel_counts.py."

@@ -54,12 +54,19 @@ def test_check_returns_0_when_schema_matches_manifest(tmp_path: Path) -> None:
 def test_write_rewrites_drifted_schema(tmp_path: Path) -> None:
     manifest = write_personas_yaml(tmp_path, ["alpha", "beta", "gamma"])
     schema = _write_schema(tmp_path, ["alpha"])  # drifted: missing beta, gamma, adversary
+    original = schema.read_text().replace("\n", "\r\n").encode()
+    schema.write_bytes(original)
     schema.chmod(0o755)
     rc = _run(["--write", "--manifest", str(manifest), "--schema", str(schema)])
     assert rc == 0
     data = json.loads(schema.read_text())
     assert data["properties"]["reviewer"]["enum"] == ["alpha", "beta", "gamma", "adversary"]
     assert schema.stat().st_mode & 0o7777 == 0o755
+    expected = original.replace(
+        b'"alpha"', b'"alpha",\r\n        "beta",\r\n        "gamma",\r\n        "adversary"'
+    )
+    assert schema.read_bytes() == expected
+    assert _run(["--check", "--manifest", str(manifest), "--schema", str(schema)]) == 0
 
 
 def test_write_on_matching_schema_is_a_noop(tmp_path: Path) -> None:

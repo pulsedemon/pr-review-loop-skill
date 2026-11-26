@@ -208,19 +208,25 @@ def test_archive_warning_preserves_results_from_readable_siblings(
     loop = tmp_path / ".git" / "pr-loop"
     loop.mkdir(parents=True)
     invalid = loop / "state.pr12.done.json"
-    invalid.write_bytes(b"\xff" if failure == "invalid_utf8" else b"{not json")
-    if failure == "read_error":
-        read = Path.read_text
+    invalid.write_bytes(
+        {"invalid_utf8": b"\xff", "invalid_json": b"{not json", "read_error": b'{"pr_number":12}'}[
+            failure
+        ]
+    )
+    read = Path.read_text
 
-        def deny_archive(path, *args, **kwargs):
-            if path == invalid:
-                raise PermissionError("read denied")
-            return read(path, *args, **kwargs)
+    def read_with_ascii_default(path, *args, encoding=None, **kwargs):
+        if failure == "read_error" and path == invalid:
+            raise PermissionError("read denied")
+        return read(path, *args, encoding=encoding or "ascii", **kwargs)
 
-        monkeypatch.setattr(Path, "read_text", deny_archive)
-    (loop / "state.pr13.done.json").write_text(json.dumps({"pr_number": 13}))
+    monkeypatch.setattr(Path, "read_text", read_with_ascii_default)
+    (loop / "state.pr13.done.json").write_text('{"pr_number":13,"title":"café"}', encoding="utf-8")
     assert find_loop_prs.archived_state_prs(tmp_path) == {13}
-    assert f"archive cross-check incomplete for {invalid}:" in capsys.readouterr().err
+    warning = capsys.readouterr().err
+    assert f"archive cross-check incomplete for {invalid}:" in warning
+    if failure == "read_error":
+        assert "read denied" in warning
 
 
 def test_archived_state_prs_follows_a_worktree_git_pointer(tmp_path):

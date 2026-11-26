@@ -34,19 +34,19 @@ import yaml
 _SAFE_NAME = re.compile(r"[A-Za-z0-9._][A-Za-z0-9._-]*")
 
 _INSTALL_REGION = re.compile(
-    r"(# \[\[\[cog: dev_trees_install \]\]\]\n)(.*?)(# \[\[\[end\]\]\])",
+    r"(# \[\[\[cog: dev_trees_install \]\]\](?:\r\n|\r|\n))(.*?)(# \[\[\[end\]\]\])",
     re.DOTALL,
 )
 _RUNSH_REGION = re.compile(
-    r"(# \[\[\[cog: dev_trees_grep \]\]\]\n)(.*?)( *# \[\[\[end\]\]\])",
+    r"(# \[\[\[cog: dev_trees_grep \]\]\](?:\r\n|\r|\n))(.*?)( *# \[\[\[end\]\]\])",
     re.DOTALL,
 )
 _HELPER_REGION = re.compile(
-    r"(# \[\[\[cog: dev_trees_rsync \]\]\]\n)(.*?)( *# \[\[\[end\]\]\])",
+    r"(# \[\[\[cog: dev_trees_rsync \]\]\](?:\r\n|\r|\n))(.*?)( *# \[\[\[end\]\]\])",
     re.DOTALL,
 )
 _MOVE_A1_REGION = re.compile(
-    r"(    # \[\[\[cog: dev_trees_py \]\]\]\n)(.*?)(    # \[\[\[end\]\]\])",
+    r"(    # \[\[\[cog: dev_trees_py \]\]\](?:\r\n|\r|\n))(.*?)(    # \[\[\[end\]\]\])",
     re.DOTALL,
 )
 

@@ -9,9 +9,9 @@ Source of truth is ``manifests/move-a1-enum.yaml``. Mirrors:
   - ``reviewers/tests.md``  (sentence inside ``regen:move-a1-enum`` region)
   - ``reviewers/adversary.md``  (sentence inside ``regen:move-a1-enum`` region)
 
-``--check`` accumulates drift across all surfaces and exits 5 if any are
-dirty (so a single run shows the full picture). ``--write`` rewrites in
-place atomically. Manifest and target errors exit 3.
+``--check`` exits 5 for mirror drift after a complete scan. An incomplete
+discovery scan exits 3 even if drift was already reported. ``--write`` rewrites in place
+atomically. Manifest and target errors exit 3.
 
 Future-mirror discovery: ``--check`` scans the tree under
 ``--out-of-region-root`` (default repo root) for any enum value occurring
@@ -24,6 +24,7 @@ Spec: docs/generators.md
 from __future__ import annotations
 
 import argparse
+import codecs
 import json
 import os
 import re
@@ -137,11 +138,11 @@ def _regen_out_schema(text: str, values: list[str]) -> str:
         )
     inner = match.group(2)
     indent = 14
-    indent_match = re.search(r"\n( +)\"", inner)
+    indent_match = re.search(r"[\r\n]( +)\"", inner)
     if indent_match is not None:
         indent = len(indent_match.group(1))
     body = _render_out_enum_body(values, indent=indent)
-    new = text[: match.start(2)] + body + text[match.end(2) :]
+    new = generator_io.splice_body(match, body)
     try:
         json.loads(new)
     except json.JSONDecodeError as e:
@@ -251,8 +252,8 @@ def _scan_out_of_region(
 ) -> list[str]:
     """Return a list of "<file>:<lineno>: <line>" hits for any enum value
     occurring outside a known region in non-excluded UTF-8 text under root.
-    Manifest and mirror formats must be UTF-8. Undecodable files in other
-    formats containing NUL bytes are treated as binary."""
+    Manifest and mirror formats must be UTF-8. A UTF-16 or UTF-32 byte-order
+    mark identifies unsupported text. Other undecodable, NUL-bearing assets are skipped."""
     mirror_set = {p.resolve() for p in mirror_paths}
     manifest_resolved = manifest.resolve()
     text_suffixes = {path.suffix.lower() for path in [manifest, *mirror_paths]}
@@ -282,7 +283,13 @@ def _scan_out_of_region(
             try:
                 text = data.decode("utf-8")
             except UnicodeDecodeError as error:
-                if path.suffix.lower() not in text_suffixes and b"\0" in data:
+                if (
+                    path.suffix.lower() not in text_suffixes
+                    and b"\0" in data
+                    and not data.startswith(
+                        (codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE, codecs.BOM_UTF32_BE)
+                    )
+                ):
                     continue
                 generator_io.fail(f"cannot scan {path}: {error}")
             for lineno, line in enumerate(text.splitlines(), start=1):

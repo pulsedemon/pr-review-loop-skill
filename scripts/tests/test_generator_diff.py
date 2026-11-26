@@ -1,12 +1,14 @@
 """unified diff records follow the output stream's line endings."""
 
 import io
+import json
 import os
 import subprocess
 import sys
 from contextlib import redirect_stderr
 from pathlib import Path
 
+import pytest
 from generator_io import emit_drift_diff
 from personas_fixture import write_personas_yaml
 
@@ -59,3 +61,40 @@ def test_generator_cli_emits_utf8_diff_under_ascii_locale(tmp_path: Path) -> Non
     lines = result.stderr.decode("utf-8").splitlines()
     assert "-café 99" in lines
     assert "+café 1" in lines
+
+
+@pytest.mark.parametrize(
+    ("script", "option", "source", "marker"),
+    [
+        (
+            "regen_adversary_caps.py",
+            "--doc",
+            "docs/adversary.md",
+            "<!-- regen:adversary-caps:start -->",
+        ),
+        ("regen_dev_trees.py", "--install", "install.sh", "# [[[cog: dev_trees_install ]]]"),
+        ("regen_schema_enum.py", "--schema", "reviewers/output.schema.json", None),
+    ],
+)
+def test_standalone_cli_reports_utf8_drift(tmp_path, script, option, source, marker) -> None:
+    root = Path(__file__).resolve().parents[2]
+    text = (root / source).read_text(encoding="utf-8")
+    if marker is None:
+        schema = json.loads(text)
+        schema["properties"]["reviewer"]["enum"] = ["café"]
+        text = json.dumps(schema, ensure_ascii=False, indent=2)
+    else:
+        assert text.count(marker) == 1
+        text = text.replace(marker, marker + "\ncafé")
+    target = tmp_path / Path(source).name
+    target.write_text(text, encoding="utf-8")
+    result = subprocess.run(
+        [sys.executable, str(root / "scripts" / script), "--check", option, str(target)],
+        capture_output=True,
+        env={**os.environ, "LC_ALL": "C", "PYTHONUTF8": "0", "PYTHONCOERCECLOCALE": "0"},
+    )
+    assert result.returncode == 5, result.stderr
+    assert any(
+        line.startswith("-") and "café" in line
+        for line in result.stderr.decode("utf-8").splitlines()
+    )

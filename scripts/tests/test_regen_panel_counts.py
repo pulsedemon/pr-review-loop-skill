@@ -466,7 +466,11 @@ def test_validate_coverage_allows_subset_phrases(tmp_path: Path) -> None:
         ("A total of **11 personas agreed**", "A total of **11 personas"),
         ("A total of **11** personas agreed", "A total of **11** personas"),
         ("A total of `11` personas agreed", "A total of `11` personas"),
-        ("agreed by 12 personas **in total**", "12 personas **in total"),
+        ("agreed by 12 personas **in total**", "12 personas **in total**"),
+        ("A total of **11 personas** agreed", "A total of **11 personas**"),
+        ("In total, 11 personas agreed", "In total, 11 personas"),
+        ("agreed by 12 personas total, including two new members", "12 personas total"),
+        ("agreed by 12 personas in total across two rounds", "12 personas in total"),
         ("agreed by 3 personas\nTotal of 11 personas agreed", "Total of 11 personas"),
         ("The other 10 personas agreed", "The other 10 personas"),
         ("agreed by 12 personas total", "12 personas total"),
@@ -485,6 +489,18 @@ def test_allowed_subset_does_not_hide_an_explicit_total(
     err = capsys.readouterr().err
     label = "unhandled numbered persona-count phrase: "
     assert [line.partition(label)[2] for line in err.splitlines() if label in line] == [repr(total)]
+
+
+def test_adjacent_explicit_totals_are_both_reported(tmp_path: Path, capsys) -> None:
+    root = _make_corpus(tmp_path)
+    (root / "SKILL.md").write_text("agreed by 3 personas in total\nA total of 11 personas agreed")
+    assert _run(["--validate-coverage", "--corpus-root", str(root)]) == 5
+    reports = [
+        line.partition("unhandled numbered persona-count phrase: ")[2]
+        for line in capsys.readouterr().err.splitlines()
+        if "unhandled numbered persona-count phrase: " in line
+    ]
+    assert reports == ["'3 personas in total'", "'A total of 11 personas'"]
 
 
 def test_blank_lines_separate_total_qualifiers_from_allowed_subsets(tmp_path: Path) -> None:
