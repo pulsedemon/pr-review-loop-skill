@@ -73,7 +73,7 @@ def test_check_reports_drift_on_each_surface(
     rc = _run(["--check", "--manifest", str(manifest), "--corpus-root", str(root)])
     assert rc == generator_io.DRIFT_EXIT == 5
     err = capsys.readouterr().err
-    assert surface in err
+    assert f"--- {root / surface}\n" in err
     assert "regen.sh" in err
     lines = err.split("\n")
     assert "-the panel of 99 personas" in lines
@@ -157,7 +157,7 @@ def test_subset_phrases_outside_regions_are_not_touched(
     root = _make_corpus(tmp_path)
     f = root / "tests" / "scenarios" / "08.md"
     body = (
-        "Pre-text: 1 persona objected, 2 personas approved.\n\n"
+        "Pre-text: 1 persona objected,\u20282 personas approved.\n\n"
         + _total_region(
             "the panel of {n} {personas|persona}",
             "the panel of 99 personas",  # drifted
@@ -184,6 +184,26 @@ def test_subset_phrases_outside_regions_are_not_touched(
         b"the panel of 99 personas", b"the panel of 3 personas"
     )
     assert _run(["--check", "--manifest", str(manifest), "--corpus-root", str(root)]) == 0
+
+
+@pytest.mark.parametrize("final_lf", ["", "\n"], ids=["eof", "lf"])
+@pytest.mark.parametrize(
+    "mode", ["--check", "--write", "--validate-markers", "--validate-coverage"]
+)
+def test_closing_marker_accepts_trailing_unicode_whitespace(
+    tmp_path: Path, final_lf: str, mode: str
+) -> None:
+    root = _make_corpus(tmp_path)
+    target = root / "SKILL.md"
+    original = (
+        _total_region("{n} personas", "2 personas").rstrip("\n") + "\u2028" + final_lf
+    ).encode()
+    target.write_bytes(original)
+    args = [mode, "--corpus-root", str(root)]
+    if mode in ("--check", "--write"):
+        args.extend(["--manifest", str(write_personas_yaml(tmp_path, ["a", "b"]))])
+    assert _run(args) == 0
+    assert target.read_bytes() == original
 
 
 @pytest.mark.parametrize(
@@ -429,6 +449,7 @@ def test_validate_coverage_allows_subset_phrases(tmp_path: Path) -> None:
     ("phrase", "total"),
     [
         ("The panel of 999 personas agreed", "panel of 999 personas"),
+        ("A total of 11 personas agreed", "A total of 11 personas"),
         ("The other 10 personas agreed", "The other 10 personas"),
         ("agreed by 12 personas total", "12 personas total"),
         ("All 11 personas agreed", "All 11 personas"),
@@ -443,14 +464,15 @@ def test_allowed_subset_does_not_hide_an_explicit_total(
     (root / "SKILL.md").write_text(f"{phrase}; 2 personas approved.\n")
     assert _run(["--validate-coverage", "--corpus-root", str(root)]) == 5
     err = capsys.readouterr().err
-    assert repr(total) in err
-    assert "2 personas approved" not in err
+    label = "unhandled numbered persona-count phrase: "
+    assert [line.partition(label)[2] for line in err.splitlines() if label in line] == [repr(total)]
 
 
 def test_blank_lines_separate_total_qualifiers_from_allowed_subsets(tmp_path: Path) -> None:
     root = _make_corpus(tmp_path)
     (root / "SKILL.md").write_text(
         "## The Other\n \n2 personas approved.\n\nagreed by 3 personas\n\nTotal elapsed time.\n"
+        "A total of\n\n11 personas agreed.\n"
     )
     assert _run(["--validate-coverage", "--corpus-root", str(root)]) == 0
 
@@ -461,12 +483,12 @@ def test_validate_coverage_catches_phrase_split_across_lines(
     """A numbered persona-count phrase wrapped across a line break still fails."""
     root = _make_corpus(tmp_path)
     (root / "SKILL.md").write_bytes(
-        b"intro\r\nthe spec mentions 11\r\nreviewer personas reviewing this PR\r\n"
+        b"intro\r\n\r\nthe spec mentions 11\r\nreviewer personas reviewing this PR\r\n"
     )
     rc = _run(["--validate-coverage", "--corpus-root", str(root)])
     assert rc == generator_io.DRIFT_EXIT == 5
     err = capsys.readouterr().err
-    assert "line 2: unhandled numbered persona-count phrase" in err
+    assert "line 3: unhandled numbered persona-count phrase" in err
 
 
 def test_validate_coverage_catches_parenthesized_phrase(

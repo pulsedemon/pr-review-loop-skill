@@ -555,6 +555,15 @@ def test_panel_description_missing_rejected(tmp_path: Path) -> None:
         load_manifest(p)
 
 
+@pytest.mark.parametrize("name", ["alpha", "adversary"])
+def test_multiline_description_rejected(tmp_path: Path, name: str) -> None:
+    manifest = yaml.safe_load(_MINIMAL_VALID)
+    persona = manifest["panel"][0] if name == "alpha" else manifest["adversary"]
+    persona["description"] = "first line\nsecond line"
+    with pytest.raises(ManifestError, match="'description' must be one line"):
+        load_manifest(_write(tmp_path, yaml.safe_dump(manifest)))
+
+
 def test_panel_description_not_string_rejected(tmp_path: Path) -> None:
     p = _write(
         tmp_path,

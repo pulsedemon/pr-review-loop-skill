@@ -14,7 +14,8 @@ Authors wrap each panel-count phrase in named-region markers and supply the
 *template* on the line immediately after the start marker, in a hidden
 ``<!-- template: ... -->`` HTML comment. The line after the template holds
 the rendered prose. Region boundaries occupy whole physical lines. Template
-text and rendered bodies cannot contain another control-comment opener. The end
+text and rendered bodies cannot contain the panel-control prefix
+``<!-- regen:panel-count-`` or the template prefix ``<!-- template:``. The end
 marker closes the region:
 
 ```
@@ -147,7 +148,7 @@ def _parse_regions(lines: list[str], path: Path) -> list[_Region]:
     """
     for number, line in enumerate(lines, start=1):
         if _CONTROL_PREFIX in line:
-            fragments = line.splitlines()
+            fragments = line.rstrip().splitlines()
             if len(fragments) > 1 and any(
                 _CONTROL_RE.fullmatch(part.rstrip()) for part in fragments
             ):
@@ -299,7 +300,7 @@ def _run_validate_markers(*, corpus_root: Path) -> int:
 
 # match punctuation-led and wrapped counts without matching tokens such as B2.
 _COVERAGE_BROAD_RE = re.compile(
-    r"\b(?:(?i:panel\s+of|the\s+other|all(?:\s+of)?(?:\s+the)?)\s+)?"
+    r"\b(?:(?i:(?:a\s+)?total\s+of|panel\s+of|the\s+other|all(?:\s+of)?(?:\s+the)?)\s+)?"
     r"\d+\s+(?:reviewer\s+)?personas?\b(?:\s+(?i:(?:in\s+)?total)\b)?"
 )
 

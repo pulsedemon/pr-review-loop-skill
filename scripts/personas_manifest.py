@@ -141,6 +141,8 @@ def _parse_persona(path: Path, label: str, raw: object, allowed_keys: frozenset[
     description = description.strip()
     if not description:
         raise ManifestError(f"{path}: {label} {name!r}: 'description' must be non-empty")
+    if len(description.splitlines()) > 1:
+        raise ManifestError(f"{path}: {label} {name!r}: 'description' must be one line")
     if description.startswith("-"):
         raise ManifestError(
             f"{path}: {label} {name!r}: 'description' must not start with '-' "
