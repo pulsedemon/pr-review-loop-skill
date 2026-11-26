@@ -218,12 +218,13 @@ def test_closing_marker_accepts_trailing_unicode_whitespace(
 @pytest.mark.parametrize(
     "mode", ["--check", "--write", "--validate-markers", "--validate-coverage"]
 )
+@pytest.mark.parametrize("indent", ["", " "])
 def test_unicode_separator_in_prose_does_not_start_a_marker_line(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str], mode: str
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], mode: str, indent: str
 ) -> None:
     root = _make_corpus(tmp_path)
     path = root / "SKILL.md"
-    original = "prose\u2028<!-- regen:panel-count-total:end -->\n"
+    original = f"prose\u2028{indent}<!-- regen:panel-count-total:end -->\n"
     path.write_text(original)
     args = [mode, "--corpus-root", str(root)]
     if mode in ("--check", "--write"):
@@ -472,6 +473,9 @@ def test_validate_coverage_allows_subset_phrases(tmp_path: Path) -> None:
         ("The panel of 999 personas agreed", "panel of 999 personas"),
         ("A total of 11 personas agreed", "A total of 11 personas"),
         ("A total of **11 personas agreed**", "A total of **11 personas"),
+        ("A total of **11 personas agreed.**", "A total of **11 personas"),
+        ("A total of **`11` personas agreed**.", "A total of **`11` personas"),
+        ("agreed by 12 personas **total (Panel + Adversary)**.", "12 personas **total"),
         ("A total of _11_ personas agreed", "A total of _11_ personas"),
         ("A total of **11** personas agreed", "A total of **11** personas"),
         ("A total of `11` personas agreed", "A total of `11` personas"),
@@ -582,6 +586,7 @@ def test_validate_coverage_ignores_non_persona_numbers(tmp_path: Path) -> None:
         "wait 5 minutes for CI\n"
         "see issue #42 for context\n"
         "The labels are \\_11 personas and status_.\n"
+        "An escaped backtick precedes a span: \\``_11 personas_`.\n"
         "The code spans are `_11 personas` and `status_`.\n"
         "The review log uses the label _11 personas for the next stage.\n"
         "B2 persona is a Move A.1 sub-mechanic label\n"  # word-boundary anchor blocks this

@@ -253,14 +253,14 @@ def _scan_out_of_region(
     """Return a list of "<file>:<lineno>: <line>" hits for any enum value
     occurring outside a known region in non-excluded UTF-8 text under root.
     An invalid UTF-8 input is skipped only when it contains NUL, has no Unicode
-    byte-order mark, and has neither a manifest nor a mirror suffix."""
+    byte-order mark, and its suffix does not identify a text file."""
     mirror_set = {p.resolve() for p in mirror_paths}
     manifest_resolved = manifest.resolve()
-    text_suffixes = {path.suffix.lower() for path in [manifest, *mirror_paths]}
+    text_suffixes = {path.suffix.lower() for path in [manifest, *mirror_paths]} | {".txt"}
     hits: list[str] = []
 
     def fail_walk(error: OSError) -> None:
-        generator_io.fail(f"cannot scan {root}: {error}")
+        generator_io.fail(ascii(f"cannot scan {root}: {error}")[1:-1])
 
     for dirpath, dirnames, filenames in os.walk(root, onerror=fail_walk):
         current_dir = Path(dirpath)
@@ -279,7 +279,7 @@ def _scan_out_of_region(
             try:
                 data = path.read_bytes()
             except OSError as error:
-                generator_io.fail(f"cannot scan {path}: {error}")
+                generator_io.fail(ascii(f"cannot scan {path}: {error}")[1:-1])
             try:
                 text = data.decode("utf-8")
             except UnicodeDecodeError as error:
@@ -296,7 +296,7 @@ def _scan_out_of_region(
                     )
                 ):
                     continue
-                generator_io.fail(f"cannot scan {path}: {error}")
+                generator_io.fail(ascii(f"cannot scan {path}: {error}")[1:-1])
             for lineno, line in enumerate(text.splitlines(), start=1):
                 for v in values:
                     if re.search(r"\b" + re.escape(v) + r"\b", line):

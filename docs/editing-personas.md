@@ -1,7 +1,6 @@
 # Editing the reviewer panel
 
-The reviewer panel (panel personas + adversary + shared addendums) is declared
-in `reviewers/personas.yaml`, the manifest. Treat it as the source of truth.
+The `reviewers/personas.yaml` manifest declares the panel, the separate adversary reviewer, and their shared addendums.
 
 The procedure moves a persona applies are part of its prompt. Move C's body
 lives canonically in [`procedure-moves.md`](procedure-moves.md) (move_c-true

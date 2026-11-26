@@ -70,6 +70,17 @@ def test_write_rewrites_drifted_schema(tmp_path: Path) -> None:
     assert _run(["--check", "--manifest", str(manifest), "--schema", str(schema)]) == 0
 
 
+@pytest.mark.parametrize("newline", [b"\r\n", b""])
+def test_inline_enum_expands_using_file_line_endings(tmp_path: Path, newline: bytes) -> None:
+    manifest = write_personas_yaml(tmp_path, ["alpha"])
+    schema = tmp_path / "schema.json"
+    original = b"{" + newline + b'"properties":{"reviewer":{"type":"string","enum":[]}}}'
+    schema.write_bytes(original)
+    assert _run(["--write", "--manifest", str(manifest), "--schema", str(schema)]) == 0
+    array = (newline or b"\n").join([b"[", b'        "alpha",', b'        "adversary"', b"      ]"])
+    assert schema.read_bytes() == original.replace(b"[]", array)
+
+
 def test_write_on_matching_schema_is_a_noop(tmp_path: Path) -> None:
     manifest = write_personas_yaml(tmp_path, ["alpha"])
     schema = _write_schema(tmp_path, ["alpha", "adversary"])

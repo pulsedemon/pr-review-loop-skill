@@ -59,8 +59,7 @@ adjacent. Round-trip is byte-stable.
 
 - ``--check`` (default): exit 0 if every region matches its rendered
   template; exit 5 with a unified diff if any region drifted.
-- ``--write``: rewrite drifted regions in place (atomic via .tmp +
-  ``os.replace``).
+- ``--write``: atomically replace files with drifted regions.
 - ``--validate-markers``: walk every corpus file and confirm region
   start/end markers are balanced and well-formed; exit 5 with the
   offending file path on imbalance. Run independently of drift detection.
@@ -142,7 +141,7 @@ def _parse_regions(lines: list[str], path: Path) -> list[_Region]:
         if _CONTROL_PREFIX in line:
             fragments = line.rstrip().splitlines()
             if len(fragments) > 1 and any(
-                _CONTROL_RE.fullmatch(part.rstrip()) for part in fragments
+                _CONTROL_RE.fullmatch(part.strip()) for part in fragments
             ):
                 raise _MarkerError(
                     f"{path}: line {number}: put the marker on its own physical line"
@@ -290,9 +289,9 @@ def _run_validate_markers(*, corpus_root: Path) -> int:
     return 0
 
 
-# match punctuation-led and wrapped counts without matching tokens such as B2.
 _TOTAL_PREFIX = r"(?i:(?:a\s+)?total\s+of|in\s+total,|panel\s+of)"
 _PANEL_LABEL = r"(?i:\(panel\s*\+\s*adversary\))"
+# match wrapped counts while excluding embedded digits such as B2.
 _COVERAGE_BROAD_RE = re.compile(
     rf"\b(?:{_TOTAL_PREFIX}\s+)?\d+\s+(?:reviewer\s+)?personas?\b"
     rf"(?:(?!\s+{_TOTAL_PREFIX}\s+\d)"
@@ -322,41 +321,42 @@ def _mask_word_markup(text: str) -> str:
     chars = list(text)
     openings: dict[str, int] = {}
     runs = list(_WORD_MARKUP.finditer(text))
-    next_tick: dict[str, int] = {}
+    next_tick: dict[int, int] = {}
     closes_at: dict[int, int] = {}
     for run in reversed(runs):
-        delimiter = run[0]
-        if delimiter.startswith("`"):
-            if delimiter in next_tick:
-                closes_at[run.start()] = next_tick[delimiter]
-            next_tick[delimiter] = run.start()
+        if run[0].startswith("`"):
+            width = len(run[0])
+            # an escape consumes only the first backtick in an opening run.
+            for start in (run.start(), run.start() + 1):
+                if end := next_tick.get(run.end() - start):
+                    closes_at[start] = end
+            next_tick[width] = run.start()
 
-    code_end = -1
+    code_end = 0
     for match in runs:
-        if match.start() <= code_end:
+        start, end = match.span()
+        if start < code_end:
             continue
-        delimiter = match[0]
-        pos = match.start()
+        pos = start
         while pos and text[pos - 1] == "\\":
             pos -= 1
-        if (match.start() - pos) % 2:
+        start += (start - pos) % 2
+        delimiter = text[start:end]
+        if not delimiter:
             continue
         if delimiter.startswith("`"):
-            if match.start() in closes_at:
-                code_end = closes_at[match.start()]
-                spaces = " " * len(delimiter)
-                chars[match.start() : match.end()] = spaces
-                chars[code_end : code_end + len(delimiter)] = spaces
+            if start in closes_at:
+                close = closes_at[start]
+                code_end = close + len(delimiter)
+                chars[start:end] = chars[close:code_end] = " " * len(delimiter)
             continue
-        left = text[max(0, match.start() - 1) : match.start()]
-        right = text[match.end() : match.end() + 1]
-        if right.isalnum() and not left.isalnum():
-            openings[delimiter] = match.start()
-        elif left.isalnum() and not right.isalnum() and delimiter in openings:
-            start = openings.pop(delimiter)
-            spaces = " " * len(delimiter)
-            chars[start : start + len(delimiter)] = spaces
-            chars[match.start() : match.end()] = spaces
+        left = text[start - 1] if start else " "
+        right = text[end] if end < len(text) else " "
+        if not left.isspace() and not right.isalnum() and delimiter in openings:
+            opening = openings.pop(delimiter)
+            chars[opening : opening + len(delimiter)] = chars[start:end] = " " * len(delimiter)
+        elif not right.isspace() and not left.isalnum():
+            openings[delimiter] = start
     return "".join(chars)
 
 

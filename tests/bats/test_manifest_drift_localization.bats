@@ -49,15 +49,10 @@ PY
 }
 
 @test "scripts/regen-check.sh fails with exit 5 and surfaces phantom in the diff" {
-  # When the manifest gains phantom, cog regenerates the SKILL.md
-  # "Reviewer personas" section to include a phantom bullet — which
-  # then diffs against the on-disk SKILL.md (which doesn't have one).
-  # regen-check.sh resolves its root via `git rev-parse --show-toplevel`,
-  # which follows cwd — not the script's own location. Run it with cwd
-  # inside $SKILL so it checks the fixture manifest, not the real repo.
+  # regen-check resolves its root from the current git checkout.
   run bash -c "cd '${SKILL}' && bash scripts/regen-check.sh"
   [[ "$status" -eq 5 ]] || {
-    echo "expected scripts/regen-check.sh to fail with exit 5 (drift) given the fixture manifest;"
+    echo "expected scripts/regen-check.sh to fail with exit 5 (drift) after adding phantom"
     echo "got status=$status. Output:"
     echo "$output"
     return 1

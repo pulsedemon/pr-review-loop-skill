@@ -260,6 +260,7 @@ def test_check_drifted_adv_md_exits_five(tmp_path: Path) -> None:
 
 def test_write_repairs_drift_across_all_surfaces(tmp_path: Path) -> None:
     paths = _seed(tmp_path)
+    expected_prose = {key: paths[key].read_bytes() for key in ("skill", "tests_md", "adv_md")}
     paths["state_schema"].chmod(0o755)
     paths["state_schema"].write_text(
         paths["state_schema"].read_text().replace("cross_fixture", "xfoo", 1)
@@ -286,6 +287,8 @@ def test_write_repairs_drift_across_all_surfaces(tmp_path: Path) -> None:
     write = _run(paths, "--write", "--out-of-region-root", str(tmp_path))
     assert write.returncode == 0, write.stderr
     assert paths["state_schema"].stat().st_mode & 0o7777 == 0o755
+    for key, original in expected_prose.items():
+        assert paths[key].read_bytes() == original
     assert paths["out_schema"].read_bytes() == expected
     state = json.loads(paths["state_schema"].read_text())
     assert (
@@ -333,15 +336,20 @@ def test_out_of_region_scan_rejects_undecodable_text_and_skips_binary(tmp_path: 
 
 
 @pytest.mark.parametrize(
-    "data", ["cross_fixture".encode("utf-16"), b"\xef\xbb\xbf\x00\xffcross_fixture"]
+    "data",
+    [
+        "café cross_fixture".encode("utf-16le"),
+        "cross_fixture".encode("utf-16"),
+        b"\xef\xbb\xbf\x00\xffcross_fixture",
+    ],
 )
-def test_scan_reports_undecodable_text_with_a_bom(tmp_path: Path, data: bytes) -> None:
+def test_scan_reports_undecodable_plain_text(tmp_path: Path, data: bytes) -> None:
     paths = _seed(tmp_path)
-    notes = tmp_path / "notes.txt"
+    notes = tmp_path / "notes\nnext.txt"
     notes.write_bytes(data)
     result = _run(paths, "--check", "--out-of-region-root", str(tmp_path))
     assert result.returncode == 3
-    assert f"cannot scan {notes}" in result.stderr
+    assert f"cannot scan {tmp_path}/notes\\nnext.txt" in result.stderr
 
 
 def test_missing_scan_root_reports_incomplete_discovery_after_mirror_drift(tmp_path: Path) -> None:
