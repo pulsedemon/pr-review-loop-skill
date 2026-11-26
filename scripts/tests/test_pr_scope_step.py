@@ -990,9 +990,9 @@ def test_main_finalize_returns_2_on_malformed_gate_result_json(capsys) -> None:
     assert "pr_scope_step: failed to parse gate_result JSON" in capsys.readouterr().err
 
 
-def test_main_persist_updates_state_and_pr_scope_files(tmp_path) -> None:
-    state_path = tmp_path / "state.json"
-    pr_scope_path = tmp_path / "pr-scope.json"
+def test_main_persist_updates_state_and_scope_files_with_long_basenames(tmp_path) -> None:
+    state_path = tmp_path / ("s" * 248 + ".json")
+    pr_scope_path = tmp_path / ("p" * 248 + ".json")
     state_path.write_text('{"status":"running","history":[]}\n', encoding="utf-8")
 
     rc = _main(

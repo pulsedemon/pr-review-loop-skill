@@ -162,7 +162,7 @@ def _run(paths: dict[str, Path], *args: str) -> subprocess.CompletedProcess[str]
             *args,
         ],
         capture_output=True,
-        text=True,
+        encoding="utf-8",
         check=False,
     )
 
@@ -260,13 +260,20 @@ def test_check_drifted_adv_md_exits_five(tmp_path: Path) -> None:
 
 def test_write_repairs_drift_across_all_surfaces(tmp_path: Path) -> None:
     paths = _seed(tmp_path)
+    expected_prose = {key: paths[key].read_bytes() for key in ("skill", "tests_md", "adv_md")}
     paths["state_schema"].chmod(0o755)
     paths["state_schema"].write_text(
         paths["state_schema"].read_text().replace("cross_fixture", "xfoo", 1)
     )
-    paths["out_schema"].write_text(
-        paths["out_schema"].read_text().replace("describe_label_drift", "yfoo", 1)
+    expected = (
+        paths["out_schema"]
+        .read_text()
+        .replace('              "', '                 "')
+        .replace("            ]", "               ]")
+        .replace("\n", "\r")
+        .encode()
     )
+    paths["out_schema"].write_bytes(expected.replace(b"describe_label_drift", b"yfoo", 1))
     paths["skill"].write_text(paths["skill"].read_text().replace("testid_unmounted", "zfoo", 1))
     tests_text = paths["tests_md"].read_text()
     idx = tests_text.rfind("conditional_unmounted")
@@ -280,6 +287,9 @@ def test_write_repairs_drift_across_all_surfaces(tmp_path: Path) -> None:
     write = _run(paths, "--write", "--out-of-region-root", str(tmp_path))
     assert write.returncode == 0, write.stderr
     assert paths["state_schema"].stat().st_mode & 0o7777 == 0o755
+    for key, original in expected_prose.items():
+        assert paths[key].read_bytes() == original
+    assert paths["out_schema"].read_bytes() == expected
     state = json.loads(paths["state_schema"].read_text())
     assert (
         state["properties"]["history"]["items"]["properties"]["findings"]["items"]["properties"][
@@ -292,14 +302,86 @@ def test_write_repairs_drift_across_all_surfaces(tmp_path: Path) -> None:
     assert check.returncode == 0, check.stderr
 
 
-def test_out_of_region_occurrence_in_sibling_file_exits_five(tmp_path: Path) -> None:
+def test_out_of_region_occurrence_in_sibling_file_exits_five(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     paths = _seed(tmp_path)
     stray = tmp_path / "docs" / "stray.md"
     stray.parent.mkdir(parents=True, exist_ok=True)
-    stray.write_text("This document mentions cross_fixture without any region marker.\n")
+    stray.write_text("ā mentions cross_fixture without a region marker.\n", encoding="utf-8")
+    monkeypatch.setenv("LC_ALL", "C")
+    monkeypatch.setenv("PYTHONUTF8", "0")
+    monkeypatch.setenv("PYTHONCOERCECLOCALE", "0")
     result = _run(paths, "--check", "--out-of-region-root", str(tmp_path))
     assert result.returncode == 5
-    assert "stray.md" in result.stderr, result.stderr
+    assert "stray.md:1: ā mentions" in result.stderr, result.stderr
+
+
+def test_out_of_region_scan_rejects_undecodable_text_and_skips_binary(tmp_path: Path) -> None:
+    paths = _seed(tmp_path)
+    source = tmp_path / "stray.md"
+    source.write_bytes(b"caf\xe9 cross_fixture")
+    result = _run(paths, "--check", "--out-of-region-root", str(tmp_path))
+    assert result.returncode == 3
+    assert f"cannot scan {source}" in result.stderr
+    source.write_bytes(b"\x00cross_fixture")
+    result = _run(paths, "--check", "--out-of-region-root", str(tmp_path))
+    assert result.returncode == 5 and str(source) in result.stderr
+    source.write_bytes(b"\x00\xffcross_fixture")
+    result = _run(paths, "--check", "--out-of-region-root", str(tmp_path))
+    assert result.returncode == 3 and str(source) in result.stderr
+    source.rename(tmp_path / "asset.bin")
+    result = _run(paths, "--check", "--out-of-region-root", str(tmp_path))
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize(
+    ("suffix", "data"),
+    [
+        ("txt", "future cross_fixture mirror".encode("utf-16le")),
+        ("py", "café cross_fixture".encode("utf-16le")),
+        ("yml", "café cross_fixture".encode("utf-16le")),
+        ("txt", "café cross_fixture".encode("utf-16le")),
+        ("txt", "cross_fixture".encode("utf-16")),
+        ("txt", b"\xef\xbb\xbf\x00\xffcross_fixture"),
+    ],
+)
+def test_scan_reports_undecodable_plain_text(tmp_path: Path, suffix: str, data: bytes) -> None:
+    paths = _seed(tmp_path)
+    notes = tmp_path / f"notes\nnext.{suffix}"
+    notes.write_bytes(data)
+    result = _run(paths, "--check", "--out-of-region-root", str(tmp_path))
+    assert result.returncode == 3
+    assert f"cannot scan {tmp_path}/notes\\nnext.{suffix}" in result.stderr
+
+
+def test_missing_scan_root_reports_incomplete_discovery_after_mirror_drift(tmp_path: Path) -> None:
+    paths = _seed(tmp_path)
+    mirror = paths["out_schema"]
+    mirror.write_text(mirror.read_text().replace("describe_label_drift", "stale_label", 1))
+    missing = tmp_path / "missing"
+    result = _run(paths, "--check", "--out-of-region-root", str(missing))
+    assert result.returncode == 3
+    assert f"--- {mirror}\n" in result.stderr
+    assert "stale_label" in result.stderr
+    assert f"cannot scan {missing}" in result.stderr
+
+
+def test_discovery_read_error_names_the_file(tmp_path: Path, monkeypatch, capsys) -> None:
+    source = tmp_path / "source.md"
+    source.write_text("ordinary prose")
+    read = Path.read_bytes
+
+    def fail_read(path):
+        if path == source:
+            raise PermissionError("read denied")
+        return read(path)
+
+    monkeypatch.setattr(Path, "read_bytes", fail_read)
+    with pytest.raises(SystemExit) as error:
+        regen._scan_out_of_region(tmp_path, ["value"], tmp_path / "manifest.yaml", [])
+    assert error.value.code == 3
+    assert f"cannot scan {source}: read denied" in capsys.readouterr().err
 
 
 def test_out_of_region_scan_ignores_nested_worktrees(tmp_path: Path) -> None:

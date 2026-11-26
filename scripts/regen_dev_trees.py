@@ -34,19 +34,19 @@ import yaml
 _SAFE_NAME = re.compile(r"[A-Za-z0-9._][A-Za-z0-9._-]*")
 
 _INSTALL_REGION = re.compile(
-    r"(# \[\[\[cog: dev_trees_install \]\]\]\n)(.*?)(# \[\[\[end\]\]\])",
+    r"(# \[\[\[cog: dev_trees_install \]\]\](?:\r\n|\r|\n))(.*?)(# \[\[\[end\]\]\])",
     re.DOTALL,
 )
 _RUNSH_REGION = re.compile(
-    r"(# \[\[\[cog: dev_trees_grep \]\]\]\n)(.*?)( *# \[\[\[end\]\]\])",
+    r"(# \[\[\[cog: dev_trees_grep \]\]\](?:\r\n|\r|\n))(.*?)( *# \[\[\[end\]\]\])",
     re.DOTALL,
 )
 _HELPER_REGION = re.compile(
-    r"(# \[\[\[cog: dev_trees_rsync \]\]\]\n)(.*?)( *# \[\[\[end\]\]\])",
+    r"(# \[\[\[cog: dev_trees_rsync \]\]\](?:\r\n|\r|\n))(.*?)( *# \[\[\[end\]\]\])",
     re.DOTALL,
 )
 _MOVE_A1_REGION = re.compile(
-    r"(    # \[\[\[cog: dev_trees_py \]\]\]\n)(.*?)(    # \[\[\[end\]\]\])",
+    r"(    # \[\[\[cog: dev_trees_py \]\]\](?:\r\n|\r|\n))(.*?)(    # \[\[\[end\]\]\])",
     re.DOTALL,
 )
 
@@ -114,7 +114,7 @@ def main(argv: list[str]) -> int:
         args.check = True
 
     try:
-        manifest = yaml.safe_load(args.manifest.read_text())
+        manifest = yaml.safe_load(args.manifest.read_text(encoding="utf-8"))
         raw = manifest["dev_trees"]
         # Check the type before list(): a bare string would become its
         # characters and a mapping its keys, either of which can pass every
@@ -136,7 +136,7 @@ def main(argv: list[str]) -> int:
         dupes = sorted({n for n in names if names.count(n) > 1})
         if dupes:
             raise ValueError(f"duplicate dev_trees entries: {dupes}")
-    except (FileNotFoundError, KeyError, TypeError, ValueError, yaml.YAMLError) as e:
+    except (OSError, KeyError, TypeError, ValueError, yaml.YAMLError) as e:
         print(f"regen_dev_trees: manifest error: {e}", file=sys.stderr)
         return generator_io.MANIFEST_ERROR_EXIT
 
@@ -161,4 +161,4 @@ def main(argv: list[str]) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    generator_io.run(main)

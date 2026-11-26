@@ -330,7 +330,7 @@ def persist_pr_scope_outcome(
 
 def _write_temp_json(target: Path, payload: str, label: str) -> Path:
     try:
-        fd, tmp_name = tempfile.mkstemp(prefix=f".{target.name}.", dir=target.parent)
+        fd, tmp_name = tempfile.mkstemp(prefix=".pr-loop-", dir=target.parent)
     except OSError as exc:
         raise PrScopeStepError(f"failed to write {label} ({exc})") from exc
 

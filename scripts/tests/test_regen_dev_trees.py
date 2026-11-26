@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -106,7 +107,7 @@ def test_duplicate_manifest_entries_exit_3(tmp_path: Path) -> None:
 
 def test_write_preserves_the_target_file_mode(tmp_path: Path) -> None:
     manifest = tmp_path / "dev-trees.yaml"
-    manifest.write_text("dev_trees:\n  - .git\n  - .venv\n")
+    manifest.write_text("# généré\ndev_trees:\n  - .git\n  - .venv\n", encoding="utf-8")
     targets = [
         (
             "--install",
@@ -147,16 +148,23 @@ def test_write_preserves_the_target_file_mode(tmp_path: Path) -> None:
         path = tmp_path / filename
         start = f"{indent}# [[[cog: {marker} ]]]\n"
         end = f"{indent}# [[[end]]]\n"
-        path.write_text(start + "stale\n" + end)
+        prefix = "# ā\n"
+        path.write_bytes((prefix + start + "stale\n" + end).replace("\n", "\r\n").encode())
         path.chmod(mode)
         args.extend([option, str(path)])
-        expected.append((path, start + body + end, mode))
+        expected.append((path, prefix + start + body + end, mode))
 
-    proc = subprocess.run(args, cwd=tmp_path, capture_output=True, text=True)
+    proc = subprocess.run(
+        args,
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        env={**os.environ, "LC_ALL": "C", "PYTHONUTF8": "0", "PYTHONCOERCECLOCALE": "0"},
+    )
 
     assert proc.returncode == 0, proc.stderr
     for path, content, mode in expected:
-        assert path.read_text() == content
+        assert path.read_bytes() == content.replace("\n", "\r\n").encode()
         assert path.stat().st_mode & 0o7777 == mode
 
 

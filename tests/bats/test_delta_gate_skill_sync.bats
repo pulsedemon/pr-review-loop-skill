@@ -9,11 +9,41 @@
 
 load test_helper
 
+gate_enum_matches_panel() {
+  jq -se --arg panel "$1" \
+    'length == 1 and ((.[0].properties.reviewer.enum | sort) == ($panel | split("\n") | sort))'
+}
+
 @test "gate.schema.json reviewer enum matches the personas.yaml panel" {
-  local enum panel
-  enum=$(python3 -c "import json;print(','.join(sorted(json.load(open('${REPO_ROOT}/reviewers/gate.schema.json'))['properties']['reviewer']['enum'])))")
-  panel=$(python3 -c "import yaml;print(','.join(sorted(p['name'] for p in yaml.safe_load(open('${REPO_ROOT}/reviewers/personas.yaml'))['panel'])))")
-  [ "$enum" = "$panel" ]
+  local panel
+  panel=$(python3 "${SCRIPTS}/personas_manifest.py" --list panel-names)
+  gate_enum_matches_panel "$panel" <"${REPO_ROOT}/reviewers/gate.schema.json"
+}
+
+@test "the gate enum can list reviewers in a different order" {
+  gate_enum_matches_panel $'alpha\nbeta' <<<'{"properties":{"reviewer":{"enum":["beta","alpha"]}}}'
+}
+
+@test "a single comma-joined enum entry cannot match two panel names" {
+  run gate_enum_matches_panel $'alpha\nbeta' <<<'{"properties":{"reviewer":{"enum":["alpha,beta"]}}}'
+  [[ "$status" -eq 1 && "$output" == false ]]
+}
+
+@test "a gate enum must include every panel name and no additional names" {
+  run gate_enum_matches_panel $'alpha\nbeta' <<<'{"properties":{"reviewer":{"enum":["alpha"]}}}'
+  [[ "$status" -eq 1 && "$output" == false ]]
+  run gate_enum_matches_panel $'alpha\nbeta' <<<'{"properties":{"reviewer":{"enum":["alpha","gamma"]}}}'
+  [[ "$status" -eq 1 && "$output" == false ]]
+  run gate_enum_matches_panel alpha <<<'{"properties":{"reviewer":{"enum":["alpha","beta"]}}}'
+  [[ "$status" -eq 1 && "$output" == false ]]
+}
+
+@test "the gate enum comparison requires exactly one schema document" {
+  local schema='{"properties":{"reviewer":{"enum":["alpha"]}}}'
+  run gate_enum_matches_panel alpha </dev/null
+  [[ "$status" -eq 1 && "$output" == false ]]
+  run gate_enum_matches_panel alpha <<<"$schema $schema"
+  [[ "$status" -eq 1 && "$output" == false ]]
 }
 
 @test "gate.schema.json does not list the adversary" {

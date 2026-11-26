@@ -861,7 +861,7 @@ def write_state_file(path: str | Path, payload: dict[str, Any]) -> None:
 
     target = Path(path)
     try:
-        fd, tmp_name = tempfile.mkstemp(prefix=f".{target.name}.", dir=target.parent)
+        fd, tmp_name = tempfile.mkstemp(prefix=".pr-loop-", dir=target.parent)
     except OSError as exc:
         raise StateValidationError(f"failed to write state.json ({exc})") from exc
 

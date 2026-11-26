@@ -9,9 +9,9 @@ Source of truth is ``manifests/move-a1-enum.yaml``. Mirrors:
   - ``reviewers/tests.md``  (sentence inside ``regen:move-a1-enum`` region)
   - ``reviewers/adversary.md``  (sentence inside ``regen:move-a1-enum`` region)
 
-``--check`` accumulates drift across all surfaces and exits 5 if any are
-dirty (so a single run shows the full picture). ``--write`` rewrites in
-place atomically. Manifest and target errors exit 3.
+``--check`` exits 5 for mirror drift after a complete scan. An incomplete
+discovery scan exits 3 even if drift was already reported. ``--write`` rewrites in place
+atomically. Manifest and target errors exit 3.
 
 Future-mirror discovery: ``--check`` scans the tree under
 ``--out-of-region-root`` (default repo root) for any enum value occurring
@@ -24,6 +24,7 @@ Spec: docs/generators.md
 from __future__ import annotations
 
 import argparse
+import codecs
 import json
 import os
 import re
@@ -66,7 +67,7 @@ _OUT_ENUM_SLICE = re.compile(
 
 def load_values(path: Path) -> list[str]:
     """return the manifest's enum values; raise on a missing key or malformed list."""
-    values = yaml.safe_load(path.read_text())["move_a1_pattern"]
+    values = yaml.safe_load(path.read_text(encoding="utf-8"))["move_a1_pattern"]
     # check the type first: a bare string would iterate as its characters.
     if (
         not isinstance(values, list)
@@ -137,11 +138,11 @@ def _regen_out_schema(text: str, values: list[str]) -> str:
         )
     inner = match.group(2)
     indent = 14
-    indent_match = re.search(r"\n( +)\"", inner)
+    indent_match = re.search(r"[\r\n]( +)\"", inner)
     if indent_match is not None:
         indent = len(indent_match.group(1))
     body = _render_out_enum_body(values, indent=indent)
-    new = text[: match.start(2)] + body + text[match.end(2) :]
+    new = generator_io.splice_body(match, body)
     try:
         json.loads(new)
     except json.JSONDecodeError as e:
@@ -250,13 +251,39 @@ def _scan_out_of_region(
     mirror_paths: list[Path],
 ) -> list[str]:
     """Return a list of "<file>:<lineno>: <line>" hits for any enum value
-    occurring outside a known region in any non-excluded file under root."""
+    occurring outside a known region in non-excluded UTF-8 text under root.
+    An invalid UTF-8 input is skipped only when it contains NUL, has no Unicode
+    byte-order mark, and its name does not identify a repository text format."""
     mirror_set = {p.resolve() for p in mirror_paths}
     manifest_resolved = manifest.resolve()
+    text_suffixes = {path.suffix.lower() for path in [manifest, *mirror_paths]} | {
+        ".bash",
+        ".bats",
+        ".csv",
+        ".html",
+        ".js",
+        ".json",
+        ".lock",
+        ".md",
+        ".py",
+        ".sh",
+        ".toml",
+        ".xml",
+        ".txt",
+        ".yaml",
+        ".yml",
+    }
+    wide_values = [
+        value.encode(encoding)
+        for value in values
+        for encoding in ("utf-16-le", "utf-16-be", "utf-32-le", "utf-32-be")
+    ]
     hits: list[str] = []
-    if not root.exists():
-        return hits
-    for dirpath, dirnames, filenames in os.walk(root):
+
+    def fail_walk(error: OSError) -> None:
+        generator_io.fail(ascii(f"cannot scan {root}: {error}")[1:-1])
+
+    for dirpath, dirnames, filenames in os.walk(root, onerror=fail_walk):
         current_dir = Path(dirpath)
         rel_dir = current_dir.relative_to(root)
         dirnames[:] = sorted(d for d in dirnames if not _is_excluded(rel_dir / d))
@@ -271,9 +298,32 @@ def _scan_out_of_region(
             if resolved in mirror_set:
                 continue
             try:
-                text = path.read_text()
-            except (OSError, UnicodeDecodeError):
-                continue
+                data = path.read_bytes()
+            except OSError as error:
+                generator_io.fail(ascii(f"cannot scan {path}: {error}")[1:-1])
+            known_text = path.suffix.lower() in text_suffixes or path.name in {
+                "LICENSE",
+                ".gitignore",
+            }
+            if known_text and b"\0" in data and any(token in data for token in wide_values):
+                generator_io.fail(ascii(f"cannot scan {path}: expected UTF-8 enum text")[1:-1])
+            try:
+                text = data.decode("utf-8")
+            except UnicodeDecodeError as error:
+                if (
+                    not known_text
+                    and b"\0" in data
+                    and not data.startswith(
+                        (
+                            codecs.BOM_UTF8,
+                            codecs.BOM_UTF16_LE,
+                            codecs.BOM_UTF16_BE,
+                            codecs.BOM_UTF32_BE,
+                        )
+                    )
+                ):
+                    continue
+                generator_io.fail(ascii(f"cannot scan {path}: {error}")[1:-1])
             for lineno, line in enumerate(text.splitlines(), start=1):
                 for v in values:
                     if re.search(r"\b" + re.escape(v) + r"\b", line):
@@ -305,7 +355,7 @@ def _scan_tests_md_bullet_drift(path: Path, values: list[str]) -> list[str]:
     reviewers/adversary.md the same ``**snake_case**`` syntax is used
     for unrelated parameter names and would produce false positives.
     """
-    text = path.read_text()
+    text = path.read_text(encoding="utf-8")
     region_spans = [(m.start(), m.end()) for m in _REGION.finditer(text)]
     value_set = set(values)
     hits: list[str] = []
@@ -347,7 +397,7 @@ def main(argv: list[str]) -> int:
 
     try:
         values = load_values(args.manifest)
-    except (FileNotFoundError, KeyError, TypeError, ValueError, yaml.YAMLError) as e:
+    except (OSError, KeyError, TypeError, ValueError, yaml.YAMLError) as e:
         print(f"regen_move_a1_enum: manifest error: {e}", file=sys.stderr)
         return generator_io.MANIFEST_ERROR_EXIT
 
@@ -403,4 +453,4 @@ def main(argv: list[str]) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    generator_io.run(main)

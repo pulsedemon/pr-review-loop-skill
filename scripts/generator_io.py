@@ -1,10 +1,13 @@
 """shared file output for manifest-driven generators."""
 
 import difflib
+import io
 import os
 import re
 import sys
+import tempfile
 from collections.abc import Callable, Iterable
+from contextlib import redirect_stderr
 from pathlib import Path
 from typing import NoReturn
 
@@ -12,17 +15,37 @@ DRIFT_EXIT = 5
 MANIFEST_ERROR_EXIT = 3
 
 
+def run(main: Callable[[list[str]], int]) -> NoReturn:
+    """use UTF-8 for generator CLI help and diagnostics."""
+    for stream in (sys.stdout, sys.stderr):
+        if isinstance(stream, io.TextIOWrapper):
+            stream.reconfigure(encoding="utf-8", errors="backslashreplace")
+    if sys.stderr is None:
+        with open(os.devnull, "w", encoding="utf-8") as sink, redirect_stderr(sink):
+            raise SystemExit(main(sys.argv[1:]))
+    raise SystemExit(main(sys.argv[1:]))
+
+
 def atomic_write(path: Path, content: str) -> None:
     """preserve target permissions when replacing generated content."""
-    tmp = path.with_suffix(path.suffix + ".tmp")
+    stream = tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        newline="",
+        dir=path.parent,
+        prefix=".regen-",
+        suffix=".tmp",
+        delete=False,
+    )
+    tmp = Path(stream.name)
     try:
-        tmp.write_text(content)
+        with stream:
+            stream.write(content)
         os.chmod(tmp, path.stat().st_mode & 0o7777)
         os.replace(tmp, path)
-    except Exception:
+    except BaseException:
         try:
-            if tmp.exists():
-                tmp.unlink()
+            tmp.unlink()
         except OSError:
             # keep cleanup errors from hiding the write failure.
             pass
@@ -31,12 +54,16 @@ def atomic_write(path: Path, content: str) -> None:
 
 def emit_drift_diff(path: Path, current: str, regenerated: str) -> None:
     diff = difflib.unified_diff(
-        current.splitlines(keepends=True),
-        regenerated.splitlines(keepends=True),
+        io.StringIO(current, newline="").readlines(),
+        io.StringIO(regenerated, newline="").readlines(),
         fromfile=str(path),
         tofile=f"{path} (regenerated)",
     )
-    sys.stderr.writelines(diff)
+    for line in diff:
+        if line.endswith(("\r", "\n")):
+            print(line.removesuffix("\n").removesuffix("\r"), file=sys.stderr)
+        else:
+            print(line, r"\ No newline at end of file", sep="\n", file=sys.stderr)
 
 
 def fail(message: str) -> NoReturn:
@@ -45,15 +72,25 @@ def fail(message: str) -> NoReturn:
     raise SystemExit(MANIFEST_ERROR_EXIT)
 
 
-def sub_region(region: re.Pattern[str], text: str, body: str, error: str) -> str:
-    """replace the middle of the first match of ``region``'s three groups with ``body``.
+_LINE_ENDING = re.compile(r"\r\n|\r|\n")
 
-    exits with ``error`` when the region does not match.
-    """
-    new, n = region.subn(lambda m: m.group(1) + body + m.group(3), text, count=1)
-    if n != 1:
+
+def splice_body(match: re.Match[str], body: str) -> str:
+    """splice an LF-rendered body into group two, preserving line endings by position."""
+    if "\n" in body:
+        endings = iter(_LINE_ENDING.findall(match[2]))
+        nearby = _LINE_ENDING.search(match[0]) or _LINE_ENDING.search(match.string)
+        default = nearby[0] if nearby else "\n"
+        body = re.sub(r"\n", lambda _: next(endings, default), body)
+    return match.string[: match.start(2)] + body + match.string[match.end(2) :]
+
+
+def sub_region(region: re.Pattern[str], text: str, body: str, error: str) -> str:
+    """splice an LF-rendered body into the first matched region or exit with error."""
+    match = region.search(text)
+    if match is None:
         fail(error)
-    return new
+    return splice_body(match, body)
 
 
 def sync(targets: Iterable[tuple[Path, Callable[[str], str]]], *, check: bool) -> bool:
@@ -64,7 +101,7 @@ def sync(targets: Iterable[tuple[Path, Callable[[str], str]]], *, check: bool) -
     drifted = False
     for path, regen in targets:
         try:
-            current = path.read_text()
+            current = path.read_bytes().decode("utf-8")
         except (OSError, UnicodeDecodeError) as e:
             fail(f"failed to read {path}: {e}")
         regenerated = regen(current)

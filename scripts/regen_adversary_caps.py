@@ -27,11 +27,11 @@ import generator_io
 import yaml
 
 _HELPER_REGION = re.compile(
-    r"(# \[\[\[cog: adversary_caps_sh \]\]\]\n)(.*?)(# \[\[\[end\]\]\])",
+    r"(# \[\[\[cog: adversary_caps_sh \]\]\](?:\r\n|\r|\n))(.*?)(# \[\[\[end\]\]\])",
     re.DOTALL,
 )
 _DOC_REGION = re.compile(
-    r"(<!-- regen:adversary-caps:start -->\n)(.*?)(<!-- regen:adversary-caps:end -->)",
+    r"(<!-- regen:adversary-caps:start -->(?:\r\n|\r|\n))(.*?)(<!-- regen:adversary-caps:end -->)",
     re.DOTALL,
 )
 _SCHEMA_FIELDS = ("shallow_adversary_runs", "shallow_approval_adversary_runs")
@@ -117,9 +117,9 @@ def main(argv: list[str]) -> int:
         args.check = True
 
     try:
-        manifest = yaml.safe_load(args.manifest.read_text())
+        manifest = yaml.safe_load(args.manifest.read_text(encoding="utf-8"))
         cap = int(manifest["cap"])
-    except (FileNotFoundError, KeyError, TypeError, ValueError, yaml.YAMLError) as e:
+    except (OSError, KeyError, TypeError, ValueError, yaml.YAMLError) as e:
         print(f"regen_adversary_caps: manifest error: {e}", file=sys.stderr)
         return generator_io.MANIFEST_ERROR_EXIT
 
@@ -143,4 +143,4 @@ def main(argv: list[str]) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    generator_io.run(main)

@@ -1,29 +1,23 @@
 #!/usr/bin/env bats
 
-# Drift-localization contract: adding a fake entry to the manifest
-# must produce one specific failure message per dependent surface so
-# the operator knows where the conflict starts and where to fix it.
-#
-# Implementation: swap the real reviewers/personas.yaml with a
-# fixture containing one extra persona ('phantom') that no other
-# surface references, then run each dependent sync test and assert
-# each names a specific surface in its failure output.
-
 load test_helper
 
-# Work against an isolated copy of the repo with the phantom fixture
-# swapped in — never the real reviewers/personas.yaml. An earlier version
-# overwrote the real manifest in setup() and restored it in teardown(),
-# which raced the manifest-sync tests under `bats --jobs` (they would read
-# personas.yaml mid-swap and see 'phantom'). $SKILL is a self-contained
-# copy: the sub-test bats files resolve REPO_ROOT from their own path, and
-# regen-check.sh resolves its root via `git rev-parse`, so the --git
-# copy keeps both pointed inside the copy.
+# keep the real flags and addendums so phantom is the only drift.
 setup() {
+  export LC_ALL=C PYTHONUTF8=0 PYTHONCOERCECLOCALE=0
   SKILL="${BATS_TEST_TMPDIR}/skill"
   copy_skill_tree --git "$SKILL"
-  cp "${SKILL}/tests/fixtures/manifest_with_extra_persona.yaml" \
-     "${SKILL}/reviewers/personas.yaml"
+  python3 - "${SKILL}/reviewers/personas.yaml" <<'PY'
+import sys
+from pathlib import Path
+
+import yaml
+
+path = Path(sys.argv[1])
+manifest = yaml.safe_load(path.read_text(encoding="utf-8"))
+manifest["panel"].append({"name": "phantom", "description": "fixture stub", "move_c": True})
+path.write_text(yaml.safe_dump(manifest, sort_keys=False), encoding="utf-8")
+PY
 }
 
 @test "filesystem-sync test fails and mentions phantom" {
@@ -42,10 +36,6 @@ setup() {
 }
 
 @test "Move C drift guard fails because phantom.md doesn't exist on disk" {
-  # The Move C drift guard tries to extract the section from
-  # reviewers/phantom.md (since phantom has move_c: true in the
-  # fixture). The file doesn't exist, so extraction returns empty
-  # and the 'section is present' precondition fires.
   run "${BATS_ROOT}/bin/bats" "${SKILL}/tests/bats/test_move_c_drift_guard.bats"
   [[ "$status" -ne 0 ]] || {
     echo "expected failure; got success"
@@ -59,29 +49,42 @@ setup() {
 }
 
 @test "scripts/regen-check.sh fails with exit 5 and surfaces phantom in the diff" {
-  # When the manifest gains phantom, cog regenerates the SKILL.md
-  # "Reviewer personas" section to include a phantom bullet — which
-  # then diffs against the on-disk SKILL.md (which doesn't have one).
-  # Likewise scripts/regen_schema_enum.py regenerates the enum to
-  # include phantom and diffs against the on-disk schema. Either
-  # failure exits non-zero with a unified diff containing the literal
-  # 'phantom'.
-  #
-  # regen-check.sh resolves its root via `git rev-parse --show-toplevel`,
-  # which follows cwd — not the script's own location. Run it with cwd
-  # inside $SKILL so it checks the fixture manifest, not the real repo.
+  # regen-check resolves its root from the current git checkout.
   run bash -c "cd '${SKILL}' && bash scripts/regen-check.sh"
   [[ "$status" -eq 5 ]] || {
-    echo "expected scripts/regen-check.sh to fail with exit 5 (drift) given the fixture manifest;"
+    echo "expected scripts/regen-check.sh to fail with exit 5 (drift) after adding phantom"
     echo "got status=$status. Output:"
     echo "$output"
     return 1
   }
-  echo "$output" | grep -q "phantom" || {
-    echo "expected scripts/regen-check.sh output to mention 'phantom' in the diff; got:"
-    echo "$output"
-    return 1
-  }
+  printf '%s\n' "$output" >"$BATS_TEST_TMPDIR/regen.log"
+  python3 - "$REPO_ROOT/reviewers/personas.yaml" "$SKILL/reviewers/personas.yaml" "$BATS_TEST_TMPDIR/regen.log" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+import yaml
+
+original, mutated = (yaml.safe_load(Path(path).read_text(encoding="utf-8")) for path in sys.argv[1:3])
+phantom = mutated["panel"].pop()
+if phantom != {"name": "phantom", "description": "fixture stub", "move_c": True} or mutated != original:
+    raise SystemExit("expected the manifest to differ only by the appended phantom persona")
+
+lines = Path(sys.argv[3]).read_text(encoding="utf-8").splitlines()
+lines.remove("--- current SKILL.md")
+lines.remove("+++ changed SKILL.md")
+added = [line[1:] for line in lines if line.startswith("+")]
+removed = [line[1:] for line in lines if line.startswith("-")]
+added.remove("- `phantom.md`: fixture stub")
+prefix = "- **Move C (cross-doc consistency)**, "
+if len(removed) != 1 or not removed[0].startswith(prefix):
+    raise SystemExit(f"expected one removed Move C bullet, got {removed!r}")
+heading, body = removed[0][len(prefix):].split(": ", 1)
+names = re.findall(r"`([^`]+)`", heading)
+carriers = ", ".join(f"`{name}`" for name in sorted([*names, "phantom"]))
+if added != [f"{prefix}{carriers}: {body}"]:
+    raise SystemExit(f"expected only phantom added to the Move C carriers, got {added!r}")
+PY
 }
 
 @test "scripts/regen-check.sh failure message points at scripts/regen.sh" {

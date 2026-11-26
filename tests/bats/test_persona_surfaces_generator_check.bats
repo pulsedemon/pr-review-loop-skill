@@ -8,8 +8,8 @@
 
 load test_helper
 
-@test "scripts/regen-check.sh succeeds on the checked-in tree" {
-  run bash "${REPO_ROOT}/scripts/regen-check.sh"
+@test "scripts/regen-check.sh succeeds on the UTF-8 tree in an ASCII locale" {
+  run env LC_ALL=C PYTHONUTF8=0 PYTHONCOERCECLOCALE=0 bash "${REPO_ROOT}/scripts/regen-check.sh"
   [[ "$status" -eq 0 ]] || {
     echo "scripts/regen-check.sh failed (exit $status). Output:"
     echo "$output"

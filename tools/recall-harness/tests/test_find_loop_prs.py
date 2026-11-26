@@ -5,9 +5,9 @@ manifest rows, and that mapping is what these pin.
 """
 
 import json
-import pathlib
 import subprocess
 import sys
+from pathlib import Path
 from unittest.mock import patch
 
 import find_loop_prs  # type: ignore[import-not-found]  # noqa: E402  — sibling module via conftest.py
@@ -164,6 +164,7 @@ def test_scan_repo_tolerates_a_null_comment_node():
         ("state.pr12.done.json", {"pr_number": 12}, {12}),
         ("state.pr13.archived.json", {"pr_number": "13"}, set()),
         ("state.pr14.done.json", {"no_pr": 1}, set()),
+        ("state.invalid.json", {"pr_number": True}, set()),
     ],
 )
 def test_archived_state_prs_keeps_only_integer_pr_numbers(tmp_path, name, payload, expected):
@@ -200,12 +201,32 @@ def test_archived_state_prs_skips_a_non_object_state_file(tmp_path):
     assert find_loop_prs.archived_state_prs(tmp_path) == {13}
 
 
-def test_archived_state_prs_skips_unreadable_files(tmp_path):
+@pytest.mark.parametrize("failure", ["invalid_json", "invalid_utf8", "read_error"])
+def test_archive_warning_preserves_results_from_readable_siblings(
+    tmp_path, capsys, monkeypatch, failure
+):
     loop = tmp_path / ".git" / "pr-loop"
     loop.mkdir(parents=True)
-    (loop / "state.pr12.done.json").write_text("{not json")
-    (loop / "state.pr13.done.json").write_text(json.dumps({"pr_number": 13}))
+    invalid = loop / "state.pr12.done.json"
+    invalid.write_bytes(
+        {"invalid_utf8": b"\xff", "invalid_json": b"{not json", "read_error": b'{"pr_number":12}'}[
+            failure
+        ]
+    )
+    read = Path.read_text
+
+    def read_with_ascii_default(path, *args, encoding=None, **kwargs):
+        if failure == "read_error" and path == invalid:
+            raise PermissionError("read denied")
+        return read(path, *args, encoding=encoding or "ascii", **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", read_with_ascii_default)
+    (loop / "state.pr13.done.json").write_text('{"pr_number":13,"title":"café"}', encoding="utf-8")
     assert find_loop_prs.archived_state_prs(tmp_path) == {13}
+    warning = capsys.readouterr().err
+    assert f"archive cross-check incomplete for {invalid}:" in warning
+    if failure == "read_error":
+        assert "read denied" in warning
 
 
 def test_archived_state_prs_follows_a_worktree_git_pointer(tmp_path):
@@ -228,7 +249,7 @@ def test_archived_state_prs_follows_a_worktree_git_pointer(tmp_path):
         check=True,
     ).stdout.strip()
     assert not (checkout / ".git").is_dir(), "worktree .git should be a pointer file"
-    loop = pathlib.Path(git_dir) / "pr-loop"
+    loop = Path(git_dir) / "pr-loop"
     loop.mkdir(parents=True)
     (loop / "state.pr42.done.json").write_text(json.dumps({"pr_number": 42}))
 

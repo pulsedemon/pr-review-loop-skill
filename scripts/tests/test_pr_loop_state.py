@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import io
 import json
+import os
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -1531,7 +1532,7 @@ def test_main_append_input_rejects_missing_or_malformed_receipt_atomically(
 def test_main_append_input_persists_snapshot_and_ledger_upsert_together(
     tmp_path, monkeypatch, capsys
 ) -> None:
-    state_path = tmp_path / "state.json"
+    state_path = tmp_path / ("s" * os.pathconf(tmp_path, "PC_NAME_MAX"))
     state_path.write_text(json.dumps(state_with_reviewed_comments()) + "\n", encoding="utf-8")
     current = comment_snapshot("late objection")
     update = comment_receipt(replied_at="2026-09-11T00:00:00Z")

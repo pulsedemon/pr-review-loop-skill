@@ -124,13 +124,16 @@ def test_check_drifted_doc_exits_five(tmp_path: Path) -> None:
 def test_write_repairs_drift(tmp_path: Path) -> None:
     paths = _seed(tmp_path, cap=2)
     paths["helper"].chmod(0o755)
-    paths["helper"].write_text(
-        paths["helper"].read_text().replace("ADVERSARY_CAP=2", "ADVERSARY_CAP=99")
-    )
+    expected = {
+        key: paths[key].read_text().replace("\n", "\r\n").encode() for key in ("helper", "doc")
+    }
+    paths["helper"].write_bytes(expected["helper"].replace(b"ADVERSARY_CAP=2", b"ADVERSARY_CAP=99"))
+    paths["doc"].write_bytes(expected["doc"].replace(b"The cap is 2", b"The cap is 99"))
     write = _run(paths, "--write")
     assert write.returncode == 0, write.stderr
     assert paths["helper"].stat().st_mode & 0o7777 == 0o755
-    assert "ADVERSARY_CAP=2\n" in paths["helper"].read_text()
+    for key, content in expected.items():
+        assert paths[key].read_bytes() == content
     check = _run(paths, "--check")
     assert check.returncode == 0, check.stderr
 

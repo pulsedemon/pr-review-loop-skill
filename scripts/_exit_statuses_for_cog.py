@@ -27,7 +27,7 @@ class ExitStatusManifestError(ValueError):
 
 
 def _load_enum() -> set[str]:
-    data = json.loads(_SCHEMA.read_text())
+    data = json.loads(_SCHEMA.read_text(encoding="utf-8"))
     try:
         enum = data["properties"]["status"]["enum"]
     except (KeyError, TypeError) as e:
@@ -40,7 +40,7 @@ def _load_enum() -> set[str]:
 
 
 def _load_yaml() -> list[tuple[str, str]]:
-    data = yaml.safe_load(_MANIFEST.read_text())
+    data = yaml.safe_load(_MANIFEST.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
         raise ExitStatusManifestError(f"{_MANIFEST}: top level must be a mapping")
     statuses = data.get("statuses")

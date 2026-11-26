@@ -1,4 +1,4 @@
-"""Tests for scripts.personas_manifest — the persona-manifest loader."""
+"""tests for the persona-manifest loader."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import textwrap
 from pathlib import Path
 
 import pytest
+import yaml
 from personas_manifest import (  # type: ignore[import-not-found]  # sibling module made importable by conftest.py
     Manifest,
     ManifestError,
@@ -24,19 +25,16 @@ def _write(tmp_path: Path, body: str) -> Path:
 _MINIMAL_VALID = """
 panel:
   - name: alpha
-    file: alpha.md
     description: alpha persona
     owns_schema_constraint_blocker: true
 adversary:
   name: adversary
-  file: adversary.md
   description: adversary persona
 addendums: []
 """
 
 
 def test_load_real_manifest_succeeds() -> None:
-    # The real manifest at reviewers/personas.yaml must load without errors.
     repo_root = Path(__file__).resolve().parents[2]
     manifest = load_manifest(repo_root / "reviewers" / "personas.yaml")
     assert isinstance(manifest, Manifest)
@@ -50,17 +48,14 @@ def test_panel_persona_basic_fields(tmp_path: Path) -> None:
         """
         panel:
           - name: alpha
-            file: alpha.md
             description: alpha persona
             move_c: false
           - name: beta
-            file: beta.md
             description: beta persona
             move_c: true
             owns_schema_constraint_blocker: true
         adversary:
           name: adversary
-          file: adversary.md
           description: adversary persona
         addendums: []
         """,
@@ -71,40 +66,20 @@ def test_panel_persona_basic_fields(tmp_path: Path) -> None:
     assert m.panel[0].owns_schema_constraint_blocker is False
 
 
-def test_file_must_equal_name_dot_md(tmp_path: Path) -> None:
-    p = _write(
-        tmp_path,
-        """
-        panel:
-          - name: alpha
-            file: wrong_name.md
-            move_c: false
-        adversary:
-          name: adversary
-          file: adversary.md
-        addendums: []
-        """,
-    )
-    with pytest.raises(ManifestError, match=r"file.*must equal.*alpha\.md"):
-        load_manifest(p)
-
-
 def test_duplicate_panel_names_rejected(tmp_path: Path) -> None:
     p = _write(
         tmp_path,
         """
         panel:
           - name: alpha
-            file: alpha.md
             description: alpha persona
             move_c: false
+            owns_schema_constraint_blocker: true
           - name: alpha
-            file: alpha.md
             description: alpha duplicate
             move_c: false
         adversary:
           name: adversary
-          file: adversary.md
           description: adversary persona
         addendums: []
         """,
@@ -119,12 +94,10 @@ def test_exactly_one_schema_constraint_owner_required(tmp_path: Path) -> None:
         """
         panel:
           - name: alpha
-            file: alpha.md
             description: alpha persona
             move_c: false
         adversary:
           name: adversary
-          file: adversary.md
           description: adversary persona
         addendums: []
         """,
@@ -139,18 +112,15 @@ def test_more_than_one_schema_constraint_owner_rejected(tmp_path: Path) -> None:
         """
         panel:
           - name: alpha
-            file: alpha.md
             description: alpha persona
             move_c: false
             owns_schema_constraint_blocker: true
           - name: beta
-            file: beta.md
             description: beta persona
             move_c: false
             owns_schema_constraint_blocker: true
         adversary:
           name: adversary
-          file: adversary.md
           description: adversary persona
         addendums: []
         """,
@@ -159,27 +129,23 @@ def test_more_than_one_schema_constraint_owner_rejected(tmp_path: Path) -> None:
         load_manifest(p_two)
 
 
-def test_move_c_files_returns_only_move_c_personas(tmp_path: Path) -> None:
+def test_move_c_personas_selects_multiple_carriers(tmp_path: Path) -> None:
     p = _write(
         tmp_path,
         """
         panel:
           - name: alpha
-            file: alpha.md
             description: alpha persona
             move_c: true
           - name: beta
-            file: beta.md
             description: beta persona
             move_c: false
             owns_schema_constraint_blocker: true
           - name: gamma
-            file: gamma.md
             description: gamma persona
             move_c: true
         adversary:
           name: adversary
-          file: adversary.md
           description: adversary persona
         addendums: []
         """,
@@ -194,17 +160,14 @@ def test_schema_constraint_owner_helper(tmp_path: Path) -> None:
         """
         panel:
           - name: alpha
-            file: alpha.md
             description: alpha persona
             move_c: false
             owns_schema_constraint_blocker: true
           - name: beta
-            file: beta.md
             description: beta persona
             move_c: true
         adversary:
           name: adversary
-          file: adversary.md
           description: adversary persona
         addendums: []
         """,
@@ -223,7 +186,7 @@ def test_non_dict_panel_entry_rejected(tmp_path: Path) -> None:
           - "not a dict"
         adversary:
           name: adversary
-          file: adversary.md
+          description: adversary persona
         addendums: []
         """,
     )
@@ -236,15 +199,15 @@ def test_panel_entry_missing_required_key_rejected(tmp_path: Path) -> None:
         tmp_path,
         """
         panel:
-          - name: alpha
-            move_c: false
+          - description: alpha persona
+            owns_schema_constraint_blocker: true
         adversary:
           name: adversary
-          file: adversary.md
+          description: adversary persona
         addendums: []
         """,
     )
-    with pytest.raises(ManifestError, match=r"panel\[0\] missing required key 'file'"):
+    with pytest.raises(ManifestError, match=r"panel\[0\] missing required key 'name'"):
         load_manifest(p)
 
 
@@ -266,7 +229,7 @@ def test_panel_missing_rejected(tmp_path: Path) -> None:
         """
         adversary:
           name: adversary
-          file: adversary.md
+          description: adversary persona
         addendums: []
         """,
     )
@@ -281,7 +244,7 @@ def test_panel_empty_rejected(tmp_path: Path) -> None:
         panel: []
         adversary:
           name: adversary
-          file: adversary.md
+          description: adversary persona
         addendums: []
         """,
     )
@@ -295,7 +258,7 @@ def test_adversary_not_a_mapping_rejected(tmp_path: Path) -> None:
         """
         panel:
           - name: alpha
-            file: alpha.md
+            description: alpha persona
             owns_schema_constraint_blocker: true
         adversary: "just a string"
         addendums: []
@@ -311,53 +274,15 @@ def test_addendums_not_a_list_rejected(tmp_path: Path) -> None:
         """
         panel:
           - name: alpha
-            file: alpha.md
+            description: alpha persona
             owns_schema_constraint_blocker: true
         adversary:
           name: adversary
-          file: adversary.md
+          description: adversary persona
         addendums: "foo"
         """,
     )
     with pytest.raises(ManifestError, match=r"'addendums' must be a list"):
-        load_manifest(p)
-
-
-def test_adversary_missing_required_key_rejected(tmp_path: Path) -> None:
-    p = _write(
-        tmp_path,
-        """
-        panel:
-          - name: alpha
-            file: alpha.md
-            description: alpha persona
-            owns_schema_constraint_blocker: true
-        adversary:
-          name: adversary
-        addendums: []
-        """,
-    )
-    with pytest.raises(ManifestError, match=r"adversary missing required key 'file'"):
-        load_manifest(p)
-
-
-def test_adversary_file_must_match_name(tmp_path: Path) -> None:
-    p = _write(
-        tmp_path,
-        """
-        panel:
-          - name: alpha
-            file: alpha.md
-            description: alpha persona
-            owns_schema_constraint_blocker: true
-        adversary:
-          name: adversary
-          file: wrong.md
-          description: adversary persona
-        addendums: []
-        """,
-    )
-    with pytest.raises(ManifestError, match=r"file 'wrong\.md' must equal 'adversary\.md'"):
         load_manifest(p)
 
 
@@ -369,25 +294,49 @@ def test_yaml_parse_error_wrapped_in_manifest_error(tmp_path: Path) -> None:
 
 
 def test_unknown_panel_key_rejected(tmp_path: Path) -> None:
-    # A typo'd `mov_c` previously silently defaulted to False, leaving the
-    # persona out of the Move C drift guard. Loud failure is the only way the
-    # manifest can stay the single source of truth.
     p = _write(
         tmp_path,
         """
         panel:
           - name: alpha
-            file: alpha.md
+            description: alpha persona
             mov_c: true
             owns_schema_constraint_blocker: true
         adversary:
           name: adversary
-          file: adversary.md
+          description: adversary persona
         addendums: []
         """,
     )
     with pytest.raises(ManifestError, match=r"unknown key\(s\): \['mov_c'\]"):
         load_manifest(p)
+
+
+@pytest.mark.parametrize("name", ["alpha", "adversary"])
+def test_cli_rejects_legacy_file_key(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], name: str
+) -> None:
+    manifest = yaml.safe_load(_MINIMAL_VALID)
+    persona = manifest["panel"][0] if name == "alpha" else manifest["adversary"]
+    persona["file"] = f"{name}.md"
+    path = _write(tmp_path, yaml.safe_dump(manifest))
+    assert _main(["--manifest", str(path), "--list", "all-known-files"]) == 3
+    assert "unknown key(s): ['file']" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("name", ["alpha", "adversary"])
+def test_persona_name_rejects_a_trailing_newline(tmp_path: Path, name: str) -> None:
+    manifest = _MINIMAL_VALID.replace(f"name: {name}\n", f'name: "{name}\\n"\n')
+    with pytest.raises(ManifestError, match="must match"):
+        load_manifest(_write(tmp_path, manifest))
+
+
+def test_unknown_keys_of_different_types_report_a_manifest_error(tmp_path: Path) -> None:
+    manifest = _MINIMAL_VALID.replace(
+        "    description: alpha", "    file: alpha.md\n    1: extra\n    description: alpha"
+    )
+    with pytest.raises(ManifestError, match=r"unknown key\(s\): \['file', 1\]"):
+        load_manifest(_write(tmp_path, manifest))
 
 
 def test_unknown_adversary_key_rejected(tmp_path: Path) -> None:
@@ -396,12 +345,10 @@ def test_unknown_adversary_key_rejected(tmp_path: Path) -> None:
         """
         panel:
           - name: alpha
-            file: alpha.md
             description: alpha persona
             owns_schema_constraint_blocker: true
         adversary:
           name: adversary
-          file: adversary.md
           description: adversary persona
           rol: panel
         addendums: []
@@ -411,41 +358,16 @@ def test_unknown_adversary_key_rejected(tmp_path: Path) -> None:
         load_manifest(p)
 
 
-def test_panel_move_c_must_be_bool_not_string(tmp_path: Path) -> None:
-    # bool("false") is True in Python, so silent coercion would flip the
-    # persona into Move C. Quoted bools are a likely YAML typo and must fail loudly.
-    p = _write(
-        tmp_path,
-        """
-        panel:
-          - name: alpha
-            file: alpha.md
-            description: alpha persona
-            move_c: "false"
-            owns_schema_constraint_blocker: true
-        adversary:
-          name: adversary
-          file: adversary.md
-          description: adversary persona
-        addendums: []
-        """,
-    )
-    with pytest.raises(ManifestError, match=r"'move_c' must be a boolean, got str"):
-        load_manifest(p)
-
-
 def test_panel_owns_schema_constraint_blocker_must_be_bool(tmp_path: Path) -> None:
     p = _write(
         tmp_path,
         """
         panel:
           - name: alpha
-            file: alpha.md
             description: alpha persona
             owns_schema_constraint_blocker: "true"
         adversary:
           name: adversary
-          file: adversary.md
           description: adversary persona
         addendums: []
         """,
@@ -463,11 +385,11 @@ def test_panel_name_must_be_string(tmp_path: Path) -> None:
         """
         panel:
           - name: 123
-            file: 123.md
+            description: alpha persona
             owns_schema_constraint_blocker: true
         adversary:
           name: adversary
-          file: adversary.md
+          description: adversary persona
         addendums: []
         """,
     )
@@ -481,12 +403,10 @@ def test_addendum_must_be_string(tmp_path: Path) -> None:
         """
         panel:
           - name: alpha
-            file: alpha.md
             description: alpha persona
             owns_schema_constraint_blocker: true
         adversary:
           name: adversary
-          file: adversary.md
           description: adversary persona
         addendums:
           - key: val
@@ -509,12 +429,10 @@ def test_addendum_collides_with_panel_file_rejected(tmp_path: Path) -> None:
         """
         panel:
           - name: alpha
-            file: alpha.md
             description: alpha persona
             owns_schema_constraint_blocker: true
         adversary:
           name: adversary
-          file: adversary.md
           description: adversary persona
         addendums:
           - alpha.md
@@ -530,12 +448,10 @@ def test_addendum_collides_with_adversary_file_rejected(tmp_path: Path) -> None:
         """
         panel:
           - name: alpha
-            file: alpha.md
             description: alpha persona
             owns_schema_constraint_blocker: true
         adversary:
           name: adversary
-          file: adversary.md
           description: adversary persona
         addendums:
           - adversary.md
@@ -569,13 +485,6 @@ def test_direct_manifest_construction_validates_duplicate_names() -> None:
     )
     with pytest.raises(ManifestError, match=r"duplicate panel persona name: a"):
         Manifest(panel=panel, adversary=adv)
-
-
-def test_direct_manifest_construction_rejects_adversary_with_move_c() -> None:
-    bad_adv = Persona(name="adversary", description="adversary persona", move_c=True)
-    panel = (Persona(name="a", description="a persona", owns_schema_constraint_blocker=True),)
-    with pytest.raises(ManifestError, match=r"adversary 'adversary' must not set"):
-        Manifest(panel=panel, adversary=bad_adv)
 
 
 def test_persona_file_is_derived() -> None:
@@ -633,11 +542,9 @@ def test_panel_description_missing_rejected(tmp_path: Path) -> None:
         """
         panel:
           - name: alpha
-            file: alpha.md
             owns_schema_constraint_blocker: true
         adversary:
           name: adversary
-          file: adversary.md
           description: adversary persona
         addendums: []
         """,
@@ -648,18 +555,25 @@ def test_panel_description_missing_rejected(tmp_path: Path) -> None:
         load_manifest(p)
 
 
+@pytest.mark.parametrize("name", ["alpha", "adversary"])
+def test_multiline_description_rejected(tmp_path: Path, name: str) -> None:
+    manifest = yaml.safe_load(_MINIMAL_VALID)
+    persona = manifest["panel"][0] if name == "alpha" else manifest["adversary"]
+    persona["description"] = "first line\nsecond line"
+    with pytest.raises(ManifestError, match="'description' must be one line"):
+        load_manifest(_write(tmp_path, yaml.safe_dump(manifest)))
+
+
 def test_panel_description_not_string_rejected(tmp_path: Path) -> None:
     p = _write(
         tmp_path,
         """
         panel:
           - name: alpha
-            file: alpha.md
             description: 42
             owns_schema_constraint_blocker: true
         adversary:
           name: adversary
-          file: adversary.md
           description: adversary persona
         addendums: []
         """,
@@ -674,12 +588,10 @@ def test_panel_description_empty_rejected(tmp_path: Path) -> None:
         """
         panel:
           - name: alpha
-            file: alpha.md
             description: "   "
             owns_schema_constraint_blocker: true
         adversary:
           name: adversary
-          file: adversary.md
           description: adversary persona
         addendums: []
         """,
@@ -694,12 +606,10 @@ def test_panel_description_leading_hyphen_rejected(tmp_path: Path) -> None:
         """
         panel:
           - name: alpha
-            file: alpha.md
             description: "- alpha persona"
             owns_schema_constraint_blocker: true
         adversary:
           name: adversary
-          file: adversary.md
           description: adversary persona
         addendums: []
         """,
@@ -720,12 +630,10 @@ def test_adversary_description_missing_rejected(tmp_path: Path) -> None:
         """
         panel:
           - name: alpha
-            file: alpha.md
             description: alpha persona
             owns_schema_constraint_blocker: true
         adversary:
           name: adversary
-          file: adversary.md
         addendums: []
         """,
     )
@@ -741,12 +649,10 @@ def test_adversary_description_not_string_rejected(tmp_path: Path) -> None:
         """
         panel:
           - name: alpha
-            file: alpha.md
             description: alpha persona
             owns_schema_constraint_blocker: true
         adversary:
           name: adversary
-          file: adversary.md
           description: [list, not, string]
         addendums: []
         """,
@@ -763,12 +669,10 @@ def test_adversary_description_empty_rejected(tmp_path: Path) -> None:
         """
         panel:
           - name: alpha
-            file: alpha.md
             description: alpha persona
             owns_schema_constraint_blocker: true
         adversary:
           name: adversary
-          file: adversary.md
           description: ""
         addendums: []
         """,
@@ -785,12 +689,10 @@ def test_adversary_description_leading_hyphen_rejected(tmp_path: Path) -> None:
         """
         panel:
           - name: alpha
-            file: alpha.md
             description: alpha persona
             owns_schema_constraint_blocker: true
         adversary:
           name: adversary
-          file: adversary.md
           description: "- adversary persona"
         addendums: []
         """,
@@ -812,12 +714,10 @@ def test_persona_name_with_bracket_rejected(tmp_path: Path) -> None:
         """
         panel:
           - name: 'bad]name'
-            file: 'bad]name.md'
             description: some persona
             owns_schema_constraint_blocker: true
         adversary:
           name: adversary
-          file: adversary.md
           description: adversary persona
         addendums: []
         """,
@@ -833,12 +733,10 @@ def test_persona_name_uppercase_rejected(tmp_path: Path) -> None:
         """
         panel:
           - name: BadName
-            file: BadName.md
             description: some persona
             owns_schema_constraint_blocker: true
         adversary:
           name: adversary
-          file: adversary.md
           description: adversary persona
         addendums: []
         """,
@@ -854,12 +752,10 @@ def test_adversary_name_uppercase_rejected(tmp_path: Path) -> None:
         """
         panel:
           - name: alpha
-            file: alpha.md
             description: alpha persona
             owns_schema_constraint_blocker: true
         adversary:
           name: Adversary
-          file: Adversary.md
           description: adversary persona
         addendums: []
         """,
@@ -870,18 +766,18 @@ def test_adversary_name_uppercase_rejected(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize("key", ["move_a", "move_a1", "move_b", "move_c"])
 def test_move_flag_must_be_boolean(tmp_path: Path, key: str) -> None:
+    # a quoted "false" is truthy if the loader coerces it.
     p = _write(
         tmp_path,
         f"""
         panel:
           - name: alpha
-            file: alpha.md
             description: "alpha persona"
-            {key}: "yes"
+            {key}: "false"
             owns_schema_constraint_blocker: true
         adversary:
           name: adversary
-          file: adversary.md
+          description: adversary persona
         addendums: []
         """,
     )
@@ -895,12 +791,10 @@ def test_move_flags_default_to_false_when_absent(tmp_path: Path) -> None:
         """
         panel:
           - name: alpha
-            file: alpha.md
             description: "alpha persona"
             owns_schema_constraint_blocker: true
         adversary:
           name: adversary
-          file: adversary.md
           description: "adversary persona"
         addendums: []
         """,
@@ -920,19 +814,16 @@ def test_move_accessors_select_the_flagged_personas(tmp_path: Path) -> None:
         """
         panel:
           - name: alpha
-            file: alpha.md
             description: "alpha persona"
             move_a: true
             move_b: true
             owns_schema_constraint_blocker: true
           - name: beta
-            file: beta.md
             description: "beta persona"
             move_a1: true
             move_c: true
         adversary:
           name: adversary
-          file: adversary.md
           description: "adversary persona"
         addendums: []
         """,
@@ -951,12 +842,11 @@ def test_unknown_adversary_move_key_rejected(tmp_path: Path, key: str) -> None:
         f"""
         panel:
           - name: alpha
-            file: alpha.md
             description: "alpha persona"
             owns_schema_constraint_blocker: true
         adversary:
           name: adversary
-          file: adversary.md
+          description: adversary persona
           {key}: true
         addendums: []
         """,

@@ -13,7 +13,10 @@ to either be wrapped in a region or match a maintained allowlist.
 Authors wrap each panel-count phrase in named-region markers and supply the
 *template* on the line immediately after the start marker, in a hidden
 ``<!-- template: ... -->`` HTML comment. The line after the template holds
-the rendered prose. The end marker closes the region:
+the rendered prose. Region boundaries occupy whole physical lines. Template
+text and rendered bodies cannot contain the panel-control prefix
+``<!-- regen:panel-count-`` or the template prefix ``<!-- template:``. The end
+marker closes the region:
 
 ```
 <!-- regen:panel-count-total:start -->
@@ -56,8 +59,7 @@ adjacent. Round-trip is byte-stable.
 
 - ``--check`` (default): exit 0 if every region matches its rendered
   template; exit 5 with a unified diff if any region drifted.
-- ``--write``: rewrite drifted regions in place (atomic via .tmp +
-  ``os.replace``).
+- ``--write``: atomically replace files with drifted regions.
 - ``--validate-markers``: walk every corpus file and confirm region
   start/end markers are balanced and well-formed; exit 5 with the
   offending file path on imbalance. Run independently of drift detection.
@@ -82,6 +84,7 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -90,9 +93,10 @@ from personas_manifest import ManifestError, load_manifest
 
 _KIND_TOTAL = "total"
 
-_START_RE = re.compile(r"^<!-- regen:panel-count-(total|total-plus-1):start -->\s*$")
-_END_RE = re.compile(r"^<!-- regen:panel-count-(total|total-plus-1):end -->\s*$")
-_TEMPLATE_RE = re.compile(r"^<!-- template: (.+?) -->\s*$")
+_CONTROL_PREFIX = "<!-- regen:panel-count-"
+_TEMPLATE_PREFIX = "<!-- template:"
+_CONTROL_RE = re.compile(_CONTROL_PREFIX + r"(total|total-plus-1):(start|end) -->")
+_TEMPLATE_RE = re.compile(_TEMPLATE_PREFIX + r" (.+?) -->")
 
 _PLACEHOLDER_PERSONAS = "{personas|persona}"
 _PLACEHOLDER_N = "{n}"
@@ -132,37 +136,37 @@ def _corpus_files(root: Path) -> list[Path]:
 
 
 def _parse_regions(lines: list[str], path: Path) -> list[_Region]:
-    """Walk a file's lines and extract every well-formed region.
-
-    Raises ``_MarkerError`` (caught by every caller and converted to
-    exit 5) if a region opens without a matching close, an end marker
-    appears outside any open region, an end marker disagrees with its
-    open marker's kind, or the line immediately after the start marker
-    is not a ``<!-- template: ... -->`` comment. Catching these in the
-    same walk keeps marker validation and drift detection on one parser.
-    """
+    """pair recognized control lines and validate their template and body."""
+    for number, line in enumerate(lines, start=1):
+        if _CONTROL_PREFIX in line:
+            fragments = line.rstrip().splitlines()
+            if len(fragments) > 1 and any(
+                _CONTROL_RE.fullmatch(part.strip()) for part in fragments
+            ):
+                raise _MarkerError(
+                    f"{path}: line {number}: put the marker on its own physical line"
+                )
     regions: list[_Region] = []
     i = 0
     n_lines = len(lines)
     while i < n_lines:
         line = lines[i]
-        start_m = _START_RE.match(line)
-        end_m = _END_RE.match(line)
-        if end_m and not start_m:
+        marker = _CONTROL_RE.fullmatch(line.rstrip())
+        if marker and marker[2] == "end":
             raise _MarkerError(
                 f"{path}: line {i + 1}: orphan end marker for "
-                f"regen:panel-count-{end_m.group(1)} (no matching start)"
+                f"regen:panel-count-{marker[1]} (no matching start)"
             )
-        if not start_m:
+        if not marker:
             i += 1
             continue
-        kind = start_m.group(1)
+        kind = marker[1]
         if i + 1 >= n_lines:
             raise _MarkerError(
                 f"{path}: line {i + 1}: regen:panel-count-{kind}:start has no body "
                 f"(template comment expected on next line)"
             )
-        template_m = _TEMPLATE_RE.match(lines[i + 1])
+        template_m = _TEMPLATE_RE.fullmatch(lines[i + 1].rstrip())
         if template_m is None:
             raise _MarkerError(
                 f"{path}: line {i + 2}: expected <!-- template: ... --> directly after "
@@ -177,8 +181,13 @@ def _parse_regions(lines: list[str], path: Path) -> list[_Region]:
             raise _MarkerError(
                 f"{path}: line {i + 1}: regen:panel-count-{kind}:start without matching :end marker"
             )
-        end_line_m = _END_RE.match(lines[i + 3])
-        if end_line_m is None:
+        for number, content in ((i + 2, template_m[1]), (i + 3, lines[i + 2])):
+            if _CONTROL_PREFIX in content or _TEMPLATE_PREFIX in content:
+                raise _MarkerError(
+                    f"{path}: line {number}: expected panel-count prose, found a marker"
+                )
+        end_line_m = _CONTROL_RE.fullmatch(lines[i + 3].rstrip())
+        if end_line_m is None or end_line_m[2] != "end":
             raise _MarkerError(
                 f"{path}: line {i + 4}: expected regen:panel-count-{kind}:end "
                 f"after rendered body, got: {lines[i + 3]!r}"
@@ -204,19 +213,20 @@ class _MarkerError(Exception):
     """Raised when a corpus file has malformed or unbalanced region markers."""
 
 
-def _regenerate_text(text: str, panel_n: int, path: Path) -> str:
-    """Return ``text`` from ``path`` with every region's body re-rendered."""
-    lines = text.splitlines(keepends=False)
-    # Track whether the original ended with a newline so writing is byte-stable.
-    ended_with_newline = text.endswith("\n")
-    regions = _parse_regions(lines, path)
-    for r in regions:
-        n = panel_n if r.kind == _KIND_TOTAL else panel_n + 1
-        lines[r.start_line + 2] = _render_template(r.template, n)
-    out = "\n".join(lines)
-    if ended_with_newline:
-        out += "\n"
-    return out
+def _read_lines(path: Path) -> list[str]:
+    with path.open(encoding="utf-8", newline="") as source:
+        return source.readlines()
+
+
+def _regenerate_lines(lines: list[str], panel_n: int, path: Path) -> str:
+    """replace the body of each generated region, preserving its line ending."""
+    for region in _parse_regions(lines, path):
+        n = panel_n if region.kind == _KIND_TOTAL else panel_n + 1
+        index = region.start_line + 2
+        body = lines[index]
+        ending = body[len(body.rstrip("\r\n")) :]
+        lines[index] = _render_template(region.template, n) + ending
+    return "".join(lines)
 
 
 def _run_check_or_write(*, write: bool, manifest_path: Path, corpus_root: Path) -> int:
@@ -230,12 +240,13 @@ def _run_check_or_write(*, write: bool, manifest_path: Path, corpus_root: Path) 
     drifted: list[Path] = []
     for path in _corpus_files(corpus_root):
         try:
-            current = path.read_text()
+            lines = _read_lines(path)
         except (OSError, UnicodeDecodeError) as e:
             print(f"regen_panel_counts: failed to read {path}: {e}", file=sys.stderr)
             return generator_io.MANIFEST_ERROR_EXIT
+        current = "".join(lines)
         try:
-            regenerated = _regenerate_text(current, panel_n, path)
+            regenerated = _regenerate_lines(lines, panel_n, path)
         except _MarkerError as e:
             print(f"regen_panel_counts: {e}", file=sys.stderr)
             return generator_io.DRIFT_EXIT
@@ -262,12 +273,12 @@ def _run_validate_markers(*, corpus_root: Path) -> int:
     failures: list[str] = []
     for path in _corpus_files(corpus_root):
         try:
-            text = path.read_text()
+            lines = _read_lines(path)
         except (OSError, UnicodeDecodeError) as e:
             failures.append(f"{path}: failed to read: {e}")
             continue
         try:
-            _parse_regions(text.splitlines(keepends=False), path)
+            _parse_regions(lines, path)
         except _MarkerError as e:
             failures.append(str(e))
     if failures:
@@ -278,28 +289,141 @@ def _run_validate_markers(*, corpus_root: Path) -> int:
     return 0
 
 
-# match punctuation-led and wrapped counts without matching tokens such as B2.
-_COVERAGE_BROAD_RE = re.compile(r"\b\d+\s+(?:reviewer\s+)?personas?\b")
+_TOTAL_PREFIX = r"(?i:(?:a\s+)?total\s+of|in\s+total,?|total:|panel\s+of)"
+_PANEL_LABEL = r"(?i:\(panel\s*\+\s*adversary\))"
+_PERSONA_COUNT = r"\d+\s+(?:reviewer\s+)?personas?\b"
+# match wrapped counts while excluding embedded digits such as B2.
+_COVERAGE_BROAD_RE = re.compile(
+    rf"\b(?:{_TOTAL_PREFIX}\s+)?{_PERSONA_COUNT}"
+    r"(?:,\s+(?i:in\s+total)(?=,)|"
+    rf",?\s+(?i:in\s+total)(?=\t*(?: {{2,}}|\r)\n[ \t]*{_PERSONA_COUNT})|"
+    rf"(?:(?!,?\s+{_TOTAL_PREFIX}\s+\d),?\s+"
+    rf"(?:(?i:total)(?=\s*{_PANEL_LABEL})|(?i:in\s+total)(?=,?\s+(?i:across|after)(?=\s)"
+    rf"|\s*(?:[.;:!?)]|$|{_PANEL_LABEL}|,\s*(?i:including|excluding)\b"
+    rf"|{_TOTAL_PREFIX}\s+\d)))))?"
+)
+_HEADING = re.compile(r"^[ \t]*(?:>[ \t]*|(?:[-+*]|\d{1,9}[.)])[ \t]+)*#{1,6}(?:[ \t]+.*)?$")
+_WORD_MARKUP = re.compile(r"\*+|_+|`+")
 
 # total-shaped phrases must stay generated even when their counts currently match.
 _COVERAGE_ALLOW_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(
         r"\d+\s+personas?\s+(?:approved|objected|requested\s+changes|raised|flagged|agreed)"
     ),
-    re.compile(r"agreed\s+by\s+\d+\s+personas?"),
+    re.compile(r"agreed\s+by\s+\d+\s+personas?", re.IGNORECASE),
     re.compile(r"\d+\s+Move\s+C\s+personas?"),
 )
+
+
+def _mask_word_markup(text: str) -> str:
+    """keep source offsets and literal identifiers intact when masking paired delimiters."""
+    chars = list(text)
+    openings: dict[str, list[int]] = {"*": [], "_": []}
+    runs = list(_WORD_MARKUP.finditer(text))
+    next_tick: dict[int, int] = {}
+    closes_at: dict[int, int] = {}
+    for run in reversed(runs):
+        if run[0].startswith("`"):
+            width = len(run[0])
+            # an escape consumes only the first backtick in an opening run.
+            for start in (run.start(), run.start() + 1):
+                if end := next_tick.get(run.end() - start):
+                    closes_at[start] = end
+            next_tick[width] = run.start()
+
+    code_end = 0
+    for match in runs:
+        start, end = match.span()
+        if start < code_end:
+            continue
+        pos = start
+        while pos and text[pos - 1] == "\\":
+            pos -= 1
+        start += (start - pos) % 2
+        delimiter = text[start:end]
+        if not delimiter:
+            continue
+        if delimiter.startswith("`"):
+            if start in closes_at:
+                close = closes_at[start]
+                code_end = close + len(delimiter)
+                chars[start:end] = chars[close:code_end] = "\t" * len(delimiter)
+            continue
+        left = text[start - 1] if start else " "
+        right = text[end] if end < len(text) else " "
+        pending = openings[delimiter[0]]
+        if not left.isspace() and not right.isalnum():
+            while start < end and pending:
+                chars[pending.pop()] = chars[start] = "\t"
+                start += 1
+        if not right.isspace() and not left.isalnum():
+            pending.extend(range(start, end))
+    return "".join(chars)
+
+
+def _unwrapped_counts(paragraph: str) -> Iterator[re.Match[str]]:
+    paragraph = _mask_word_markup(paragraph)
+    allowed_spans = sorted(
+        (
+            match.span()
+            for pattern in _COVERAGE_ALLOW_PATTERNS
+            for match in pattern.finditer(paragraph)
+        ),
+        reverse=True,
+    )
+    allowed_end = -1
+    for match in _COVERAGE_BROAD_RE.finditer(paragraph):
+        while allowed_spans and allowed_spans[-1][0] <= match.start():
+            allowed_end = max(allowed_end, allowed_spans.pop()[1])
+        if match.end() > allowed_end:
+            yield match
+
+
+_QUOTE_PREFIX = re.compile(r"^(?: {0,3}>[ \t]?)+", re.MULTILINE)
+
+
+def _coverage_paragraphs(lines: list[str]) -> Iterator[tuple[int, str, str]]:
+    paragraph_start = 0
+    normalized: list[str] = []
+    quote_depth = 0
+    for index, line in enumerate(lines):
+        prefix = _QUOTE_PREFIX.match(line)
+        width = prefix.end() if prefix else 0
+        depth = line[:width].count(">")
+        content = line[width:]
+        separate = not content.strip() or _HEADING.fullmatch(content)
+        if normalized and (separate or depth > quote_depth):
+            yield (
+                paragraph_start + 1,
+                "\n".join(lines[paragraph_start:index]),
+                "\n".join(normalized),
+            )
+            normalized.clear()
+        masked = " " * width + content
+        if (len(content) - len(content.rstrip("\\"))) % 2:
+            # a stripped CR can stand in for the backslash without shifting source offsets.
+            masked = masked[:-1] + "\r"
+        if separate:
+            if content.strip():
+                yield index + 1, line, masked
+            quote_depth = 0
+            continue
+        if not normalized:
+            paragraph_start = index
+            quote_depth = depth
+        normalized.append(masked)
+    if normalized:
+        yield paragraph_start + 1, "\n".join(lines[paragraph_start:]), "\n".join(normalized)
 
 
 def _run_validate_coverage(*, corpus_root: Path) -> int:
     failures: list[str] = []
     for path in _corpus_files(corpus_root):
         try:
-            text = path.read_text()
+            lines = _read_lines(path)
         except (OSError, UnicodeDecodeError) as e:
             failures.append(f"{path}: failed to read: {e}")
             continue
-        lines = text.splitlines(keepends=False)
         try:
             regions = _parse_regions(lines, path)
         except _MarkerError as e:
@@ -310,24 +434,26 @@ def _run_validate_coverage(*, corpus_root: Path) -> int:
             for j in range(r.start_line, r.end_line + 1):
                 region_lines.add(j)
         # exclude generated regions while retaining line breaks for wrapped phrases.
-        scan_lines = ["" if idx in region_lines else line for idx, line in enumerate(lines)]
-        scan_text = "\n".join(scan_lines)
-        allowed_spans = [
-            match.span()
-            for pattern in _COVERAGE_ALLOW_PATTERNS
-            for match in pattern.finditer(scan_text)
+        scan_lines = [
+            "" if idx in region_lines else line.rstrip("\r\n") for idx, line in enumerate(lines)
         ]
-        for m in _COVERAGE_BROAD_RE.finditer(scan_text):
-            if any(start <= m.start() and m.end() <= end for start, end in allowed_spans):
-                continue
-            start_line_idx = scan_text.count("\n", 0, m.start())
-            failures.append(
-                f"{path}: line {start_line_idx + 1}: unhandled numbered persona-count phrase: "
-                f"{m.group(0)!r}\n"
-                f"    fix: wrap the phrase in a regen:panel-count region, OR add an "
-                f"allowlist pattern to _COVERAGE_ALLOW_PATTERNS in "
-                f"scripts/regen_panel_counts.py."
-            )
+        for line_number, source, paragraph in _coverage_paragraphs(scan_lines):
+            previous = 0
+            for m in _unwrapped_counts(paragraph):
+                line_number += paragraph.count("\n", previous, m.start())
+                previous = m.start()
+                phrase = source[m.start() : m.end()]
+                closing = _WORD_MARKUP.match(paragraph, m.end())
+                if closing and _WORD_MARKUP.findall(phrase).count(closing[0]) % 2:
+                    phrase += closing[0]
+                failures.append(
+                    f"{path}: line {line_number}: unhandled numbered persona-count phrase: "
+                    f"{phrase!r}\n"
+                    f"    fix: wrap the phrase in a regen:panel-count region, OR add an "
+                    f"allowlist pattern to _COVERAGE_ALLOW_PATTERNS in "
+                    f"scripts/regen_panel_counts.py."
+                )
+
     if failures:
         print("regen_panel_counts: coverage check failed:", file=sys.stderr)
         for f in failures:
@@ -379,4 +505,4 @@ def main(argv: list[str]) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    generator_io.run(main)

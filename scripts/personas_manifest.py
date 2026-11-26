@@ -26,7 +26,6 @@ class ManifestError(ValueError):
 _PANEL_KEYS = frozenset(
     {
         "name",
-        "file",
         "description",
         "move_a",
         "move_a1",
@@ -35,7 +34,7 @@ _PANEL_KEYS = frozenset(
         "owns_schema_constraint_blocker",
     }
 )
-_ADVERSARY_KEYS = frozenset({"name", "file", "description"})
+_ADVERSARY_KEYS = frozenset({"name", "description"})
 _NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 
 
@@ -115,31 +114,22 @@ class Manifest:
 def _parse_persona(path: Path, label: str, raw: object, allowed_keys: frozenset[str]) -> Persona:
     if not isinstance(raw, dict):
         raise ManifestError(f"{path}: {label} must be a mapping, got {type(raw).__name__}")
-    for key in ("name", "file"):
-        if key not in raw:
-            raise ManifestError(f"{path}: {label} missing required key {key!r}")
+    if "name" not in raw:
+        raise ManifestError(f"{path}: {label} missing required key 'name'")
     extra = set(raw.keys()) - allowed_keys
     if extra:
         raise ManifestError(
-            f"{path}: {label} has unknown key(s): {sorted(extra)} "
+            f"{path}: {label} has unknown key(s): {sorted(extra, key=repr)} "
             f"(typo? allowed: {sorted(allowed_keys)})"
         )
     name = raw["name"]
-    file = raw["file"]
     if not isinstance(name, str):
         raise ManifestError(f"{path}: {label} 'name' must be a string, got {type(name).__name__}")
-    if not _NAME_RE.match(name):
+    if not _NAME_RE.fullmatch(name):
         raise ManifestError(
             f"{path}: {label}: 'name' {name!r} must match {_NAME_RE.pattern} "
             f"(lowercase identifier; constrains downstream filename + schema enum splice)"
         )
-    if not isinstance(file, str):
-        raise ManifestError(
-            f"{path}: {label} {name!r}: 'file' must be a string, got {type(file).__name__}"
-        )
-    expected_file = f"{name}.md"
-    if file != expected_file:
-        raise ManifestError(f"{path}: {label} {name!r}: file {file!r} must equal {expected_file!r}")
     if "description" not in raw:
         raise ManifestError(f"{path}: {label} {name!r}: missing required key 'description'")
     description = raw["description"]
@@ -151,6 +141,8 @@ def _parse_persona(path: Path, label: str, raw: object, allowed_keys: frozenset[
     description = description.strip()
     if not description:
         raise ManifestError(f"{path}: {label} {name!r}: 'description' must be non-empty")
+    if len(description.splitlines()) > 1:
+        raise ManifestError(f"{path}: {label} {name!r}: 'description' must be one line")
     if description.startswith("-"):
         raise ManifestError(
             f"{path}: {label} {name!r}: 'description' must not start with '-' "
@@ -180,7 +172,7 @@ def _parse_persona(path: Path, label: str, raw: object, allowed_keys: frozenset[
 
 def load_manifest(path: Path) -> Manifest:
     try:
-        text = path.read_text()
+        text = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as e:
         raise ManifestError(f"failed to read {path}: {e}") from e
     try:
@@ -240,10 +232,7 @@ def _main(argv: list[str]) -> int:
         help="which derived list to print, one item per line",
     )
     args = parser.parse_args(argv)
-    # Exit codes: 0 success, 2 argparse (CLI usage), 3 ManifestError (bad manifest).
-    # Distinct codes let bats consumers tell "we invoked the CLI wrong" apart from
-    # "the manifest itself is broken" — the second is a real-content failure that
-    # should produce a different test diagnostic than the first.
+    # reserve exit 2 for argparse usage errors.
     try:
         m = load_manifest(args.manifest)
     except ManifestError as e:

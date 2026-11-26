@@ -1,7 +1,6 @@
 # Editing the reviewer panel
 
-The reviewer panel (panel personas + adversary + shared addendums) is declared
-in `reviewers/personas.yaml`, the manifest. Treat it as the source of truth.
+The `reviewers/personas.yaml` manifest declares the panel, the separate adversary reviewer, and their shared addendums.
 
 The procedure moves a persona applies are part of its prompt. Move C's body
 lives canonically in [`procedure-moves.md`](procedure-moves.md) (move_c-true
@@ -11,10 +10,11 @@ their wording is tuned to each persona's domain. See
 
 ## Add, remove, or rename a persona
 
-1. Edit `reviewers/personas.yaml`. Each persona needs `name`, `file` (must
-   equal `<name>.md`), and a one-line `description` (the bullet text shown
+1. Edit `reviewers/personas.yaml`. Each persona needs `name` (its prompt file is
+   `reviewers/<name>.md`) and a one-line `description` (the bullet text shown
    in SKILL.md's "Reviewer personas" section). Use a YAML folded scalar
-   (`>-`) for multi-sentence descriptions.
+   (`>-`) for multi-sentence descriptions. When upgrading an existing manifest,
+   remove `file` from every panel and adversary entry.
 2. Run `scripts/regen.sh`. This regenerates the surfaces the
    manifest fully drives:
    - the SKILL.md "Reviewer personas" bullet list (via `cog`),
@@ -163,8 +163,7 @@ receives its path. Record the pin and file hashes instead.
 
 ## Mutation-test the contract
 
-`tests/bats/test_manifest_drift_localization.bats` swaps a fixture manifest
-with an extra `phantom` persona into place, then runs every dependent sync
-test and asserts each fails with a message naming a specific surface. If the
-acceptance criterion ever regresses (one manifest edit no longer surfaces
-every drifted surface by name), that test catches it.
+`tests/bats/test_manifest_drift_localization.bats` adds an extra `phantom`
+persona to a copy of the manifest. It checks that the filesystem and Move C
+guards identify the missing prompt. The regeneration check shows the extra
+persona in the diff and recommends `scripts/regen.sh` in its diagnostic.

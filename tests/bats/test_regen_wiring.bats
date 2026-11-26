@@ -52,6 +52,26 @@ assert_every_generator_ran() {
   [[ "$stderr" == *"cog output"* ]]
 }
 
+@test "both regeneration modes report a legacy persona file key as a manifest error" {
+  local tree="$BATS_TEST_TMPDIR/legacy"
+  copy_skill_tree --git "$tree"
+  cd "$tree"
+  python3 - <<'PYTHON'
+from pathlib import Path
+
+import yaml
+
+path = Path("reviewers/personas.yaml")
+manifest = yaml.safe_load(path.read_text(encoding="utf-8"))
+manifest["panel"][0]["file"] = "legacy.md"
+path.write_text(yaml.safe_dump(manifest), encoding="utf-8")
+PYTHON
+  run bash scripts/regen.sh
+  [[ "$status" -eq 3 && "$output" == *"unknown key(s): ['file']"* ]]
+  run bash scripts/regen-check.sh
+  [[ "$status" -eq 3 && "$output" == *"unknown key(s): ['file']"* ]]
+}
+
 @test "regen.sh --check passes a generator's drift exit through" {
   # cog runs first, so drift it also sees cannot show a generator's status
   # being swallowed; this drift is visible to regen_dev_trees.py alone.
@@ -116,4 +136,19 @@ assert_every_generator_ran() {
     echo "personas-check.sh shim must exec regen-check.sh with \"\$@\""
     return 1
   }
+}
+
+@test "a generator can print UTF-8 help with stderr closed" {
+  run env LC_ALL=C PYTHONUTF8=0 PYTHONCOERCECLOCALE=0 bash -c 'exec python3 "$1" --help 2>&-' _ "$SCRIPTS/regen_panel_counts.py"
+  [[ "$status" -eq 0 ]]
+  [[ "$output" == *"usage: regen_panel_counts.py"* ]]
+  [[ "$output" == *"…"* ]]
+}
+
+@test "a drifted generator with closed stderr leaves stdout empty" {
+  local target="$BATS_TEST_TMPDIR/SKILL.md"
+  printf '%s\n' '<!-- regen:panel-count-total:start -->' '<!-- template: {n} personas -->' 'stale' '<!-- regen:panel-count-total:end -->' > "$target"
+  run bash -c 'exec python3 "$1" --check --corpus-root "$2" 2>&-' _ "$SCRIPTS/regen_panel_counts.py" "$BATS_TEST_TMPDIR"
+  [[ "$status" -eq 5 ]]
+  [[ -z "$output" ]]
 }
