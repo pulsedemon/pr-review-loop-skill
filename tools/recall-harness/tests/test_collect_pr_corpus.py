@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 from collect_pr_corpus import (  # type: ignore[import-not-found]  # noqa: E402  — sibling module made importable by conftest.py
+    matched_filename,
     normalize_external_comment,
     parse_pr_list,
     parse_summary_bullets,
@@ -394,3 +395,11 @@ def test_parse_summary_bullets_reads_the_loop_templates(template):
     expected = [{"summary": placeholder}] * body.count("\n- " + placeholder)
     assert expected
     assert parse_summary_bullets(body) == ([], expected)
+
+
+@pytest.mark.parametrize(
+    ("owner", "repo", "number"), [("two/parts", "r", 1), ("o", "", 1), ("o", "r", "one")]
+)
+def test_bucket_name_requires_repository_components_and_integer_pr(owner, repo, number):
+    with pytest.raises(ValueError):
+        matched_filename(owner, repo, number)

@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from _shared import finding_id
 
 HARNESS = Path(__file__).resolve().parents[1]
 SCRIPT = HARNESS / "match_external.py"
@@ -385,7 +386,7 @@ def test_loop_unmatched_records_carry_finding_id_and_scorer(tmp_path):
     loop = [{"file": "b.ts", "line": 20, "summary": "unrelated finding nobody else raised at all"}]
     out = _run(_corpus(loop, []), tmp_path)
     (record,) = out["loop_unmatched"]
-    assert len(record["finding_id"]) == 12
+    assert record["finding_id"] == finding_id(loop[0])
     assert record["scorer"] == EXPECTED_SCORER
 
 

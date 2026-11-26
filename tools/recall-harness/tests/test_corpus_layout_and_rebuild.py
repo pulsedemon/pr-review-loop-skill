@@ -8,10 +8,12 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
 from collect_pr_corpus import (  # type: ignore[import-not-found]
     CORPUS_VERSION,
     corpus_filename,
 )
+from match_external import _stage_outputs
 
 HARNESS = Path(__file__).resolve().parents[1]
 MATCH_SCRIPT_PATH = HARNESS / "match_external.py"
@@ -167,3 +169,51 @@ def test_malformed_later_record_preserves_all_matcher_outputs(tmp_path):
     for directory in outputs:
         assert list(directory.iterdir()) == [directory / "previous.jsonl"]
         assert (directory / "previous.jsonl").read_text() == "previous\n"
+
+
+def test_nested_output_directories_publish_all_buckets(tmp_path):
+    corpus = tmp_path / "corpus"
+    _write_nested(corpus, "o", "r", 1)
+    outer = tmp_path / "derived"
+    outputs = [outer / "unmatched", outer, outer / "loop_unmatched"]
+    result = _run_match(corpus, *outputs)
+    assert result.returncode == 0, result.stderr
+    assert all((output / "o/r/pr-1.jsonl").is_file() for output in outputs)
+
+
+def test_loop_validation_preserves_outputs_without_any_external(tmp_path):
+    corpus = tmp_path / "corpus"
+    _write_nested(corpus, "o", "r", 1)
+    path = corpus / "o/r/pr-1.json"
+    record = json.loads(path.read_text())
+    record.update(
+        loop_findings=[{"file": "a", "line": False, "summary": "text"}], external_findings=[]
+    )
+    path.write_text(json.dumps(record))
+    outputs = [tmp_path / name for name in ("unmatched", "matched", "loop_unmatched")]
+    result = _run_match(corpus, *outputs)
+    assert result.returncode != 0
+    assert "loop_findings[0]" in result.stderr
+    assert all(not output.exists() for output in outputs)
+
+
+def test_failed_publication_restores_previous_buckets(tmp_path, monkeypatch):
+    outputs = tuple(tmp_path / name for name in ("unmatched", "matched", "loop_unmatched"))
+    for output in outputs:
+        output.mkdir()
+        (output / "previous.jsonl").write_text(output.name)
+    rename = Path.rename
+
+    def refuse_second_install(source, target):
+        if target == outputs[1] and (source / "next.jsonl").exists():
+            raise OSError("cannot install second bucket")
+        return rename(source, target)
+
+    monkeypatch.setattr(Path, "rename", refuse_second_install)
+    with pytest.raises(OSError, match="cannot install second bucket"):
+        with _stage_outputs(outputs, tmp_path / "corpus") as staged:
+            for directory in staged:
+                (directory / "next.jsonl").write_text("new")
+    for output in outputs:
+        assert (output / "previous.jsonl").read_text() == output.name
+        assert not (output / "next.jsonl").exists()
