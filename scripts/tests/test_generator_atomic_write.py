@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import generator_io
@@ -24,7 +25,7 @@ def test_atomic_write_preserves_mode(tmp_path: Path, mode: int) -> None:
 
 
 def test_atomic_write_replaces_a_target_with_a_long_basename(tmp_path: Path) -> None:
-    target = tmp_path / ("x" * 248 + ".md")
+    target = tmp_path / ("x" * os.pathconf(tmp_path, "PC_NAME_MAX"))
     target.write_bytes(b"old")
     generator_io.atomic_write(target, "new")
     assert target.read_bytes() == b"new"

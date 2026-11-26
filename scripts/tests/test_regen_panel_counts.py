@@ -472,6 +472,7 @@ def test_validate_coverage_allows_subset_phrases(tmp_path: Path) -> None:
         ("The panel of 999 personas agreed", "panel of 999 personas"),
         ("A total of 11 personas agreed", "A total of 11 personas"),
         ("A total of **11 personas agreed**", "A total of **11 personas"),
+        ("A total of _11_ personas agreed", "A total of _11_ personas"),
         ("A total of **11** personas agreed", "A total of **11** personas"),
         ("A total of `11` personas agreed", "A total of `11` personas"),
         ("agreed by 12 personas **in total**", "12 personas **in total**"),
@@ -580,6 +581,7 @@ def test_validate_coverage_ignores_non_persona_numbers(tmp_path: Path) -> None:
     (root / "SKILL.md").write_text(
         "wait 5 minutes for CI\n"
         "see issue #42 for context\n"
+        "The review log uses the label _11 personas for the next stage.\n"
         "B2 persona is a Move A.1 sub-mechanic label\n"  # word-boundary anchor blocks this
     )
     rc = _run(["--validate-coverage", "--corpus-root", str(root)])

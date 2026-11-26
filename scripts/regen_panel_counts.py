@@ -313,7 +313,7 @@ _PARAGRAPH_BOUNDARY = re.compile(
     r"#{1,6}(?:[ \t]+[^\n]*)?$)",
     re.MULTILINE,
 )
-_WORD_MARKUP = re.compile(r"[*_`]+")
+_WORD_MARKUP = re.compile(r"\*+|_+|`+")
 
 # total-shaped phrases must stay generated even when their counts currently match.
 _COVERAGE_ALLOW_PATTERNS: tuple[re.Pattern[str], ...] = (
@@ -325,16 +325,26 @@ _COVERAGE_ALLOW_PATTERNS: tuple[re.Pattern[str], ...] = (
 )
 
 
-def _mask_word_markup(match: re.Match[str]) -> str:
-    """keep source offsets while matching words next to Markdown emphasis or code delimiters."""
-    text = match.string
-    left = text[max(0, match.start() - 1) : match.start()]
-    right = text[match.end() : match.end() + 1]
-    return " " * len(match[0]) if left.isalnum() != right.isalnum() else match[0]
+def _mask_word_markup(text: str) -> str:
+    """keep source offsets and literal identifiers intact when masking paired delimiters."""
+    chars = list(text)
+    openings: dict[str, int] = {}
+    for match in _WORD_MARKUP.finditer(text):
+        delimiter = match[0]
+        left = text[max(0, match.start() - 1) : match.start()]
+        right = text[match.end() : match.end() + 1]
+        if right.isalnum() and not left.isalnum():
+            openings[delimiter] = match.start()
+        elif left.isalnum() and not right.isalnum() and delimiter in openings:
+            start = openings.pop(delimiter)
+            spaces = " " * len(delimiter)
+            chars[start : start + len(delimiter)] = spaces
+            chars[match.start() : match.end()] = spaces
+    return "".join(chars)
 
 
 def _unwrapped_counts(paragraph: str) -> Iterator[re.Match[str]]:
-    paragraph = _WORD_MARKUP.sub(_mask_word_markup, paragraph)
+    paragraph = _mask_word_markup(paragraph)
     allowed_spans = sorted(
         (
             match.span()
@@ -374,7 +384,7 @@ def _run_validate_coverage(*, corpus_root: Path) -> int:
         ]
         scan_text = "\n".join(scan_lines)
         line_number = 1
-        # isolate headings and keep separators so line offsets still index the source.
+        # isolate hash-prefixed headings and keep separators so line offsets still index the source.
         for paragraph in _PARAGRAPH_BOUNDARY.split(scan_text):
             for m in _unwrapped_counts(paragraph):
                 start_line = line_number + paragraph.count("\n", 0, m.start())
