@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""A2: Match external findings against loop findings using scripts/match_findings.py.
+"""A2: Match external findings against loop findings using scripts/finding_matcher.py.
 
 For each corpus file in --corpus-dir:
 - Skip external findings without file/line (unanchored: the matcher requires
   both; unanchored go directly to A4's unanchored buckets).
-- For each anchored external finding, apply scripts/match_findings.py's
+- For each anchored external finding, apply scripts/finding_matcher.py's
   `is_match` in-process against every anchored loop finding, scoring
   token_containment at CONTAINMENT_THRESHOLD within HARNESS_LINE_WINDOW rather
   than the loop's own jaccard defaults (see the README on why). If any match,
@@ -12,12 +12,12 @@ For each corpus file in --corpus-dir:
 - Write matched/<owner>/<repo>/pr-<N>.jsonl (full pair: external + matched_loop) and
   unmatched/<owner>/<repo>/pr-<N>.jsonl (external only).
 
-Each output line is one JSON object with stable keys: finding_id (recomputed
-from the external finding using the same hash as A1's collect_pr_corpus),
-external, and matched_loop (matched only).
+Matched and unmatched rows carry the external finding and its ID. Matched rows
+also carry the loop finding. Loop-unmatched rows carry the loop finding and its ID.
+All three buckets record the scorer.
 
 the matcher module is imported once via --match-script (default
-scripts/match_findings.py). missing or wrongly typed fields raise RuntimeError
+scripts/finding_matcher.py). invalid matcher fields on anchored findings raise RuntimeError
 so malformed inputs cannot inflate the candidate-miss bucket.
 """
 
@@ -28,31 +28,30 @@ import importlib.util
 import json
 import shutil
 import sys
+from contextlib import ExitStack, contextmanager
 from pathlib import Path
+from tempfile import mkdtemp
 from types import ModuleType
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _shared import (  # noqa: E402
+from _shared import (
+    DEFAULT_CORPUS_DIR,
+    DEFAULT_LOOP_UNMATCHED_DIR,
+    DEFAULT_MATCHED_DIR,
+    DEFAULT_UNMATCHED_DIR,
+    HARNESS_DIR,
     finding_id,
+    is_anchored,
+    require_corpus_identity,
     require_corpus_version,
     require_nested_layout,
+    reservation_path,
 )
-from collect_pr_corpus import (  # type: ignore[import-not-found]  # noqa: E402
+from collect_pr_corpus import (
     CORPUS_VERSION,
     matched_filename,
 )
 
-# Back-compat alias: external callers and tests imported finding_id_for from
-# this module before the _shared extraction. Keep the alias so we don't break
-# them in a fix-batch PR.
-finding_id_for = finding_id
-
-_HARNESS_DIR = Path(__file__).resolve().parent
-DEFAULT_CORPUS_DIR = _HARNESS_DIR / "corpus"
-DEFAULT_UNMATCHED_DIR = _HARNESS_DIR / "unmatched"
-DEFAULT_MATCHED_DIR = _HARNESS_DIR / "matched"
-DEFAULT_LOOP_UNMATCHED_DIR = _HARNESS_DIR / "loop_unmatched"
-DEFAULT_MATCH_SCRIPT = _HARNESS_DIR.parents[1] / "scripts" / "match_findings.py"
+DEFAULT_MATCH_SCRIPT = HARNESS_DIR.parents[1] / "scripts" / "finding_matcher.py"
 
 # allow external reviewers to anchor the same issue to different lines.
 # this window is independent of the loop's finding-deduplication window.
@@ -64,24 +63,17 @@ def _scorer_stamp(matcher: ModuleType) -> str:
     return f"token_containment@{matcher.CONTAINMENT_THRESHOLD:g}/win{HARNESS_LINE_WINDOW}"
 
 
-def _is_anchored(finding: dict) -> bool:
-    return finding.get("file") is not None and finding.get("line") is not None
-
-
 def _load_matcher(match_script: Path) -> ModuleType:
-    """Import match_findings.py once per run so its rules apply in-process."""
-    spec = importlib.util.spec_from_file_location("match_findings", match_script)
+    """load the matcher module supplied for this run."""
+    spec = importlib.util.spec_from_file_location("finding_matcher", match_script)
     if spec is None or spec.loader is None:
         raise RuntimeError(f"cannot load matcher module from {match_script}")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     for name in (
-        "token_overlap",
         "token_containment",
         "is_match",
         "tokens",
-        "LINE_WINDOW",
-        "OVERLAP_THRESHOLD",
         "CONTAINMENT_THRESHOLD",
         "MIN_CONTAINMENT_TOKENS",
     ):
@@ -90,26 +82,21 @@ def _load_matcher(match_script: Path) -> ModuleType:
     return module
 
 
+def _require_matcher_fields(label: str, obj: dict, where: str) -> None:
+    for key, typ in (("file", str), ("line", int), ("summary", str)):
+        if key not in obj:
+            raise RuntimeError(f"matcher input {label}: missing required field '{key}' on {where}")
+        value = obj[key]
+        if not isinstance(value, typ) or (typ is int and isinstance(value, bool)):
+            raise RuntimeError(f"matcher input {label}: field '{key}' has wrong type on {where}")
+
+
 def _run_matcher(matcher: ModuleType, a: dict, b: dict) -> bool:
     """return whether a and b match under the harness's containment scorer.
 
     containment accommodates the length difference between loop findings and
-    bot comments. malformed inputs raise RuntimeError so validation failures
-    cannot inflate the candidate-miss bucket.
+    bot comments. the caller validates each finding before candidate selection.
     """
-    for label, obj in (("a", a), ("b", b)):
-        for key, typ in (("file", str), ("line", int), ("summary", str)):
-            if key not in obj:
-                raise RuntimeError(
-                    f"matcher input {label}: missing required field '{key}' on "
-                    f"{a.get('file')}:{a.get('line')} vs {b.get('file')}:{b.get('line')}"
-                )
-            value = obj[key]
-            if not isinstance(value, typ) or (typ is int and isinstance(value, bool)):
-                raise RuntimeError(
-                    f"matcher input {label}: field '{key}' has wrong type on "
-                    f"{a.get('file')}:{a.get('line')} vs {b.get('file')}:{b.get('line')}"
-                )
     return matcher.is_match(
         a,
         b,
@@ -125,18 +112,11 @@ def _best_near_miss(
     """Return (best_overlap_score, best_loop_summary, line_delta) over same-file
     loop findings.
 
-    `ext_for_matcher` is the same trimmed `{file, line, summary}` dict that
-    `_run_matcher` validates at match_external.py:100-128 (all three keys
-    present, correct types). Do not pass a raw external: `ext["summary"]`
-    and `ext["line"]` below are unchecked accesses, by design, because the
-    caller is responsible for trimming. Passing a raw external will KeyError
-    silently at runtime, not at test time.
-
     Scores containment, the same scorer `_run_matcher` gates on, so a near-miss
-    number is directly comparable to the threshold it fell short of.
+    score can be compared with the matching threshold, even when the line window prevented a match.
 
     Scope is restricted to same-file findings (mirroring the matcher's first
-    short-circuit at match_findings.py:135) because that's the cohort the
+    short-circuit in finding_matcher.is_match) because that's the cohort the
     matcher would have considered. Line-window is *not* applied: the whole
     point of the near-miss diagnostic is to see whether the matcher's
     summary-overlap rule is the gate that fired; restricting by line again
@@ -185,6 +165,7 @@ def process_corpus_file(
 ) -> None:
     corpus = json.loads(corpus_path.read_text())
     require_corpus_version(corpus, corpus_path, CORPUS_VERSION)
+    require_corpus_identity(corpus, corpus_path)
     if corpus.get("skipped"):
         return
     if corpus.get("is_open"):
@@ -200,14 +181,23 @@ def process_corpus_file(
     matched_lines: list[str] = []
     unmatched_lines: list[str] = []
 
-    anchored_loop = [f for f in loop if _is_anchored(f)]
+    anchored_loop = []
+    for index, finding in enumerate(loop):
+        if is_anchored(finding):
+            _require_matcher_fields(
+                "loop", finding, f"{owner}/{repo} PR #{pr} loop_findings[{index}]"
+            )
+            anchored_loop.append(finding)
     # Which loop findings some external corroborated. Tracked by index because
     # loop findings are plain dicts (unhashable) and carry no id of their own.
     corroborated_loop_idx: set[int] = set()
 
-    for ext in external:
-        if not _is_anchored(ext):
+    for index, ext in enumerate(external):
+        if not is_anchored(ext):
             continue  # Unanchored externals never feed the matcher.
+        _require_matcher_fields(
+            "external", ext, f"{owner}/{repo} PR #{pr} external_findings[{index}]"
+        )
         ext_for_matcher = {
             "file": ext["file"],
             "line": ext["line"],
@@ -220,7 +210,7 @@ def process_corpus_file(
                 corroborated_loop_idx.add(idx)
                 break
         record = {
-            "finding_id": finding_id_for(ext),
+            "finding_id": finding_id(ext),
             "external": ext,
             "scorer": _scorer_stamp(matcher),
         }
@@ -264,6 +254,115 @@ def process_corpus_file(
     )
 
 
+def _output_layout(destinations: tuple[Path, ...], protected_inputs: list[Path]):
+    paths = tuple(path.resolve() for path in destinations)
+    if len(set(paths)) != len(paths):
+        raise ValueError("each matcher output needs its own directory")
+    inputs = {p.resolve() for p in protected_inputs} | {p.absolute() for p in protected_inputs}
+    for destination, path in zip(destinations, paths, strict=True):
+        if destination.is_symlink() or any(
+            ancestor.is_symlink()
+            and any(ancestor.parent.resolve().is_relative_to(root) for root in paths)
+            for ancestor in destination.parents
+        ):
+            raise ValueError(
+                f"matcher output traverses a symlink within an output tree: {destination}"
+            )
+        if any(source.is_relative_to(path) for source in inputs):
+            raise ValueError(f"matcher output and corpus directories overlap: {path}")
+        if path.exists() and not path.is_dir():
+            raise NotADirectoryError(path)
+    existing = [path for path in paths if path.exists()]
+    if existing:
+        ancestors = {parent for source in inputs for parent in (source, *source.parents)}
+        for parent in ancestors:
+            if parent.exists() and any(parent.samefile(root) for root in existing):
+                raise ValueError(f"matcher output and corpus directories overlap: {parent}")
+    if len({(p.stat().st_dev, p.stat().st_ino) for p in existing}) != len(existing):
+        raise ValueError("each matcher output needs its own directory")
+    return paths, [path for path in paths if not any(parent in paths for parent in path.parents)]
+
+
+def _require_bucket_tree(directory: Path) -> None:
+    """directory replacement must leave links and unrelated files alone."""
+    if not directory.exists():
+        return
+    pending = [directory]
+    while pending:
+        for child in pending.pop().iterdir():
+            if (
+                child.is_symlink()
+                or child.name.endswith(".recall-lock")
+                or child.name.startswith(".recall-")
+            ):
+                raise ValueError(f"matcher output contains a link or reservation: {child}")
+            if child.is_dir():
+                pending.append(child)
+            elif not child.is_file() or child.suffix != ".jsonl":
+                raise ValueError(f"output contains an entry outside the matcher buckets: {child}")
+
+
+def _release_reservation(lock: Path) -> None:
+    try:
+        lock.rmdir()
+    except OSError as error:
+        print(f"could not release matcher reservation {lock}: {error}", file=sys.stderr)
+
+
+@contextmanager
+def _stage_outputs(destinations: tuple[Path, ...], protected_inputs: list[Path]):
+    """keep prior buckets available if matching or publication fails."""
+    paths, roots = _output_layout(destinations, protected_inputs)
+    staging = {}
+    published = False
+    try:
+        for root in roots:
+            root.parent.mkdir(parents=True, exist_ok=True)
+            staging[root] = Path(mkdtemp(prefix=".recall-", dir=root.parent))
+        outputs = []
+        for path in paths:
+            root = next(root for root in roots if path.is_relative_to(root))
+            output = staging[root] / "new" / path.relative_to(root)
+            output.mkdir(parents=True, exist_ok=True)
+            outputs.append(output)
+        yield outputs
+        with ExitStack() as locks, ExitStack() as rollback:
+            for root in roots:
+                lock = reservation_path(root)
+                try:
+                    lock.mkdir()
+                except FileExistsError as error:
+                    raise RuntimeError(f"matcher output is reserved: {lock}") from error
+                locks.callback(_release_reservation, lock)
+            for root in roots:
+                for parent in root.parents:
+                    if parent.name and reservation_path(parent).exists():
+                        raise RuntimeError(f"parent matcher output is reserved: {parent}")
+                _require_bucket_tree(root)
+            for root, temp in staging.items():
+                backup = temp / "previous"
+                if root.exists():
+                    root.rename(backup)
+                    rollback.callback(backup.rename, root)
+                (temp / "new").rename(root)
+                rollback.callback(root.rename, temp / "new")
+            rollback.pop_all()
+            published = True
+    finally:
+        for root, temp in staging.items():
+            backup = temp / "previous"
+            if not published and backup.exists():
+                print(
+                    f"could not restore {root}. Previous output retained at {backup}",
+                    file=sys.stderr,
+                )
+            else:
+                try:
+                    shutil.rmtree(temp)
+                except OSError as error:
+                    print(f"could not clean staging directory {temp}: {error}", file=sys.stderr)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="A2: match external findings")
     parser.add_argument("--corpus-dir", type=Path, default=DEFAULT_CORPUS_DIR)
@@ -282,6 +381,7 @@ def main() -> int:
         "--match-script",
         type=Path,
         default=DEFAULT_MATCH_SCRIPT,
+        help="Path to a matcher module (default: scripts/finding_matcher.py).",
     )
     args = parser.parse_args()
 
@@ -292,22 +392,11 @@ def main() -> int:
     matcher = _load_matcher(args.match_script)
     corpora = sorted(args.corpus_dir.glob("*/*/pr-*.json"))
     require_nested_layout(args.corpus_dir, corpora, CORPUS_VERSION)
-    # Derived outputs are 100% a function of the corpus; rebuild from scratch so
-    # neither stale flat leftovers nor stale nested files (PRs since removed from
-    # the corpus) can persist. Runs only after the layout guard passes, so a
-    # guard failure never destroys prior good outputs.
-    for derived in (args.unmatched_dir, args.matched_dir, args.loop_unmatched_dir):
-        if derived.is_dir():
-            shutil.rmtree(derived)
-        derived.mkdir(parents=True, exist_ok=True)
-    for corpus_path in corpora:
-        process_corpus_file(
-            corpus_path,
-            args.unmatched_dir,
-            args.matched_dir,
-            args.loop_unmatched_dir,
-            matcher,
-        )
+    # publish only after every corpus record has been matched successfully.
+    destinations = (args.unmatched_dir, args.matched_dir, args.loop_unmatched_dir)
+    with _stage_outputs(destinations, [args.corpus_dir, *corpora]) as staged:
+        for corpus_path in corpora:
+            process_corpus_file(corpus_path, *staged, matcher)
 
     return 0
 

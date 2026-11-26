@@ -15,27 +15,37 @@ import csv
 import io
 import json
 import math
+import os
 import re
 import sys
 from collections import Counter, defaultdict
+from itertools import pairwise
 from pathlib import Path
 from typing import NamedTuple
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _shared import finding_id, require_corpus_version, require_nested_layout  # noqa: E402
-from collect_pr_corpus import (  # type: ignore[import-not-found]  # noqa: E402
+from _shared import (
+    DEFAULT_CORPUS_DIR,
+    DEFAULT_LOOP_UNMATCHED_DIR,
+    DEFAULT_MATCHED_DIR,
+    DEFAULT_UNMATCHED_DIR,
+    HARNESS_DIR,
+    finding_id,
+    is_anchored,
+    require_corpus_identity,
+    require_corpus_version,
+    require_nested_layout,
+    reservation_path,
+)
+from collect_pr_corpus import (
     CORPUS_VERSION,
     matched_filename,
 )
 
-_HARNESS_DIR = Path(__file__).resolve().parent
-DEFAULT_CORPUS_DIR = _HARNESS_DIR / "corpus"
-DEFAULT_UNMATCHED_DIR = _HARNESS_DIR / "unmatched"
-DEFAULT_MATCHED_DIR = _HARNESS_DIR / "matched"
-DEFAULT_LOOP_UNMATCHED_DIR = _HARNESS_DIR / "loop_unmatched"
-DEFAULT_LABELS = _HARNESS_DIR / "labels.csv"
+DEFAULT_LABELS = HARNESS_DIR / "labels.csv"
 
-MATCHED_FALSE_WARN_THRESHOLD = 0.10  # 10%
+MATCHED_FALSE_WARN_THRESHOLD = 0.10
+NEAR_MISS_DECISION_CUT = 0.45
+NEAR_MISS_DECISION_SHARE = 0.30
 
 # keep the on-disk scorer contract independent of matcher execution; the
 # threshold and window determine how this report interprets stored scores.
@@ -53,22 +63,38 @@ class NearMissRow(NamedTuple):
     is_real_miss: bool
 
 
-def _load_jsonl(path: Path) -> list[dict]:
-    if not path.exists() or path.stat().st_size == 0:
+def _load_jsonl(path: Path, observed: dict[Path, os.stat_result | None]) -> list[dict]:
+    try:
+        stream = path.open()
+    except FileNotFoundError:
+        observed[path] = None
         return []
-    rows = [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+    with stream:
+        observed[path] = os.fstat(stream.fileno())
+        rows = [json.loads(line) for line in stream if line.strip()]
     _require_scorer(rows, path)
     return rows
 
 
-def _require_scorer(rows: list[dict], path: Path) -> None:
-    """Refuse matcher output scored by anything but the current scorer.
+def _check_observed_outputs(observed: dict[Path, os.stat_result | None]) -> None:
+    """a report may read several buckets while another process publishes their replacement."""
+    parents = {p for path in observed for p in path.resolve().parents if p.name}
+    if any(reservation_path(parent).exists() for parent in parents):
+        raise RuntimeError("matcher publication in progress. Rerun the report after it finishes.")
+    for path, before in observed.items():
+        try:
+            after = path.stat()
+        except FileNotFoundError:
+            if before is None:
+                continue
+        else:
+            if before is not None and os.path.samestat(before, after):
+                continue
+        raise RuntimeError(f"matcher output changed while reporting: {path}. Rerun the report.")
 
-    The staleness check downstream compares counts, which an output from before
-    the containment switch satisfies: it partitions the same corpus the same
-    way. Only the scores differ, and reading jaccard scores against containment
-    bins and the 0.45 decision cut is silently wrong rather than visibly so.
-    """
+
+def _require_scorer(rows: list[dict], path: Path) -> None:
+    """counts can agree even when different scoring rules change which findings match."""
     for row in rows:
         scorer = row.get("scorer")
         if scorer != EXPECTED_SCORER:
@@ -327,9 +353,11 @@ def main() -> int:
     # head-of-branch state.
     in_flight: list[tuple[str, str, int]] = []
 
+    observed: dict[Path, os.stat_result | None] = {}
     for corpus_path in corpora:
         corpus = json.loads(corpus_path.read_text())
         require_corpus_version(corpus, corpus_path, CORPUS_VERSION)
+        require_corpus_identity(corpus, corpus_path)
         if corpus.get("skipped"):
             continue
         pr = corpus["pr"]
@@ -340,17 +368,15 @@ def main() -> int:
             continue
         externals = corpus.get("external_findings", [])
         total_external += len(externals)
-        anchored_externals = sum(
-            1 for e in externals if e.get("file") and e.get("line") is not None
-        )
+        anchored_externals = sum(1 for e in externals if is_anchored(e))
         total_anchored_external += anchored_externals
         unanchored_externals = len(externals) - anchored_externals
         total_unanchored_external += unanchored_externals
         total_unanchored_loop += len(corpus.get("loop_findings_unanchored", []))
 
         jsonl_name = matched_filename(owner, repo, pr)
-        matched = _load_jsonl(args.matched_dir / jsonl_name)
-        unmatched = _load_jsonl(args.unmatched_dir / jsonl_name)
+        matched = _load_jsonl(args.matched_dir / jsonl_name, observed)
+        unmatched = _load_jsonl(args.unmatched_dir / jsonl_name, observed)
         total_matched += len(matched)
 
         # One matched row per EXTERNAL finding, so two comments on the same loop
@@ -379,7 +405,7 @@ def main() -> int:
             != "matched_false"
         }
         precision_counts["corroborated"] += len(corroborated_loop)
-        loop_unmatched_records = _load_jsonl(args.loop_unmatched_dir / jsonl_name)
+        loop_unmatched_records = _load_jsonl(args.loop_unmatched_dir / jsonl_name, observed)
         uncorroborated_ids = [lu.get("finding_id", "") for lu in loop_unmatched_records]
         rejected_loop = {
             _loop_key(m): m.get("matched_loop") or {}
@@ -415,11 +441,7 @@ def main() -> int:
         # Loop-side mirror. _load_jsonl reads a missing file as an empty bucket,
         # so without this a pre-loop_unmatched A2 run would publish precision
         # over the matched rows alone with every uncorroborated finding absent.
-        anchored_loop = sum(
-            1
-            for f in corpus.get("loop_findings", [])
-            if f.get("file") and f.get("line") is not None
-        )
+        anchored_loop = sum(1 for f in corpus.get("loop_findings", []) if is_anchored(f))
         if len(paired_loop) + len(loop_unmatched_records) != anchored_loop:
             loop_invariant_violations.append(
                 (
@@ -482,9 +504,7 @@ def main() -> int:
             summary = u.get("external", {}).get("summary", "")
             miss_groups[_candidate_cause(summary)].append((owner, repo, pr, summary))
 
-    # Unanchored bucket labels are not joined to corpus items (they have no
-    # finding_id); we just surface labels.csv rows in those buckets so the
-    # protocol's promised buckets aren't silently ignored.
+    # the matcher emits no JSONL for unanchored findings, so tally their labels directly.
     for (_o, _r, _pr, bucket, _fid), (label, _notes) in labels.items():
         if bucket in ("unanchored_external", "unanchored_loop") and label:
             label_distribution[(bucket, label)] += 1
@@ -558,43 +578,17 @@ def main() -> int:
                 out.write(f"- {owner}/{repo} PR #{pr}: {summary}\n")
             out.write("\n")
 
-    # Matcher near-misses (Phase 1 diagnostic). Surfaces unmatched externals
-    # that have a same-file loop finding: i.e., the matcher is the gate that
-    # fired, not (necessarily) persona recall. The score on a near-miss row is
-    # whatever _best_near_miss computed: containment, the same scorer the match
-    # gate uses. It is typically below CONTAINMENT_THRESHOLD (because anything
-    # at or above it within ±HARNESS_LINE_WINDOW would have matched), but can
-    # also be at or above when the line-window gate rather than the overlap gate
-    # blocked the match: _best_near_miss intentionally applies no line window
-    # so the diagnostic distinguishes the two.
-    #
-    # Sort key is (is_real_miss desc, score desc): labeled real_miss rows
-    # always float above the 25-row visual cap so the section never drops
-    # them silently. The current REPORT.md has 10 labeled real_miss in
-    # `test coverage` alone, so without this sort key a cap-of-25 dominated
-    # by 51 unlabeled rows would push real_miss off the visible list and
-    # the Phase 1 decision rule's input would be corrupted.
-    #
-    # The decision-rule statistic (count of real_miss with score >= 0.45,
-    # divided by total real_miss with non-null near-miss) is computed from
-    # the FULL near_miss_rows list (uncapped) and emitted on its own line
-    # above the capped section. Phase 1's 30%/0.45 threshold is read from
-    # this single source: never hand-counted from the rendered rows.
-    #
-    # Section is omitted entirely if no unmatched record carried a
-    # same-file loop finding (all scores null): that's a different signal
-    # (no co-location at all) and the cap-at-25 list would be empty noise.
     if near_miss_rows:
         out.write("## Matcher near-misses (unmatched externals with a same-file loop finding)\n\n")
         real_miss_with_score = [r for r in near_miss_rows if r.is_real_miss]
         rm_total = len(real_miss_with_score)
-        rm_ge_045 = sum(1 for r in real_miss_with_score if r.score >= 0.45)
+        rm_at_cut = sum(1 for r in real_miss_with_score if r.score >= NEAR_MISS_DECISION_CUT)
         if rm_total:
-            pct = 100.0 * rm_ge_045 / rm_total
+            pct = 100.0 * rm_at_cut / rm_total
             out.write(
-                f"Near-miss diagnostic: {rm_ge_045} of {rm_total} real_miss rows "
-                f"have score >= 0.45 ({pct:.1f}%). "
-                "Phase 1 decision rule (spec §1, decision rule): >= 30% => matcher recall is "
+                f"Near-miss diagnostic: {rm_at_cut} of {rm_total} real_miss rows "
+                f"have score >= {NEAR_MISS_DECISION_CUT:.2f} ({pct:.1f}%). "
+                f"Decision rule: >= {NEAR_MISS_DECISION_SHARE:.0%} => matcher recall is "
                 "meaningfully limiting.\n\n"
             )
         else:
@@ -606,47 +600,21 @@ def main() -> int:
                 "Near-miss diagnostic: no real_miss labels on rows with a same-file "
                 "loop finding yet: decision-rule statistic is not computable.\n\n"
             )
-        # Histogram over real_miss near-miss scores. Spec calls the 30%/0.45
-        # thresholds "starting points, not load-bearing"; surfacing the full
-        # distribution lets the reader spot a bimodal cut elsewhere without
-        # re-running. Bins are half-open [lo, hi); the final bin's upper bound
-        # is 1.01 (exclusive) so a score of exactly 1.0 lands in it. The
-        # [0.50-1.01) bins capture line-gate-only near-misses (same-file loop
-        # finding far from the external line with high summary overlap); these
-        # are unmatched not because the overlap was too low but because the line
-        # window blocked the match: _best_near_miss applies no line gate so
-        # they show up here. The boundary is CONTAINMENT_THRESHOLD: below it the
-        # overlap gate fired, at or above it the line gate did. Bin counts must
-        # sum to n; without the final bins those rows would be silently dropped
-        # from the distribution. 0.45 is an explicit bin edge so the
-        # decision-rule cut is visible at a glance: the rows in [0.45, 0.50)
-        # are the marginal ones that flip the matcher-recall verdict.
+        # the final upper bound includes scores of exactly one in half-open bins.
         if rm_total:
-            bins = [
-                (0.00, 0.10),
-                (0.10, 0.20),
-                (0.20, 0.30),
-                (0.30, 0.40),
-                (0.40, 0.45),
-                (0.45, 0.50),
-                (0.50, 0.75),
-                (0.75, 1.01),
-            ]
+            edges = sorted({0.00, 0.10, 0.20, 0.30, 0.40, NEAR_MISS_DECISION_CUT, 0.50, 0.75, 1.01})
+            bins = list(pairwise(edges))
             counts = [sum(1 for r in real_miss_with_score if lo <= r.score < hi) for lo, hi in bins]
             out.write(f"Real_miss near-miss score distribution (n={rm_total}):\n")
             for (lo, hi), c in zip(bins, counts, strict=True):
                 out.write(f"  [{lo:.2f}-{hi:.2f}): {c}\n")
             out.write(
-                "Histogram is the source of truth if the 30%/0.45 statistic looks "
-                "borderline: the spec explicitly calls the thresholds starting points.\n\n"
+                "Histogram is the source of truth if the "
+                f"{NEAR_MISS_DECISION_SHARE:.0%}/{NEAR_MISS_DECISION_CUT:.2f} statistic looks "
+                "borderline: both thresholds are starting points.\n\n"
             )
-        # Sort key prioritizes labeled real_miss above the 25-row visual cap; see
-        # comment block above.
+        # keep labeled misses visible above the display limit.
         near_miss_rows.sort(key=lambda r: (-int(r.is_real_miss), -r.score))
-        # 200-char truncation matches the finding_evidence.snippet convention
-        # used elsewhere in the codebase (reviewers/output.schema.json); keeps
-        # REPORT.md readable while preserving enough context to identify the
-        # underlying finding.
         for r in near_miss_rows[:25]:
             tag = " [real_miss]" if r.is_real_miss else ""
             # line_delta_str surfaces when summary similarity is high but the same-file
@@ -699,8 +667,9 @@ def main() -> int:
         if rate > MATCHED_FALSE_WARN_THRESHOLD:
             out.write(f"matched_false rate: {rate:.1%}\n\n")
             out.write(
-                f"**MATCHER QUALITY WARNING**: matched_false rate {rate:.1%} is above 10%. "
-                "Tune `scripts/match_findings.py` before trusting unmatched-driven groups.\n"
+                f"**MATCHER QUALITY WARNING**: matched_false rate {rate:.1%} is above "
+                f"{MATCHED_FALSE_WARN_THRESHOLD:.0%}. "
+                "Tune `scripts/finding_matcher.py` before trusting unmatched-driven groups.\n"
             )
         else:
             out.write(f"matched_false rate: {rate:.1%}\n")
@@ -762,6 +731,7 @@ def main() -> int:
     else:
         out.write("Manual judgment coverage: n/a, no uncorroborated loop findings\n")
 
+    _check_observed_outputs(observed)
     sys.stdout.write(out.getvalue())
     return 0
 

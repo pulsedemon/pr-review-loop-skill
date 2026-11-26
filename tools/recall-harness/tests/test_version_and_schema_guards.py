@@ -22,10 +22,7 @@ from report import _load_labels  # type: ignore[import-not-found]  # noqa: E402
 HARNESS = Path(__file__).resolve().parents[1]
 MATCH_SCRIPT_PATH = HARNESS / "match_external.py"
 REPORT_SCRIPT_PATH = HARNESS / "report.py"
-REPO_MATCH_FINDINGS = HARNESS.parent.parent / "scripts" / "match_findings.py"
-
-
-# ----- _load_labels schema validation -----
+REPO_FINDING_MATCHER = HARNESS.parent.parent / "scripts" / "finding_matcher.py"
 
 
 def test_load_labels_raises_on_legacy_5_column_csv(tmp_path):
@@ -52,35 +49,6 @@ def test_load_labels_raises_on_csv_missing_repo_column(tmp_path):
 def test_load_labels_returns_empty_when_file_absent(tmp_path):
     # Backward-compat: an absent labels.csv is not an error (first-run case).
     assert _load_labels(tmp_path / "labels.csv") == {}
-
-
-# ----- CORPUS_VERSION reader-guard in match_external -----
-
-
-def _run_match_external(tmp_path: Path, corpus: dict) -> subprocess.CompletedProcess:
-    corpus_dir = tmp_path / "corpus"
-    corpus_dir.mkdir()
-    out_path = corpus_dir / corpus_filename(corpus["owner"], corpus["repo"], corpus["pr"])
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(json.dumps(corpus, indent=2, sort_keys=True))
-    return subprocess.run(
-        [
-            sys.executable,
-            str(MATCH_SCRIPT_PATH),
-            "--corpus-dir",
-            str(corpus_dir),
-            "--unmatched-dir",
-            str(tmp_path / "unmatched"),
-            "--matched-dir",
-            str(tmp_path / "matched"),
-            "--loop-unmatched-dir",
-            str(tmp_path / "loop_unmatched"),
-            "--match-script",
-            str(REPO_MATCH_FINDINGS),
-        ],
-        capture_output=True,
-        text=True,
-    )
 
 
 def _write_corpus(corpus_dir: Path, owner: str, repo: str, pr: int, record: dict) -> Path:
@@ -122,7 +90,7 @@ def test_match_external_rejects_legacy_corpus_version(tmp_path):
             "--loop-unmatched-dir",
             str(tmp_path / "loop_unmatched"),
             "--match-script",
-            str(REPO_MATCH_FINDINGS),
+            str(REPO_FINDING_MATCHER),
         ],
         capture_output=True,
         text=True,
@@ -130,9 +98,6 @@ def test_match_external_rejects_legacy_corpus_version(tmp_path):
     assert result.returncode != 0
     assert "corpus_version=1" in result.stderr
     assert "Re-run collect_pr_corpus.py" in result.stderr
-
-
-# ----- Legacy flat-layout guard in match_external -----
 
 
 def test_match_external_rejects_legacy_flat_layout(tmp_path):
@@ -158,7 +123,7 @@ def test_match_external_rejects_legacy_flat_layout(tmp_path):
             "--loop-unmatched-dir",
             str(tmp_path / "loop_unmatched"),
             "--match-script",
-            str(REPO_MATCH_FINDINGS),
+            str(REPO_FINDING_MATCHER),
         ],
         capture_output=True,
         text=True,
@@ -166,9 +131,6 @@ def test_match_external_rejects_legacy_flat_layout(tmp_path):
     assert result.returncode != 0
     assert "legacy flat corpus layout detected" in result.stderr
     assert "Re-run collect_pr_corpus.py" in result.stderr
-
-
-# ----- CORPUS_VERSION reader-guard in report -----
 
 
 def test_report_rejects_legacy_corpus_version(tmp_path):
@@ -251,6 +213,8 @@ def test_report_accepts_current_corpus_version(tmp_path):
             str(tmp_path / "unmatched"),
             "--matched-dir",
             str(tmp_path / "matched"),
+            "--loop-unmatched-dir",
+            str(tmp_path / "loop_unmatched"),
             "--labels",
             str(tmp_path / "labels.csv"),
         ],
@@ -259,9 +223,6 @@ def test_report_accepts_current_corpus_version(tmp_path):
     )
     assert result.returncode == 0, result.stderr
     assert "PRs analyzed: 1" in result.stdout
-
-
-# ----- is_open in-flight separation -----
 
 
 def test_report_surfaces_in_flight_prs_separately(tmp_path):
@@ -305,6 +266,8 @@ def test_report_surfaces_in_flight_prs_separately(tmp_path):
             str(tmp_path / "unmatched"),
             "--matched-dir",
             str(tmp_path / "matched"),
+            "--loop-unmatched-dir",
+            str(tmp_path / "loop_unmatched"),
             "--labels",
             str(tmp_path / "labels.csv"),
         ],
@@ -317,9 +280,6 @@ def test_report_surfaces_in_flight_prs_separately(tmp_path):
     # The merged record's anchored external must appear in totals; the open
     # one must NOT. Total external is 1, not 2.
     assert "External findings: 1" in result.stdout
-
-
-# ----- collect_pr orchestrator-no-FINDING fail-loud -----
 
 
 class _StubGhPrView:
@@ -338,15 +298,12 @@ class _StubGhPrView:
         class Result:
             stdout = json.dumps(
                 {
-                    "number": 99,
                     "title": "t",
-                    "author": {"login": "x"},
                     "mergedAt": "2026-05-01T00:00:00Z" if self.merged else None,
                     "mergeCommit": {"oid": "abc"} if self.merged else None,
                     "headRefOid": "def",
                     "baseRefName": "main",
                     "headRefName": "feat",
-                    "body": "",
                 }
             )
 
@@ -684,9 +641,6 @@ def test_collect_pr_mixed_source_deterministic_sort():
     ]
 
 
-# ----- registry-validation invariants enforced at module load -----
-
-
 def test_validate_registry_rejects_duplicate_names():
     """The _validate_registry hook prevents two entries claiming the same
     source name (downstream code keys aggregates by source)."""
@@ -726,9 +680,6 @@ def test_validate_registry_rejects_shared_login_without_marker():
         )
 
 
-# ----- --include-open + --merged-since rejected in main() -----
-
-
 def test_main_rejects_include_open_with_merged_since(tmp_path):
     """`gh pr list --state merged` is hardcoded on the --merged-since path, so
     combining --include-open with --merged-since silently never returned open
@@ -755,9 +706,6 @@ def test_main_rejects_include_open_with_merged_since(tmp_path):
     assert "--include-open requires --pr-list" in result.stderr
 
 
-# ----- corpus_filename collision-free guarantee -----
-
-
 def test_corpus_filename_disambiguates_when_owner_or_repo_contain_dash():
     """A flat `<owner>-<repo>-pr-<N>` scheme is ambiguous when owner or repo
     contain `-`: (`a-b`, `c`) and (`a`, `b-c`) both reduce to
@@ -769,9 +717,6 @@ def test_corpus_filename_disambiguates_when_owner_or_repo_contain_dash():
     # Nested layout is what makes the disambiguation possible.
     assert a == "a-b/c/pr-1.json"
     assert b == "a/b-c/pr-1.json"
-
-
-# ----- _load_labels header validation (runs before row loop) -----
 
 
 def test_load_labels_raises_on_empty_csv_with_bad_header(tmp_path):
@@ -881,15 +826,7 @@ def test_load_labels_accepts_the_committed_labels_file():
 
 
 def test_committed_labels_rows_have_no_overflow_field():
-    """an unquoted comma in notes splits into an eighth field that DictReader
-    parks under the None key. _load_labels reads only named columns and never
-    sees it, so the sibling test above passed while the pr-72 row was broken;
-    the overflow fires later as silent row loss when a DictWriter round-trip
-    hits the None key (it truncated the file 37 -> 28 rows mid-edit once).
-
-    mutation-verified 2026-08-21: unquoting the notes field on the pr-72
-    77c295227c30 row makes this fail naming its line; restoring the quote
-    passes."""
+    """an extra CSV field escapes named-column validation and breaks a DictWriter round trip."""
     with (Path(__file__).resolve().parents[1] / "labels.csv").open(newline="") as f:
         overflow = [i for i, row in enumerate(csv.DictReader(f), start=2) if None in row]
     assert overflow == [], f"labels.csv rows with an unquoted comma in notes (lines): {overflow}"

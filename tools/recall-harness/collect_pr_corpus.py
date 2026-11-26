@@ -24,8 +24,10 @@ byte-identical output. Comments are sorted by (file, line, created_at, id).
 Summaries are whitespace-collapsed.
 
 Recognized external review tools (currently `copilot` and `orchestrator-review`)
-live in the `EXTERNAL_REVIEW_TOOLS` registry below; `source: "toolkit"` is
-reserved for a future pr-review-toolkit addition.
+live in the `EXTERNAL_REVIEW_TOOLS` registry below.
+
+Exit 0 on success, 1 on a fetch error, or 2 on a usage error. Manifest mode
+prunes old records only after all fetches succeed.
 """
 
 from __future__ import annotations
@@ -34,23 +36,12 @@ import argparse
 import csv
 import json
 import re
-import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-# Make the sibling _shared module importable whether this file is run as a
-# script (python3 tools/recall-harness/collect_pr_corpus.py) or imported by
-# pytest. conftest.py handles the pytest case; this handles script invocation.
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _shared import (  # type: ignore[import-not-found]  # noqa: E402, F401  re-exported for callers/tests
-    canonical_summary,
-    finding_id,
-)
-
-_HARNESS_DIR = Path(__file__).resolve().parent
-DEFAULT_OUT_DIR = _HARNESS_DIR / "corpus"
+from _shared import DEFAULT_CORPUS_DIR, canonical_summary, require_pr_number
 
 SUMMARY_MARKER = "<!-- pr-review-loop-summary -->"
 
@@ -123,13 +114,7 @@ def _validate_registry(tools: tuple[ExternalReviewTool, ...]) -> None:
                     )
 
 
-# Registry of recognized external review tools. To support a new tool, append
-# an entry here. The comment-walk loop in `collect_pr` calls
-# `parse_orchestrator_findings` on any comment whose source resolves through
-# the registry; if a new tool emits a different structured body format, add a
-# new parser function and dispatch on `source` at the call site. First match
-# wins; if two tools could plausibly match the same comment, order by
-# specificity.
+# see the Sources section in README.md when adding a review tool.
 EXTERNAL_REVIEW_TOOLS: tuple[ExternalReviewTool, ...] = (
     ExternalReviewTool(
         name="copilot",
@@ -169,16 +154,6 @@ def identify_external_source(login: str | None, body: str | None) -> ExternalRev
     return None
 
 
-# Back-compat: existing tests import `is_copilot_login` and `COPILOT_LOGINS`.
-# Keep them as thin shims over the registry so the public surface is unchanged.
-COPILOT_LOGINS = next(t.logins for t in EXTERNAL_REVIEW_TOOLS if t.name == "copilot")
-
-
-def is_copilot_login(login: str | None) -> bool:
-    tool = identify_external_source(login, body=None)
-    return tool is not None and tool.name == "copilot"
-
-
 def corpus_filename(owner: str, repo: str, pr: int) -> str:
     """Per-PR corpus path (relative). Nests as <owner>/<repo>/pr-<N>.json so
     the corpus can hold PRs from multiple repos without collision on PR
@@ -188,11 +163,21 @@ def corpus_filename(owner: str, repo: str, pr: int) -> str:
     `/` (which neither GitHub owner nor repo names may contain) is
     unambiguous. The matched/ and unmatched/ JSONL outputs use the same
     scheme (with .jsonl extension)."""
+    for part in (owner, repo):
+        if (
+            not isinstance(part, str)
+            or not part
+            or "\x00" in part
+            or part in (".", "..")
+            or Path(part).name != part
+        ):
+            raise ValueError("owner and repo must each be a single directory name")
+    require_pr_number(pr)
     return f"{owner}/{repo}/pr-{pr}.json"
 
 
 def matched_filename(owner: str, repo: str, pr: int) -> str:
-    return f"{owner}/{repo}/pr-{pr}.jsonl"
+    return corpus_filename(owner, repo, pr) + "l"
 
 
 def parse_pr_list(raw: str) -> list[int]:
@@ -200,8 +185,8 @@ def parse_pr_list(raw: str) -> list[int]:
 
     Strips whitespace and filters empty elements so a trailing comma or
     space-after-comma doesn't crash on int(). Raises ValueError (via int())
-    on a genuinely non-numeric element so typos surface loudly."""
-    return [int(s.strip()) for s in raw.split(",") if s.strip()]
+    on nonnumeric elements. PR numbers must be positive."""
+    return [require_pr_number(int(s)) for s in raw.split(",") if s.strip()]
 
 
 def read_manifest(path: Path) -> list[tuple[str, str, int]]:
@@ -209,7 +194,14 @@ def read_manifest(path: Path) -> list[tuple[str, str, int]]:
     triples, in file order. csv handles quoting; pr is coerced to int so a
     non-numeric value raises loudly."""
     with path.open(newline="") as f:
-        return [(r["owner"], r["repo"], int(r["pr"])) for r in csv.DictReader(f)]
+        rows = csv.DictReader(f)
+        if not {"owner", "repo", "pr"}.issubset(rows.fieldnames or ()):
+            raise ValueError("manifest header must include owner,repo,pr")
+        return [(r["owner"], r["repo"], require_pr_number(int(r["pr"]))) for r in rows]
+
+
+class FetchResponseError(ValueError):
+    """gh returned JSON with a different shape than the requested fields."""
 
 
 def list_merged_prs(owner: str, repo: str, merged_since: str) -> list[int]:
@@ -238,15 +230,25 @@ def list_merged_prs(owner: str, repo: str, merged_since: str) -> list[int]:
         capture_output=True,
         text=True,
     )
-    return sorted(item["number"] for item in json.loads(listing_raw.stdout))
+    listing = json.loads(listing_raw.stdout)
+    if not isinstance(listing, list):
+        raise FetchResponseError("expected a list of merged PRs")
+    try:
+        return sorted(
+            require_pr_number(item.get("number") if isinstance(item, dict) else None)
+            for item in listing
+        )
+    except ValueError as error:
+        raise FetchResponseError(f"invalid merged PR listing: {error}") from error
 
+
+_PROMOTION_SUFFIX = r"(?:\s+\u2014\s+Promoted from suggestion.*)?$"
 
 # optional backticks keep both summary-renderer formats anchored.
 _BULLET_ANCHORED_EMDASH = re.compile(
     r"^-\s+`?(?P<file>[^\s:`]+):(?P<line>\d+)`?"
     r"(?P<note>\s*\([^)]*\))?"
-    r"\s*\u2014\s+(?P<summary>.+?)"
-    r"(?:\s+\u2014\s+Promoted from suggestion.*)?$",
+    r"\s*\u2014\s+(?P<summary>.+?)" + _PROMOTION_SUFFIX,
 )
 # Balanced backticks are the author marking an anchor explicitly, so any path
 # shape is admissible inside them: extensionless, and spaces too, since the
@@ -254,8 +256,7 @@ _BULLET_ANCHORED_EMDASH = re.compile(
 _BULLET_ANCHORED_COLON_TICKED = re.compile(
     r"^-\s+`(?P<file>[^`]+):(?P<line>\d+)`"
     r"(?P<note>\s*\([^)]*\))?"
-    r"\s*:\s+(?P<summary>.+?)"
-    r"(?:\s+\u2014\s+Promoted from suggestion.*)?$",
+    r"\s*:\s+(?P<summary>.+?)" + _PROMOTION_SUFFIX,
 )
 # Unticked, nothing separates a path from prose, and an extension cannot do it:
 # `example.com:8080` is shaped exactly like a file. Only a slash is decisive, so
@@ -265,8 +266,7 @@ _BULLET_ANCHORED_COLON_TICKED = re.compile(
 _BULLET_ANCHORED_COLON_BARE = re.compile(
     r"^-\s+(?P<file>[^\s:`/]*/[^\s:`]*):(?P<line>\d+)"
     r"(?P<note>\s*\([^)]*\))?"
-    r"\s*:\s+(?P<summary>.+?)"
-    r"(?:\s+\u2014\s+Promoted from suggestion.*)?$",
+    r"\s*:\s+(?P<summary>.+?)" + _PROMOTION_SUFFIX,
 )
 _BULLET_UNANCHORED = re.compile(r"^-\s+(?P<summary>.+?)$")
 
@@ -382,13 +382,7 @@ def parse_orchestrator_findings(body: str) -> list[dict]:
     FINDING block; caller fills in source/id/created_at from the parent comment.
     Bodies without any FINDING blocks return []; safe to call on any comment.
 
-    Raises RuntimeError if a parsed FINDING block has an empty file segment
-    (the regex's `[^|]+?` plus a downstream `.strip()` can produce ``""`` when
-    the upstream emits whitespace between the pipes). Empty file is unusable
-    downstream: match_external treats ``file=is not None`` as anchored while
-    report treats empty strings as unanchored, so the two consumers would
-    silently disagree on counts. Failing here pushes the break to the
-    producer."""
+    Reject blank paths because they identify no file."""
     if not body:
         return []
     out: list[dict] = []
@@ -415,9 +409,6 @@ def _gh_api(path: str) -> list:
 
     `gh api --paginate` concatenates pages as a stream of JSON arrays; we decode
     each and flatten."""
-    if shutil.which("gh") is None:
-        print("collect_pr_corpus: gh CLI not on PATH", file=sys.stderr)
-        sys.exit(1)
     result = subprocess.run(
         ["gh", "api", path, "--paginate"],
         check=True,
@@ -427,13 +418,21 @@ def _gh_api(path: str) -> list:
     decoder = json.JSONDecoder()
     out: list = []
     s = result.stdout.strip()
+    if not s:
+        raise json.JSONDecodeError(f"empty gh response for {path}", s, 0)
     i = 0
     while i < len(s):
         obj, end = decoder.raw_decode(s, i)
-        if isinstance(obj, list):
-            out.extend(obj)
-        else:
-            out.append(obj)
+        if not isinstance(obj, list) or not all(
+            isinstance(row, dict)
+            and "body" in row
+            and isinstance(row.get("body"), (str, type(None)))
+            and isinstance(row.get("user"), (dict, type(None)))
+            and "user" in row
+            for row in obj
+        ):
+            raise FetchResponseError(f"expected a page of comments or reviews for {path}")
+        out.extend(obj)
         i = end
         while i < len(s) and s[i].isspace():
             i += 1
@@ -463,15 +462,19 @@ def collect_pr(owner: str, repo: str, pr_number: int, include_open: bool = False
             "--repo",
             f"{owner}/{repo}",
             "--json",
-            "number,title,author,mergedAt,mergeCommit,headRefOid,baseRefName,headRefName,body",
+            "title,mergedAt,mergeCommit,headRefOid,baseRefName,headRefName",
         ],
         check=True,
         capture_output=True,
         text=True,
     )
     pr_meta = json.loads(pr_meta_raw.stdout)
-    merged_at = pr_meta.get("mergedAt")
-    if not merged_at and not include_open:
+    if not isinstance(pr_meta, dict) or "mergedAt" not in pr_meta:
+        raise FetchResponseError("expected PR metadata with mergedAt")
+    merged_at = pr_meta["mergedAt"]
+    if merged_at is not None and (not isinstance(merged_at, str) or not merged_at.strip()):
+        raise FetchResponseError("expected a merge timestamp or null for mergedAt")
+    if merged_at is None and not include_open:
         return {"corpus_version": CORPUS_VERSION, "pr": pr_number, "skipped": "not merged"}
     is_open = merged_at is None
 
@@ -616,16 +619,41 @@ def collect_pr(owner: str, repo: str, pr_number: int, include_open: bool = False
     }
 
 
+_FETCH_ERRORS = (
+    subprocess.CalledProcessError,
+    OSError,
+    UnicodeDecodeError,
+    json.JSONDecodeError,
+    FetchResponseError,
+)
+
+
+def _fetch_error_detail(error: Exception) -> str:
+    detail = f"{type(error).__name__}: {error}"
+    if isinstance(error, subprocess.CalledProcessError) and error.stderr:
+        detail += f"\nstderr: {error.stderr}"
+    return detail
+
+
 def _collect_and_write(
     owner: str, repo: str, pr_numbers: list[int], out_dir: Path, include_open: bool
-) -> None:
+) -> bool:
     out_dir.mkdir(parents=True, exist_ok=True)
     for pr in pr_numbers:
-        record = collect_pr(owner, repo, pr, include_open=include_open)
+        try:
+            record = collect_pr(owner, repo, pr, include_open=include_open)
+        except _FETCH_ERRORS as error:
+            print(
+                f"collect_pr_corpus: cannot collect {owner}/{repo} PR #{pr}\n"
+                f"{_fetch_error_detail(error)}",
+                file=sys.stderr,
+            )
+            return False
         out_path = out_dir / corpus_filename(owner, repo, pr)
         out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n")
         print(f"wrote {out_path}", file=sys.stderr)
+    return True
 
 
 def main() -> int:
@@ -634,6 +662,7 @@ def main() -> int:
     parser.add_argument("--repo")
     parser.add_argument(
         "--pr-list",
+        type=parse_pr_list,
         help="Comma-separated PR numbers. Mutually exclusive with --merged-since.",
     )
     parser.add_argument(
@@ -643,7 +672,7 @@ def main() -> int:
     parser.add_argument(
         "--out-dir",
         type=Path,
-        default=DEFAULT_OUT_DIR,
+        default=DEFAULT_CORPUS_DIR,
     )
     parser.add_argument(
         "--include-open",
@@ -665,7 +694,9 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    single_repo_mode = bool(args.owner or args.repo or args.pr_list or args.merged_since)
+    single_repo_mode = any(
+        value is not None for value in (args.owner, args.repo, args.pr_list, args.merged_since)
+    )
     if args.manifest and single_repo_mode:
         parser.error(
             "--manifest is mutually exclusive with --owner/--repo/--pr-list/--merged-since"
@@ -684,18 +715,18 @@ def main() -> int:
         # single-repo flags to collect a subset on purpose.
         grouped: dict[tuple[str, str], list[int]] = {}
         expected_paths = set()
-        for owner, repo, pr in read_manifest(args.manifest):
-            grouped.setdefault((owner, repo), []).append(pr)
-            expected_paths.add(args.out_dir / corpus_filename(owner, repo, pr))
+        try:
+            for owner, repo, pr in read_manifest(args.manifest):
+                grouped.setdefault((owner, repo), []).append(pr)
+                expected_paths.add(args.out_dir / corpus_filename(owner, repo, pr))
+        except (OSError, ValueError, KeyError) as error:
+            parser.error(f"cannot read manifest {args.manifest}: {error}")
         for (owner, repo), prs in grouped.items():
-            try:
-                _collect_and_write(owner, repo, prs, args.out_dir, include_open=False)
-            except subprocess.CalledProcessError as e:
+            if not _collect_and_write(owner, repo, prs, args.out_dir, include_open=False):
                 print(
-                    f"collect_pr_corpus: cannot collect {owner}/{repo} "
-                    f"(gh exited {e.returncode}). --manifest needs access to every "
-                    "listed repo; use --owner/--repo/--pr-list to collect a subset.\n"
-                    f"stderr: {e.stderr}",
+                    "Manifest collection needs access to every listed repository. "
+                    "Stopped before pruning. "
+                    "Use --owner/--repo/--pr-list to collect a subset.",
                     file=sys.stderr,
                 )
                 return 1
@@ -715,6 +746,9 @@ def main() -> int:
         # malformed search "merged:>=None"; require one explicitly.
         parser.error("provide --pr-list or --merged-since in single-repo mode")
 
+    if args.pr_list is not None and args.merged_since is not None:
+        parser.error("--pr-list and --merged-since are mutually exclusive")
+
     if args.include_open and not args.pr_list:
         parser.error(
             "--include-open requires --pr-list; --merged-since lists only merged PRs "
@@ -722,13 +756,21 @@ def main() -> int:
         )
 
     if args.pr_list:
-        pr_numbers = parse_pr_list(args.pr_list)
+        pr_numbers = args.pr_list
     else:
-        pr_numbers = list_merged_prs(args.owner, args.repo, args.merged_since)
-
-    _collect_and_write(
+        try:
+            pr_numbers = list_merged_prs(args.owner, args.repo, args.merged_since)
+        except _FETCH_ERRORS as error:
+            print(
+                f"collect_pr_corpus: cannot collect {args.owner}/{args.repo}: "
+                f"listing merged PRs since {args.merged_since}\n{_fetch_error_detail(error)}",
+                file=sys.stderr,
+            )
+            return 1
+    if not _collect_and_write(
         args.owner, args.repo, pr_numbers, args.out_dir, include_open=args.include_open
-    )
+    ):
+        return 1
     return 0
 
 

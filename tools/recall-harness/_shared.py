@@ -1,10 +1,16 @@
-"""shared finding identity and corpus validation for the recall harness."""
+"""shared paths, finding identity and corpus validation for the recall harness."""
 
 from __future__ import annotations
 
 import hashlib
 import json
 from pathlib import Path
+
+HARNESS_DIR = Path(__file__).resolve().parent
+DEFAULT_CORPUS_DIR = HARNESS_DIR / "corpus"
+DEFAULT_UNMATCHED_DIR = HARNESS_DIR / "unmatched"
+DEFAULT_MATCHED_DIR = HARNESS_DIR / "matched"
+DEFAULT_LOOP_UNMATCHED_DIR = HARNESS_DIR / "loop_unmatched"
 
 
 def require_corpus_version(corpus: dict, corpus_path: Path, expected_version: int) -> None:
@@ -15,6 +21,24 @@ def require_corpus_version(corpus: dict, corpus_path: Path, expected_version: in
             f"{corpus_path}: corpus_version={version!r}, expected "
             f"{expected_version}. Re-run collect_pr_corpus.py to regenerate."
         )
+
+
+def require_pr_number(value: int) -> int:
+    if type(value) is not int or value <= 0:
+        raise ValueError("pr must be a positive integer")
+    return value
+
+
+def require_corpus_identity(corpus: dict, path: Path) -> None:
+    owner, repo, filename = path.parts[-3:]
+    pr = require_pr_number(corpus.get("pr"))
+    # skipped records from the collector can omit owner and repo.
+    if corpus.get("skipped"):
+        matches_repo = (corpus.get("owner", owner), corpus.get("repo", repo)) == (owner, repo)
+    else:
+        matches_repo = (corpus.get("owner"), corpus.get("repo")) == (owner, repo)
+    if not matches_repo or filename != f"pr-{pr}.json":
+        raise ValueError(f"corpus identity does not match its path: {path}")
 
 
 def require_nested_layout(corpus_dir: Path, corpora: list[Path], expected_version: int) -> None:
@@ -56,3 +80,11 @@ def finding_id(finding: dict) -> str:
         sort_keys=True,
     )
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:12]
+
+
+def is_anchored(finding: dict) -> bool:
+    return finding.get("file") is not None and finding.get("line") is not None
+
+
+def reservation_path(root: Path) -> Path:
+    return root.parent / f".{root.name}.recall-lock"

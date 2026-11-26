@@ -22,14 +22,6 @@ from collect_pr_corpus import (  # type: ignore[import-not-found]  # noqa: E402 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 
 
-# ----- registry sanity checks -----
-
-
-def test_registry_has_distinct_names():
-    names = [t.name for t in EXTERNAL_REVIEW_TOOLS]
-    assert len(names) == len(set(names)), f"duplicate source name in registry: {names}"
-
-
 def test_registry_includes_copilot_and_orchestrator_review():
     names = {t.name for t in EXTERNAL_REVIEW_TOOLS}
     assert "copilot" in names
@@ -50,9 +42,6 @@ def test_registry_marker_only_required_for_shared_logins():
             )
 
 
-# ----- ExternalReviewTool.matches -----
-
-
 def test_external_review_tool_matches_login_only():
     tool = ExternalReviewTool(name="x", logins=frozenset({"alice"}))
     assert tool.matches("alice", "anything") is True
@@ -67,9 +56,6 @@ def test_external_review_tool_matches_login_and_marker():
     assert tool.matches("alice", "not the marker") is False
     assert tool.matches("alice", None) is False
     assert tool.matches("bob", "<!-- MARKER --> body") is False
-
-
-# ----- identify_external_source dispatch -----
 
 
 def test_identify_external_source_returns_copilot_for_copilot_logins():
@@ -106,9 +92,6 @@ def test_identify_external_source_returns_none_for_unknown_logins():
     assert identify_external_source("", "") is None
 
 
-# ----- parse_orchestrator_findings on the synthetic sample body -----
-
-
 def test_parse_orchestrator_findings_extracts_all_blocks_from_sample():
     """The synthetic fixture has 5 FINDING blocks across 4 distinct
     (file, line) keys, with one file (widget.ts) carrying two findings at the
@@ -139,10 +122,7 @@ def test_parse_orchestrator_findings_returns_empty_for_unrelated_body():
 
 
 def test_parse_orchestrator_findings_raises_on_empty_file_segment():
-    """match_external._is_anchored uses `is not None` while report.py uses a
-    truthy check; the two would disagree on a finding with file="". Fail at
-    the producer so the disagreement can't surface downstream as a false
-    PIPELINE WARNING."""
+    """a whitespace-only file field identifies no file."""
     import pytest
 
     body = (
@@ -153,9 +133,6 @@ def test_parse_orchestrator_findings_raises_on_empty_file_segment():
     )
     with pytest.raises(RuntimeError, match="empty file segment"):
         parse_orchestrator_findings(body)
-
-
-# ----- ExternalReviewTool construction invariants -----
 
 
 def test_external_review_tool_rejects_empty_name():
@@ -204,7 +181,7 @@ def test_external_review_tool_is_frozen():
 
 def test_parse_orchestrator_findings_summary_is_title_not_severity():
     """The summary used for matching is the TITLE text, not severity or agent
-    name. This pins the contract because the matcher's Jaccard scoring depends
+    name. This pins the contract because the matcher's containment scoring depends
     on the title vocabulary, not the structural metadata."""
     body = (
         "<!-- ORCHESTRATOR_REVIEW | COMMIT: deadbeef -->\n"

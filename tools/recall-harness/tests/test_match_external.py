@@ -1,4 +1,4 @@
-"""Tests for match_external bucketing. Uses real match_findings.py."""
+"""Tests for match_external bucketing. Uses real finding_matcher.py."""
 
 import json
 import subprocess
@@ -6,10 +6,11 @@ import sys
 from pathlib import Path
 
 import pytest
+from _shared import finding_id
 
 HARNESS = Path(__file__).resolve().parents[1]
 SCRIPT = HARNESS / "match_external.py"
-MATCH_SCRIPT = HARNESS.parent.parent / "scripts" / "match_findings.py"
+MATCH_SCRIPT = HARNESS.parent.parent / "scripts" / "finding_matcher.py"
 
 from collect_pr_corpus import (  # type: ignore[import-not-found]  # noqa: E402  — sibling made importable by conftest.py
     CORPUS_VERSION,
@@ -18,11 +19,13 @@ from collect_pr_corpus import (  # type: ignore[import-not-found]  # noqa: E402 
 )
 from match_external import (  # type: ignore[import-not-found]  # noqa: E402  — sibling made importable by conftest.py
     _load_matcher,
-    _run_matcher,
+    _require_matcher_fields,
+    process_corpus_file,
 )
+from report import EXPECTED_SCORER  # noqa: E402
 
 
-def _run(corpus: dict, tmp_path: Path) -> dict:
+def _run(corpus: dict, tmp_path: Path, match_script: Path = MATCH_SCRIPT) -> dict:
     """Invoke match_external on a single in-memory corpus, return parsed buckets."""
     corpus_dir = tmp_path / "corpus"
     unmatched_dir = tmp_path / "unmatched"
@@ -45,7 +48,7 @@ def _run(corpus: dict, tmp_path: Path) -> dict:
             "--loop-unmatched-dir",
             str(loop_unmatched_dir),
             "--match-script",
-            str(MATCH_SCRIPT),
+            str(match_script),
         ],
         check=True,
     )
@@ -163,7 +166,7 @@ def test_anchored_external_unmatched_when_loop_is_different_file(tmp_path):
             {
                 "file": "src/a.ts",
                 "line": 10,
-                "summary": "missing audit log on login",
+                "summary": "missing audit log on login for failed auth attempts here",
                 "source": "copilot",
                 "id": 3,
                 "created_at": "2026-05-02T00:00:00Z",
@@ -171,7 +174,6 @@ def test_anchored_external_unmatched_when_loop_is_different_file(tmp_path):
         ],
     )
     out = _run(corpus, tmp_path)
-    # Same summary but different file: matcher should not match.
     assert len(out["unmatched"]) == 1
     assert out["matched"] == []
 
@@ -259,51 +261,20 @@ def matcher_module():
     return _load_matcher(MATCH_SCRIPT)
 
 
-def _good():
-    return {"file": "src/a.ts", "line": 10, "summary": "missing audit log"}
-
-
-def test_run_matcher_raises_when_field_missing(matcher_module):
-    bad = {"file": "src/a.ts", "line": 10}  # missing summary
-    with pytest.raises(RuntimeError, match="missing required field 'summary'"):
-        _run_matcher(matcher_module, _good(), bad)
-
-
-def test_run_matcher_raises_when_line_is_string(matcher_module):
-    bad = {"file": "src/a.ts", "line": "10", "summary": "x"}
-    with pytest.raises(RuntimeError, match="field 'line' has wrong type"):
-        _run_matcher(matcher_module, _good(), bad)
-
-
-def test_run_matcher_raises_when_line_is_bool(matcher_module):
-    """bool is a subclass of int in Python; the matcher explicitly excludes it
-    so `True` doesn't sneak through as line number 1."""
-    bad = {"file": "src/a.ts", "line": True, "summary": "x"}
-    with pytest.raises(RuntimeError, match="field 'line' has wrong type"):
-        _run_matcher(matcher_module, _good(), bad)
-
-
-def test_run_matcher_raises_when_summary_is_not_string(matcher_module):
-    bad = {"file": "src/a.ts", "line": 10, "summary": 42}
-    with pytest.raises(RuntimeError, match="field 'summary' has wrong type"):
-        _run_matcher(matcher_module, _good(), bad)
-
-
-def test_run_matcher_raises_when_file_is_not_string(matcher_module):
-    bad = {"file": 42, "line": 10, "summary": "x"}
-    with pytest.raises(RuntimeError, match="field 'file' has wrong type"):
-        _run_matcher(matcher_module, _good(), bad)
-
-
-def test_run_matcher_validates_both_operands(matcher_module):
-    """Each operand is validated independently — a malformed `a` raises with
-    label 'a', a malformed `b` raises with label 'b'. Pins the label so a
-    refactor that drops the per-operand naming would fail."""
-    bad = {"file": "src/a.ts", "line": 10}  # missing summary
-    with pytest.raises(RuntimeError, match="^matcher input a:"):
-        _run_matcher(matcher_module, bad, _good())
-    with pytest.raises(RuntimeError, match="^matcher input b:"):
-        _run_matcher(matcher_module, _good(), bad)
+@pytest.mark.parametrize(
+    ("finding", "diagnostic"),
+    [
+        ({"file": "a", "line": 1}, "missing required field 'summary'"),
+        ({"file": "a", "line": "1", "summary": "x"}, "field 'line' has wrong type"),
+        ({"file": "a", "line": True, "summary": "x"}, "field 'line' has wrong type"),
+        ({"file": "a", "line": 1, "summary": 42}, "field 'summary' has wrong type"),
+        ({"file": 42, "line": 1, "summary": "x"}, "field 'file' has wrong type"),
+    ],
+)
+def test_invalid_matcher_field_reports_source(finding, diagnostic):
+    with pytest.raises(RuntimeError) as error:
+        _require_matcher_fields("external", finding, "example")
+    assert str(error.value) == f"matcher input external: {diagnostic} on example"
 
 
 def test_emitted_records_carry_the_scorer_stamp(tmp_path):
@@ -341,7 +312,7 @@ def test_emitted_records_carry_the_scorer_stamp(tmp_path):
     assert len(out["unmatched"]) == 1
     for bucket in ("matched", "unmatched"):
         for rec in out[bucket]:
-            assert rec.get("scorer") == "token_containment@0.5/win15", (
+            assert rec.get("scorer") == EXPECTED_SCORER, (
                 f"{bucket} record missing the scorer stamp; report.py's guard "
                 "cannot tell this output from pre-containment output"
             )
@@ -384,8 +355,8 @@ def test_loop_unmatched_records_carry_finding_id_and_scorer(tmp_path):
     loop = [{"file": "b.ts", "line": 20, "summary": "unrelated finding nobody else raised at all"}]
     out = _run(_corpus(loop, []), tmp_path)
     (record,) = out["loop_unmatched"]
-    assert len(record["finding_id"]) == 12
-    assert record["scorer"] == "token_containment@0.5/win15"
+    assert record["finding_id"] == finding_id(loop[0])
+    assert record["scorer"] == EXPECTED_SCORER
 
 
 def test_unanchored_loop_finding_absent_from_loop_unmatched(tmp_path):
@@ -394,3 +365,32 @@ def test_unanchored_loop_finding_absent_from_loop_unmatched(tmp_path):
     loop = [{"summary": "a finding with no file or line anchor at all"}]
     out = _run(_corpus(loop, []), tmp_path)
     assert out["loop_unmatched"] == []
+
+
+def test_malformed_external_raises_without_any_loop_finding(tmp_path, matcher_module):
+    corpus = _corpus(loop=[], external=[{"file": "a.ts", "line": "5", "summary": "x"}])
+    path = tmp_path / corpus_filename(corpus["owner"], corpus["repo"], corpus["pr"])
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps(corpus))
+    with pytest.raises(RuntimeError, match="field 'line' has wrong type"):
+        process_corpus_file(
+            path, tmp_path / "unmatched", tmp_path / "matched", tmp_path / "lu", matcher_module
+        )
+    assert not (tmp_path / "unmatched").exists()
+
+
+def test_match_script_uses_the_supplied_scorer(tmp_path):
+    module = tmp_path / "matcher.py"
+    module.write_text(
+        "CONTAINMENT_THRESHOLD = 0.2\nMIN_CONTAINMENT_TOKENS = 1\n"
+        "def tokens(s): return s.split()\n"
+        "def token_containment(a, b): return 1.0\n"
+        "def is_match(a, b, *, scorer, threshold, line_window):\n"
+        "    return scorer(a['summary'], b['summary']) >= threshold and line_window == 15\n"
+    )
+    loop = {"file": "a", "line": 1, "summary": "one"}
+    external = {"file": "b", "line": 2, "summary": "two"}
+    result = _run(_corpus([loop], [external]), tmp_path, module)
+    (pair,) = result["matched"]
+    assert (pair["matched_loop"], pair["external"]) == (loop, external)
+    assert pair["scorer"] == "token_containment@0.2/win15"

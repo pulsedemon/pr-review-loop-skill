@@ -224,26 +224,8 @@ def test_manifest_mode_hard_fails_on_unreachable_repo(tmp_path, monkeypatch, cap
     assert stale.read_text() == '{"pr":99}\n'
 
 
-# The drift check exists because nothing else compares the manifest against the
-# merged set. `test_corpus_is_subset_of_manifest` above compares two local
-# artifacts and skips when corpus/ is absent, which is always true on CI's
-# fresh checkout, so a PR merged into neither corpus nor manifest is invisible
-# to it.
-#
-# Mutation-tested before requesting review:
-#   - drop a merged PR row from the manifest -> exit 1 and that PR named in
-#     stderr (verified against the live repo: it caught #105, unmanifested at
-#     the time).
-#   - add a manifest row the merged set lacks -> still exit 0. a PR merged
-#     before the --merged-since window is legitimately manifested.
-#   - point owner/repo at a repo the manifest also lists -> rows for other
-#     repos are filtered out rather than counted as coverage.
-#   - drop the FileNotFoundError/JSONDecodeError handler -> both fetch-failure
-#     tests fail. only CalledProcessError was caught at first, so a missing gh
-#     escaped as a stack trace: still non-zero, but it reads in the workflow
-#     log like drift rather than a broken fetch.
-def _drift(monkeypatch, manifest, merged, owner="acme", repo="api"):
-    monkeypatch.setattr(check_manifest_drift, "list_merged_prs", lambda *_: merged)
+def _drift(monkeypatch, manifest, merged=(), owner="acme", repo="api", fetch=None):
+    monkeypatch.setattr(check_manifest_drift, "list_merged_prs", fetch or (lambda *_: merged))
     argv = [
         "check_manifest_drift.py",
         "--owner",
@@ -313,24 +295,7 @@ def test_drift_check_exits_2_when_gh_is_missing(tmp_path, monkeypatch, capsys):
     def boom(*_):
         raise FileNotFoundError(2, "No such file or directory: 'gh'")
 
-    monkeypatch.setattr(check_manifest_drift, "list_merged_prs", boom)
-    monkeypatch.setattr(
-        sys,
-        "argv",
-        [
-            "check_manifest_drift.py",
-            "--owner",
-            "acme",
-            "--repo",
-            "api",
-            "--merged-since",
-            "2026-01-01",
-            "--manifest",
-            str(manifest),
-        ],
-    )
-
-    assert check_manifest_drift.main() == 2
+    assert _drift(monkeypatch, manifest, fetch=boom) == 2
     assert "FileNotFoundError" in capsys.readouterr().err
 
 
@@ -344,24 +309,7 @@ def test_drift_check_exits_2_on_non_json_gh_output(tmp_path, monkeypatch, capsys
     def boom(*_):
         raise json.JSONDecodeError("Expecting value", "not json", 0)
 
-    monkeypatch.setattr(check_manifest_drift, "list_merged_prs", boom)
-    monkeypatch.setattr(
-        sys,
-        "argv",
-        [
-            "check_manifest_drift.py",
-            "--owner",
-            "acme",
-            "--repo",
-            "api",
-            "--merged-since",
-            "2026-01-01",
-            "--manifest",
-            str(manifest),
-        ],
-    )
-
-    assert check_manifest_drift.main() == 2
+    assert _drift(monkeypatch, manifest, fetch=boom) == 2
     assert "JSONDecodeError" in capsys.readouterr().err
 
 
@@ -398,22 +346,164 @@ def test_drift_check_exits_2_on_unparseable_manifest(tmp_path, monkeypatch, caps
     manifest = tmp_path / "m.csv"
     manifest.write_text("owner,repo,pr\nacme,api,notanumber\n")
 
-    monkeypatch.setattr(check_manifest_drift, "list_merged_prs", lambda *_: [1])
-    monkeypatch.setattr(
-        sys,
-        "argv",
-        [
-            "check_manifest_drift.py",
-            "--owner",
-            "acme",
-            "--repo",
-            "api",
-            "--merged-since",
-            "2026-01-01",
-            "--manifest",
-            str(manifest),
-        ],
-    )
-
-    assert check_manifest_drift.main() == 2
+    assert _drift(monkeypatch, manifest, [1]) == 2
     assert "cannot read" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    ("selectors", "message"),
+    [
+        (["--pr-list", "1", "--merged-since", "2026-01-01"], "mutually exclusive"),
+        (["--pr-list", "nope"], "argument --pr-list"),
+        (["--pr-list", "1,0"], "argument --pr-list"),
+    ],
+)
+def test_invalid_selectors_exit_before_fetch(tmp_path, selectors, message):
+    corpus = tmp_path / "corpus"
+    result = subprocess.run(
+        [
+            sys.executable,
+            COLLECT_SCRIPT,
+            "--owner",
+            "o",
+            "--repo",
+            "r",
+            *selectors,
+            "--out-dir",
+            corpus,
+        ],
+        env={"PATH": str(tmp_path)},
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 2
+    assert message in result.stderr
+    assert not corpus.exists()
+
+
+def test_empty_selector_cannot_trigger_manifest_pruning(tmp_path):
+    manifest = tmp_path / "manifest.csv"
+    manifest.write_text("owner,repo,pr\n")
+    record = tmp_path / "corpus/o/r/pr-1.json"
+    record.parent.mkdir(parents=True)
+    record.write_text('{"pr":1}\n')
+    result = subprocess.run(
+        [
+            sys.executable,
+            COLLECT_SCRIPT,
+            "--manifest",
+            manifest,
+            "--pr-list",
+            "",
+            "--out-dir",
+            tmp_path / "corpus",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 2
+    assert "mutually exclusive" in result.stderr
+    assert record.read_text() == '{"pr":1}\n'
+
+
+@pytest.mark.parametrize("use_manifest", [True, False])
+def test_missing_gh_reports_the_failed_repository(tmp_path, use_manifest):
+    args = ["--owner", "acme", "--repo", "api", "--pr-list", "12"]
+    if use_manifest:
+        manifest = tmp_path / "manifest.csv"
+        manifest.write_text("owner,repo,pr\nacme,api,12\n")
+        args = ["--manifest", manifest]
+    result = subprocess.run(
+        [sys.executable, COLLECT_SCRIPT, *args, "--out-dir", tmp_path / "corpus"],
+        env={"PATH": str(tmp_path)},
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 1
+    assert "cannot collect acme/api" in result.stderr
+    assert "FileNotFoundError" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+@pytest.mark.parametrize(
+    "response, error", [("invalid json", "JSONDecodeError"), ("{}", "FetchResponseError")]
+)
+@pytest.mark.parametrize("manifest_mode", [True, False])
+def test_malformed_fetch_identifies_the_operation_without_pruning(
+    tmp_path, manifest_mode, response, error
+):
+    gh = tmp_path / "gh"
+    gh.write_text(f"#!/bin/sh\nprintf '%s\n' '{response}'\n")
+    gh.chmod(0o755)
+    corpus = tmp_path / "corpus"
+    stale = corpus / "o/r/pr-99.json"
+    stale.parent.mkdir(parents=True)
+    stale.write_text('{"pr":99}\n')
+    if manifest_mode:
+        manifest = tmp_path / "manifest.csv"
+        manifest.write_text("owner,repo,pr\no,r,7\n")
+        args = ["--manifest", manifest]
+        context = "o/r PR #7"
+    else:
+        args = ["--owner", "o", "--repo", "r", "--merged-since", "2026-01-01"]
+        context = "listing merged PRs since 2026-01-01"
+    result = subprocess.run(
+        [sys.executable, COLLECT_SCRIPT, *args, "--out-dir", corpus],
+        env={"PATH": str(tmp_path)},
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 1
+    assert context in result.stderr
+    assert error in result.stderr
+    assert "Traceback" not in result.stderr
+    assert stale.read_text() == '{"pr":99}\n'
+
+
+def test_empty_comment_response_is_a_fetch_failure(tmp_path, monkeypatch):
+    gh = tmp_path / "gh"
+    gh.write_text("#!/bin/sh\nexit 0\n")
+    gh.chmod(0o755)
+    monkeypatch.setenv("PATH", str(tmp_path))
+    with pytest.raises(json.JSONDecodeError, match="empty gh response for comments"):
+        collect_pr_corpus._gh_api("comments")
+
+
+@pytest.mark.parametrize("contents", ["", "unexpected,column\n"])
+def test_headerless_manifest_cannot_prune_existing_records(tmp_path, contents):
+    manifest = tmp_path / "manifest.csv"
+    manifest.write_text(contents)
+    corpus = tmp_path / "corpus"
+    prior = corpus / "o/r/pr-9.json"
+    prior.parent.mkdir(parents=True)
+    prior.write_text('{"pr":9}')
+    result = subprocess.run(
+        [sys.executable, COLLECT_SCRIPT, "--manifest", manifest, "--out-dir", corpus],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 2
+    assert "manifest header" in result.stderr
+    assert prior.read_text() == '{"pr":9}'
+
+
+def test_malformed_page_after_metadata_does_not_write_a_skipped_record(tmp_path, monkeypatch):
+    def gh(cmd, **kwargs):
+        data = {"mergedAt": "2026-01-01T00:00:00Z"} if "view" in cmd else {}
+        return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps(data))
+
+    monkeypatch.setattr(subprocess, "run", gh)
+    with pytest.raises(collect_pr_corpus.FetchResponseError, match="page of comments or reviews"):
+        collect_pr_corpus.collect_pr("o", "r", 7)
+
+
+def test_drift_check_rejects_wrong_json_shape(tmp_path, monkeypatch, capsys):
+    manifest = tmp_path / "manifest.csv"
+    manifest.write_text("owner,repo,pr\n")
+
+    def gh(cmd, **kwargs):
+        return subprocess.CompletedProcess(cmd, 0, stdout="{}")
+
+    monkeypatch.setattr(subprocess, "run", gh)
+    assert _drift(monkeypatch, manifest, fetch=collect_pr_corpus.list_merged_prs) == 2
+    assert "expected a list of merged PRs" in capsys.readouterr().err

@@ -1,12 +1,11 @@
 """Tests for collect_pr_corpus normalization helpers."""
 
 import time
+from pathlib import Path
 
 import pytest
 from collect_pr_corpus import (  # type: ignore[import-not-found]  # noqa: E402  — sibling module made importable by conftest.py
-    canonical_summary,
-    finding_id,
-    is_copilot_login,
+    matched_filename,
     normalize_external_comment,
     parse_pr_list,
     parse_summary_bullets,
@@ -99,7 +98,7 @@ def test_parse_summary_bullets_keeps_parenthetical_in_summary():
 
 
 def test_parse_summary_bullets_extensionless_path_anchors_on_em_dash():
-    """The colon branch needs a `.` or `/` to keep prose out, but the em dash was
+    """The colon branch needs a `/` to keep prose out, but the em dash was
     never ambiguous. Requiring it on both demoted real top-level paths that
     already anchored."""
     body = (
@@ -310,38 +309,6 @@ def test_normalize_external_comment_no_line_marked_unanchored():
     assert norm["line"] is None
 
 
-def test_canonical_summary_collapses_whitespace_and_strips():
-    assert canonical_summary("  multi   line\n  summary  ") == "multi line summary"
-
-
-def test_finding_id_is_stable_across_runs():
-    f = {"file": "a.ts", "line": 10, "summary": "x", "source": "copilot"}
-    assert finding_id(f) == finding_id(dict(f))
-
-
-def test_finding_id_is_invariant_under_summary_whitespace():
-    a = {"file": "a.ts", "line": 10, "summary": "x", "source": "copilot"}
-    b = {"file": "a.ts", "line": 10, "summary": "  x  ", "source": "copilot"}
-    c = {"file": "a.ts", "line": 10, "summary": "x\t\nx", "source": "copilot"}
-    d = {"file": "a.ts", "line": 10, "summary": "x x", "source": "copilot"}
-    assert finding_id(a) == finding_id(b)
-    assert finding_id(c) == finding_id(d)
-
-
-def test_finding_id_changes_with_summary_content():
-    a = {"file": "a.ts", "line": 10, "summary": "x", "source": "copilot"}
-    b = {"file": "a.ts", "line": 10, "summary": "y", "source": "copilot"}
-    assert finding_id(a) != finding_id(b)
-
-
-def test_is_copilot_login_accepts_both_forms():
-    assert is_copilot_login("Copilot") is True
-    assert is_copilot_login("copilot-pull-request-reviewer") is True
-    assert is_copilot_login("pulsedemon") is False
-    assert is_copilot_login(None) is False
-    assert is_copilot_login("") is False
-
-
 def test_parse_pr_list_strips_whitespace():
     assert parse_pr_list("5,9,10") == [5, 9, 10]
     assert parse_pr_list("5, 9, 10") == [5, 9, 10]
@@ -419,3 +386,31 @@ def test_parse_summary_bullets_keeps_deferred_wording_outside_reviewer_section()
             "summary": "deferred cleanup of temp dirs never runs on the error path",
         }
     ]
+
+
+@pytest.mark.parametrize("template", ["summary_ready.md", "summary_needs_attention.md"])
+def test_parse_summary_bullets_reads_the_loop_templates(template):
+    body = (Path(__file__).resolve().parents[3] / "templates" / template).read_text()
+    placeholder = "<file:line> \u2014 <summary>"
+    expected = [{"summary": placeholder}] * body.count("\n- " + placeholder)
+    assert expected
+    assert parse_summary_bullets(body) == ([], expected)
+
+
+@pytest.mark.parametrize(
+    ("owner", "repo", "number"),
+    [
+        ("two/parts", "r", 1),
+        ("o", "", 1),
+        ("o", "r", "one"),
+        ("o", "r", True),
+        ("o", "r", 0),
+        ("o", "r", -1),
+        (".", "r", 1),
+        ("o", "..", 1),
+        ("o", "r\x00", 1),
+    ],
+)
+def test_bucket_name_requires_repository_components_and_integer_pr(owner, repo, number):
+    with pytest.raises(ValueError):
+        matched_filename(owner, repo, number)

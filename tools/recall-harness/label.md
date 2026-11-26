@@ -12,7 +12,8 @@ owner,repo,pr,bucket,finding_id,label,notes
 - `repo`: repository name (e.g. `pr-review-loop`, `web`).
 - `pr`: PR number (integer).
 - `bucket`: one of: `unmatched`, `unanchored_external`, `unanchored_loop`, `matched_sample`, `loop_unmatched`.
-- `finding_id`: 12-char hex hash from the corresponding JSONL file. Stable across A1/A2 re-runs.
+- `finding_id`: Copy the ID from the matching JSONL row for anchored findings, except for a loop finding from a rejected pair (see the precision bucket below). For unanchored findings, select the entry from the corpus file's `external_findings` or `loop_findings_unanchored` array by its zero-based array position (for example, `jq '.external_findings[0]' "$corpus_json"`) and pipe it into the Python command below. If two entries in the same PR and bucket produce the same hash, append a distinct suffix to each duplicate. Keep those IDs when revising judgments. The report tallies unanchored labels directly.
+
 - `label`: one of the labels in the section matching `bucket`.
 - `notes`: Explain the judgment with enough code context to revisit it: the defect behind a `real_miss`, why a finding is useful, or why it is wrong or low-value. For example, "coverage wish on an error branch that already fails loudly" is checkable; "not useful" is not. Include ambiguity and related findings. Quote fields containing commas so the CSV retains the complete note; `tools/recall-harness/tests/test_version_and_schema_guards.py::test_committed_labels_rows_have_no_overflow_field` checks this.
 
@@ -49,7 +50,7 @@ Loop findings parsed without a file:line anchor (e.g. CI-derived items). Apply O
 A4 deterministically samples 10% (min 3) of the matched pairs in `matched/<owner>/<repo>/pr-<N>.jsonl` (written by A2). Score each pair:
 
 - `matched_true`: the external and loop findings really refer to the same issue.
-- `matched_false`: the pair should not have been made. Two cases: a matcher false-positive, where the findings are unrelated but happened to share a file and overlapping vocabulary; or a loop side that is not a panel finding at all, e.g. an `addressed:` / `deferred:` disposition line. REPORT.md surfaces the per-PR `matched_false` rate; rates above 10% flag for matcher-tuning before trusting the unmatched-driven groups.
+- `matched_false`: the pair should not have been made. Two cases: a matcher false-positive, where the findings are unrelated but happened to share a file and overlapping vocabulary; or a loop side that is not a panel finding at all, e.g. an `addressed:` / `deferred:` disposition line. REPORT.md surfaces the `matched_false` rate across judged sampled pairs; rates above `MATCHED_FALSE_WARN_THRESHOLD` in `tools/recall-harness/report.py` flag for matcher-tuning before trusting the unmatched-driven groups.
 
 **A post-edit echo is still `matched_true`.** The label answers "do these describe the same issue", not "did the panel get there first": matching measures review overlap. So a bullet added to the summary after the reviewer comment it duplicates is a true pair, recorded with a note saying independence is unestablished.
 
@@ -58,6 +59,13 @@ Check before crediting one as a catch. `loop_summary_created_at` / `loop_summary
 ### `bucket = loop_unmatched` (the precision bucket)
 
 Anchored loop findings no external reviewer corroborated, written by A2 to `loop_unmatched/<owner>/<repo>/pr-<N>.jsonl`.
+
+When every pair for a loop finding is labeled `matched_false`, judge that loop finding here too. Its matched JSONL row carries the external ID. To obtain the loop ID from the repository root, choose the matched JSONL row you judged and set `row_number` to its one-based line number. Hash its `matched_loop` field:
+
+```bash
+jq -n --argjson row "$row_number" 'nth($row - 1; inputs) | .matched_loop' "$matched_jsonl" |
+  python3 -c 'import json, sys; sys.path.insert(0, "tools/recall-harness"); from _shared import finding_id; print(finding_id(json.load(sys.stdin)))'
+```
 
 **Non-corroboration is not evidence of a false positive.** Copilot has its own recall problem, so these are judged by hand against the diff and never inferred from the matched/unmatched split. Apply ONE of:
 
@@ -75,7 +83,7 @@ The useful rate covers manually judged, uncorroborated loop findings: `loop_true
 ## Workflow
 
 1. Run A1 + A2.
-2. Open `labels.csv` and for each new row needed (from `unmatched/*.jsonl`, `matched/*.jsonl`, `loop_unmatched/*.jsonl`, and the unanchored buckets), add a row.
+2. Open `labels.csv` and for each new row needed (from `unmatched/<owner>/<repo>/pr-<N>.jsonl`, `matched/<owner>/<repo>/pr-<N>.jsonl`, `loop_unmatched/<owner>/<repo>/pr-<N>.jsonl`, and the corpus files for the unanchored buckets), add a row.
 3. Apply the label. Use `notes` liberally when in doubt: future-you will thank you.
 4. Run A4 (`report.py`) to regenerate REPORT.md.
 5. Commit `labels.csv` (and `corpus-manifest.csv` if you added PRs). `REPORT.md` is generated, not committed.
@@ -88,7 +96,7 @@ The useful rate covers manually judged, uncorroborated loop findings: `loop_true
 | Style nit Copilot loves and the panel is right to skip | `noise` |
 | "Consider refactoring this unrelated file" | `out_of_scope` |
 | "This is slow in prod" | `unrecoverable` |
-| Two findings about the same line via Jaccard collision | `matched_false` |
+| Unrelated findings on the same line that share vocabulary | `matched_false` |
 | Loop side is an `addressed:` / `deferred:` disposition line | `matched_false` |
 | Same issue, but the loop bullet postdates the comment | `matched_true` + note |
 | Two findings genuinely about the same issue | `matched_true` |

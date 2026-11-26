@@ -27,31 +27,7 @@ import json
 import sys
 from pathlib import Path
 
-SCRIPT_DIR = Path(__file__).resolve().parent
-if str(SCRIPT_DIR) not in sys.path:
-    sys.path.insert(0, str(SCRIPT_DIR))
-
-from finding_matcher import (  # noqa: E402
-    CONTAINMENT_THRESHOLD,
-    LINE_WINDOW,
-    MIN_CONTAINMENT_TOKENS,
-    OVERLAP_THRESHOLD,
-    is_match,
-    token_containment,
-    token_overlap,
-    tokens,
-)
-
-__all__ = [
-    "CONTAINMENT_THRESHOLD",
-    "LINE_WINDOW",
-    "MIN_CONTAINMENT_TOKENS",
-    "OVERLAP_THRESHOLD",
-    "is_match",
-    "token_containment",
-    "token_overlap",
-    "tokens",
-]
+from finding_matcher import is_match
 
 
 def _load(arg: str) -> dict:
@@ -83,8 +59,6 @@ def main() -> int:
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as e:
         print(f"ERROR: cannot read input: {e}", file=sys.stderr)
         return 2
-    except SystemExit:
-        raise
 
     for label, obj in (("a", a), ("b", b)):
         if not isinstance(obj, dict):

@@ -12,9 +12,9 @@ HARNESS = Path(__file__).resolve().parents[1]
 REPO_ROOT = HARNESS.parent.parent
 
 
-def test_collect_default_out_dir_is_anchored():
-    assert collect_pr_corpus.DEFAULT_OUT_DIR.is_absolute()
-    assert collect_pr_corpus.DEFAULT_OUT_DIR == HARNESS / "corpus"
+def test_collect_default_corpus_dir_is_anchored():
+    assert collect_pr_corpus.DEFAULT_CORPUS_DIR.is_absolute()
+    assert collect_pr_corpus.DEFAULT_CORPUS_DIR == HARNESS / "corpus"
 
 
 def test_match_external_default_dirs_are_anchored():
@@ -33,7 +33,7 @@ def test_match_external_default_dirs_are_anchored():
 
 def test_match_external_match_script_anchored_to_repo_root():
     assert match_external.DEFAULT_MATCH_SCRIPT.is_absolute()
-    assert match_external.DEFAULT_MATCH_SCRIPT == REPO_ROOT / "scripts" / "match_findings.py"
+    assert match_external.DEFAULT_MATCH_SCRIPT == REPO_ROOT / "scripts" / "finding_matcher.py"
     assert match_external.DEFAULT_MATCH_SCRIPT.exists()
 
 
