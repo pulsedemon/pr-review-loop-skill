@@ -74,6 +74,7 @@ def test_duplicate_panel_names_rejected(tmp_path: Path) -> None:
           - name: alpha
             description: alpha persona
             move_c: false
+            owns_schema_constraint_blocker: true
           - name: alpha
             description: alpha duplicate
             move_c: false
