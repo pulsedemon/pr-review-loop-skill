@@ -116,9 +116,7 @@ jobs:
             echo "runner image no longer preinstalls: ${missing[*]}" >&2
             exit 1
           fi
-          # 1.10.0 is what noble shipped. 1.11+ errors on an empty suite
-          # (`Found no tests`), which the cap-drift fixtures in
-          # test_cap_drift_guard_fires.bats rely on exiting 0.
+          # 1.10.0 is what Ubuntu 24.04 (noble) shipped.
           BATS_VERSION=1.10.0
           curl -fsSL --retry 3 --retry-all-errors --connect-timeout 15 --max-time 120 \
             "https://github.com/bats-core/bats-core/archive/refs/tags/v${BATS_VERSION}.tar.gz" \
