@@ -4,9 +4,6 @@ import time
 
 import pytest
 from collect_pr_corpus import (  # type: ignore[import-not-found]  # noqa: E402  — sibling module made importable by conftest.py
-    canonical_summary,
-    finding_id,
-    is_copilot_login,
     normalize_external_comment,
     parse_pr_list,
     parse_summary_bullets,
@@ -308,38 +305,6 @@ def test_normalize_external_comment_no_line_marked_unanchored():
     norm = normalize_external_comment(raw, source="copilot")
     assert norm["file"] is None
     assert norm["line"] is None
-
-
-def test_canonical_summary_collapses_whitespace_and_strips():
-    assert canonical_summary("  multi   line\n  summary  ") == "multi line summary"
-
-
-def test_finding_id_is_stable_across_runs():
-    f = {"file": "a.ts", "line": 10, "summary": "x", "source": "copilot"}
-    assert finding_id(f) == finding_id(dict(f))
-
-
-def test_finding_id_is_invariant_under_summary_whitespace():
-    a = {"file": "a.ts", "line": 10, "summary": "x", "source": "copilot"}
-    b = {"file": "a.ts", "line": 10, "summary": "  x  ", "source": "copilot"}
-    c = {"file": "a.ts", "line": 10, "summary": "x\t\nx", "source": "copilot"}
-    d = {"file": "a.ts", "line": 10, "summary": "x x", "source": "copilot"}
-    assert finding_id(a) == finding_id(b)
-    assert finding_id(c) == finding_id(d)
-
-
-def test_finding_id_changes_with_summary_content():
-    a = {"file": "a.ts", "line": 10, "summary": "x", "source": "copilot"}
-    b = {"file": "a.ts", "line": 10, "summary": "y", "source": "copilot"}
-    assert finding_id(a) != finding_id(b)
-
-
-def test_is_copilot_login_accepts_both_forms():
-    assert is_copilot_login("Copilot") is True
-    assert is_copilot_login("copilot-pull-request-reviewer") is True
-    assert is_copilot_login("pulsedemon") is False
-    assert is_copilot_login(None) is False
-    assert is_copilot_login("") is False
 
 
 def test_parse_pr_list_strips_whitespace():

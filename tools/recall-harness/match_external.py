@@ -13,7 +13,7 @@ For each corpus file in --corpus-dir:
   unmatched/<owner>/<repo>/pr-<N>.jsonl (external only).
 
 Each output line is one JSON object with stable keys: finding_id (recomputed
-from the external finding using the same hash as A1's collect_pr_corpus),
+from the external finding with _shared.finding_id),
 external, and matched_loop (matched only).
 
 the matcher module is imported once via --match-script (default
@@ -31,21 +31,15 @@ import sys
 from pathlib import Path
 from types import ModuleType
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _shared import (  # noqa: E402
+from _shared import (
     finding_id,
     require_corpus_version,
     require_nested_layout,
 )
-from collect_pr_corpus import (  # type: ignore[import-not-found]  # noqa: E402
+from collect_pr_corpus import (
     CORPUS_VERSION,
     matched_filename,
 )
-
-# Back-compat alias: external callers and tests imported finding_id_for from
-# this module before the _shared extraction. Keep the alias so we don't break
-# them in a fix-batch PR.
-finding_id_for = finding_id
 
 _HARNESS_DIR = Path(__file__).resolve().parent
 DEFAULT_CORPUS_DIR = _HARNESS_DIR / "corpus"
@@ -217,7 +211,7 @@ def process_corpus_file(
                 corroborated_loop_idx.add(idx)
                 break
         record = {
-            "finding_id": finding_id_for(ext),
+            "finding_id": finding_id(ext),
             "external": ext,
             "scorer": _scorer_stamp(matcher),
         }

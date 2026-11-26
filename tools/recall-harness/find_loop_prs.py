@@ -21,8 +21,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from collect_pr_corpus import SUMMARY_MARKER  # type: ignore[import-not-found]  # noqa: E402
+from collect_pr_corpus import SUMMARY_MARKER
 
 # PRs per request, and comments per PR within it. GraphQL caps either connection
 # at 100; the outer page sits at 50 because 50x100 nodes is a large enough

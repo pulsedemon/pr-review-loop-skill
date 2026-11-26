@@ -40,14 +40,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-# Make the sibling _shared module importable whether this file is run as a
-# script (python3 tools/recall-harness/collect_pr_corpus.py) or imported by
-# pytest. conftest.py handles the pytest case; this handles script invocation.
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _shared import (  # type: ignore[import-not-found]  # noqa: E402, F401  re-exported for callers/tests
-    canonical_summary,
-    finding_id,
-)
+from _shared import canonical_summary
 
 _HARNESS_DIR = Path(__file__).resolve().parent
 DEFAULT_OUT_DIR = _HARNESS_DIR / "corpus"
@@ -167,16 +160,6 @@ def identify_external_source(login: str | None, body: str | None) -> ExternalRev
         if tool.matches(login, body):
             return tool
     return None
-
-
-# Back-compat: existing tests import `is_copilot_login` and `COPILOT_LOGINS`.
-# Keep them as thin shims over the registry so the public surface is unchanged.
-COPILOT_LOGINS = next(t.logins for t in EXTERNAL_REVIEW_TOOLS if t.name == "copilot")
-
-
-def is_copilot_login(login: str | None) -> bool:
-    tool = identify_external_source(login, body=None)
-    return tool is not None and tool.name == "copilot"
 
 
 def corpus_filename(owner: str, repo: str, pr: int) -> str:

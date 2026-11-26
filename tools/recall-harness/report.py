@@ -21,9 +21,8 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import NamedTuple
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _shared import finding_id, require_corpus_version, require_nested_layout  # noqa: E402
-from collect_pr_corpus import (  # type: ignore[import-not-found]  # noqa: E402
+from _shared import finding_id, require_corpus_version, require_nested_layout
+from collect_pr_corpus import (
     CORPUS_VERSION,
     matched_filename,
 )
