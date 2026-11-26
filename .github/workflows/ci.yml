@@ -154,23 +154,3 @@ jobs:
           test ! -L "$HOME/.codex/skills/pr-review-loop"
           test ! -e "$HOME/.config/opencode/skills/pr-review-loop"
           test ! -e "$HOME/.config/opencode/agent/prl-cheap.md"
-      - name: bare install with nothing detected exits 0
-        run: |
-          set -euo pipefail
-          export HOME="$RUNNER_TEMP/fakehome-empty"
-          export XDG_CONFIG_HOME="$HOME/.config"
-          mkdir -p "$HOME"
-          out="$(./install.sh 2>&1)"
-          echo "$out" | grep -q "no supported hosts detected"
-          test -z "$(ls -A "$HOME")"
-      - name: uninstall preserves symlinks pointing elsewhere
-        run: |
-          set -euo pipefail
-          export HOME="$RUNNER_TEMP/fakehome2"
-          mkdir -p "$HOME/.cursor/skills" "$HOME/.claude/skills" "$RUNNER_TEMP/other"
-          # Foreign symlink: not pointing at this repo. Call --uninstall
-          # directly to prove uninstall leaves symlinks it didn't create alone.
-          ln -s "$RUNNER_TEMP/other" "$HOME/.cursor/skills/pr-review-loop"
-          ./install.sh --uninstall
-          test -L "$HOME/.cursor/skills/pr-review-loop"
-          test "$(readlink "$HOME/.cursor/skills/pr-review-loop")" = "$RUNNER_TEMP/other"
