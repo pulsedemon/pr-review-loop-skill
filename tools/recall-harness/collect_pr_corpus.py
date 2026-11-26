@@ -164,10 +164,16 @@ def corpus_filename(owner: str, repo: str, pr: int) -> str:
     unambiguous. The matched/ and unmatched/ JSONL outputs use the same
     scheme (with .jsonl extension)."""
     for part in (owner, repo):
-        if not isinstance(part, str) or not part or part in (".", "..") or Path(part).name != part:
+        if (
+            not isinstance(part, str)
+            or not part
+            or "\x00" in part
+            or part in (".", "..")
+            or Path(part).name != part
+        ):
             raise ValueError("owner and repo must each be a single directory name")
-    if type(pr) is not int:
-        raise ValueError("pr must be an integer")
+    if type(pr) is not int or pr <= 0:
+        raise ValueError("pr must be a positive integer")
     return f"{owner}/{repo}/pr-{pr}.json"
 
 
@@ -397,6 +403,8 @@ def _gh_api(path: str) -> list:
     decoder = json.JSONDecoder()
     out: list = []
     s = result.stdout.strip()
+    if not s:
+        raise json.JSONDecodeError(f"empty gh response for {path}", s, 0)
     i = 0
     while i < len(s):
         obj, end = decoder.raw_decode(s, i)
@@ -682,7 +690,8 @@ def main() -> int:
         for (owner, repo), prs in grouped.items():
             if not _collect_and_write(owner, repo, prs, args.out_dir, include_open=False):
                 print(
-                    "Manifest collection stopped before pruning. "
+                    "Manifest collection needs access to every listed repository. "
+                    "Stopped before pruning. "
                     "Use --owner/--repo/--pr-list to collect a subset.",
                     file=sys.stderr,
                 )

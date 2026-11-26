@@ -30,6 +30,7 @@ from _shared import (
     HARNESS_DIR,
     finding_id,
     is_anchored,
+    require_corpus_identity,
     require_corpus_version,
     require_nested_layout,
 )
@@ -333,6 +334,7 @@ def main() -> int:
         require_corpus_version(corpus, corpus_path, CORPUS_VERSION)
         if corpus.get("skipped"):
             continue
+        require_corpus_identity(corpus, corpus_path)
         pr = corpus["pr"]
         owner = corpus["owner"]
         repo = corpus["repo"]

@@ -26,10 +26,11 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import shutil
 import sys
 from contextlib import ExitStack, contextmanager
 from pathlib import Path
-from tempfile import TemporaryDirectory
+from tempfile import mkdtemp
 from types import ModuleType
 
 from _shared import (
@@ -40,6 +41,7 @@ from _shared import (
     HARNESS_DIR,
     finding_id,
     is_anchored,
+    require_corpus_identity,
     require_corpus_version,
     require_nested_layout,
 )
@@ -168,6 +170,7 @@ def process_corpus_file(
     require_corpus_version(corpus, corpus_path, CORPUS_VERSION)
     if corpus.get("skipped"):
         return
+    require_corpus_identity(corpus, corpus_path)
     if corpus.get("is_open"):
         # In-flight PRs are surfaced separately by A4 (report.py); skip A2 so we
         # don't leave stale matched/unmatched JSONL behind once they merge.
@@ -255,25 +258,32 @@ def process_corpus_file(
 
 
 @contextmanager
-def _stage_outputs(destinations: tuple[Path, ...], corpus_dir: Path):
+def _stage_outputs(destinations: tuple[Path, ...], protected_inputs: list[Path]):
     """keep prior buckets available if matching or publication fails."""
-    if any(path.is_symlink() for path in destinations):
-        raise ValueError("output directories cannot be symlinks")
     paths = tuple(path.resolve() for path in destinations)
     if len(set(paths)) != len(paths):
         raise ValueError("each matcher output needs its own directory")
-    corpus = corpus_dir.resolve()
-    for path in paths:
-        if corpus.is_relative_to(path):
-            raise ValueError(f"output directory would replace the corpus: {path}")
+    inputs = {p.resolve() for p in protected_inputs} | {p.absolute() for p in protected_inputs}
+    for destination, path in zip(destinations, paths, strict=True):
+        if destination.is_symlink() or any(
+            ancestor.is_symlink()
+            and any(ancestor.parent.resolve().is_relative_to(root) for root in paths)
+            for ancestor in destination.parents
+        ):
+            raise ValueError(
+                f"matcher output traverses a symlink within an output tree: {destination}"
+            )
+        if any(source.is_relative_to(path) for source in inputs):
+            raise ValueError(f"matcher output and corpus directories overlap: {path}")
         if path.exists() and not path.is_dir():
             raise NotADirectoryError(path)
     roots = [path for path in paths if not any(parent in paths for parent in path.parents)]
-    with ExitStack() as cleanup:
-        staging = {}
+    staging = {}
+    published = False
+    try:
         for root in roots:
             root.parent.mkdir(parents=True, exist_ok=True)
-            staging[root] = Path(cleanup.enter_context(TemporaryDirectory(dir=root.parent)))
+            staging[root] = Path(mkdtemp(prefix=".recall-", dir=root.parent))
         outputs = []
         for path in paths:
             root = next(root for root in roots if path.is_relative_to(root))
@@ -290,6 +300,17 @@ def _stage_outputs(destinations: tuple[Path, ...], corpus_dir: Path):
                 (temp / "new").rename(root)
                 rollback.callback(root.rename, temp / "new")
             rollback.pop_all()
+            published = True
+    finally:
+        for root, temp in staging.items():
+            backup = temp / "previous"
+            if not published and backup.exists():
+                print(
+                    f"could not restore {root}. Previous output retained at {backup}",
+                    file=sys.stderr,
+                )
+            else:
+                shutil.rmtree(temp)
 
 
 def main() -> int:
@@ -323,7 +344,7 @@ def main() -> int:
     require_nested_layout(args.corpus_dir, corpora, CORPUS_VERSION)
     # publish only after every corpus record has been matched successfully.
     destinations = (args.unmatched_dir, args.matched_dir, args.loop_unmatched_dir)
-    with _stage_outputs(destinations, args.corpus_dir) as staged:
+    with _stage_outputs(destinations, [args.corpus_dir, *corpora]) as staged:
         for corpus_path in corpora:
             process_corpus_file(corpus_path, *staged, matcher)
 

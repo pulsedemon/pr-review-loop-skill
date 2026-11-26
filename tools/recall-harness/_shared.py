@@ -23,6 +23,12 @@ def require_corpus_version(corpus: dict, corpus_path: Path, expected_version: in
         )
 
 
+def require_corpus_identity(corpus: dict, path: Path) -> None:
+    owner, repo, filename = path.parts[-3:]
+    if (owner, repo, filename) != (corpus["owner"], corpus["repo"], f"pr-{corpus['pr']}.json"):
+        raise ValueError(f"corpus identity does not match its path: {path}")
+
+
 def require_nested_layout(corpus_dir: Path, corpora: list[Path], expected_version: int) -> None:
     """reject legacy files that the nested corpus scan would omit."""
     if not corpus_dir.is_dir():
