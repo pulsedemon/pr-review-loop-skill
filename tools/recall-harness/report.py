@@ -15,6 +15,7 @@ import csv
 import io
 import json
 import math
+import os
 import re
 import sys
 from collections import Counter, defaultdict
@@ -33,6 +34,7 @@ from _shared import (
     require_corpus_identity,
     require_corpus_version,
     require_nested_layout,
+    reservation_path,
 )
 from collect_pr_corpus import (
     CORPUS_VERSION,
@@ -61,12 +63,34 @@ class NearMissRow(NamedTuple):
     is_real_miss: bool
 
 
-def _load_jsonl(path: Path) -> list[dict]:
-    if not path.exists() or path.stat().st_size == 0:
+def _load_jsonl(path: Path, observed: dict[Path, os.stat_result | None]) -> list[dict]:
+    try:
+        stream = path.open()
+    except FileNotFoundError:
+        observed[path] = None
         return []
-    rows = [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+    with stream:
+        observed[path] = os.fstat(stream.fileno())
+        rows = [json.loads(line) for line in stream if line.strip()]
     _require_scorer(rows, path)
     return rows
+
+
+def _check_observed_outputs(observed: dict[Path, os.stat_result | None]) -> None:
+    """a report may read several buckets while another process publishes their replacement."""
+    parents = {p for path in observed for p in path.resolve().parents if p.name}
+    if any(reservation_path(parent).exists() for parent in parents):
+        raise RuntimeError("matcher publication in progress. Rerun the report after it finishes.")
+    for path, before in observed.items():
+        try:
+            after = path.stat()
+        except FileNotFoundError:
+            if before is None:
+                continue
+        else:
+            if before is not None and os.path.samestat(before, after):
+                continue
+        raise RuntimeError(f"matcher output changed while reporting: {path}. Rerun the report.")
 
 
 def _require_scorer(rows: list[dict], path: Path) -> None:
@@ -329,6 +353,7 @@ def main() -> int:
     # head-of-branch state.
     in_flight: list[tuple[str, str, int]] = []
 
+    observed: dict[Path, os.stat_result | None] = {}
     for corpus_path in corpora:
         corpus = json.loads(corpus_path.read_text())
         require_corpus_version(corpus, corpus_path, CORPUS_VERSION)
@@ -350,8 +375,8 @@ def main() -> int:
         total_unanchored_loop += len(corpus.get("loop_findings_unanchored", []))
 
         jsonl_name = matched_filename(owner, repo, pr)
-        matched = _load_jsonl(args.matched_dir / jsonl_name)
-        unmatched = _load_jsonl(args.unmatched_dir / jsonl_name)
+        matched = _load_jsonl(args.matched_dir / jsonl_name, observed)
+        unmatched = _load_jsonl(args.unmatched_dir / jsonl_name, observed)
         total_matched += len(matched)
 
         # One matched row per EXTERNAL finding, so two comments on the same loop
@@ -380,7 +405,7 @@ def main() -> int:
             != "matched_false"
         }
         precision_counts["corroborated"] += len(corroborated_loop)
-        loop_unmatched_records = _load_jsonl(args.loop_unmatched_dir / jsonl_name)
+        loop_unmatched_records = _load_jsonl(args.loop_unmatched_dir / jsonl_name, observed)
         uncorroborated_ids = [lu.get("finding_id", "") for lu in loop_unmatched_records]
         rejected_loop = {
             _loop_key(m): m.get("matched_loop") or {}
@@ -706,6 +731,7 @@ def main() -> int:
     else:
         out.write("Manual judgment coverage: n/a, no uncorroborated loop findings\n")
 
+    _check_observed_outputs(observed)
     sys.stdout.write(out.getvalue())
     return 0
 

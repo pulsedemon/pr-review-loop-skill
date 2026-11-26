@@ -44,6 +44,7 @@ from _shared import (
     require_corpus_identity,
     require_corpus_version,
     require_nested_layout,
+    reservation_path,
 )
 from collect_pr_corpus import (
     CORPUS_VERSION,
@@ -112,7 +113,7 @@ def _best_near_miss(
     loop findings.
 
     Scores containment, the same scorer `_run_matcher` gates on, so a near-miss
-    number is directly comparable to the threshold it fell short of.
+    score can be compared with the matching threshold, even when the line window prevented a match.
 
     Scope is restricted to same-file findings (mirroring the matcher's first
     short-circuit in finding_matcher.is_match) because that's the cohort the
@@ -286,13 +287,26 @@ def _require_bucket_tree(directory: Path) -> None:
     """directory replacement must leave links and unrelated files alone."""
     if not directory.exists():
         return
-    for child in directory.iterdir():
-        if child.is_symlink():
-            raise ValueError(f"matcher output contains a symlink: {child}")
-        if child.is_dir():
-            _require_bucket_tree(child)
-        elif not child.is_file() or child.suffix != ".jsonl":
-            raise ValueError(f"output contains an entry outside the matcher buckets: {child}")
+    pending = [directory]
+    while pending:
+        for child in pending.pop().iterdir():
+            if (
+                child.is_symlink()
+                or child.name.endswith(".recall-lock")
+                or child.name.startswith(".recall-")
+            ):
+                raise ValueError(f"matcher output contains a link or reservation: {child}")
+            if child.is_dir():
+                pending.append(child)
+            elif not child.is_file() or child.suffix != ".jsonl":
+                raise ValueError(f"output contains an entry outside the matcher buckets: {child}")
+
+
+def _release_reservation(lock: Path) -> None:
+    try:
+        lock.rmdir()
+    except OSError as error:
+        print(f"could not release matcher reservation {lock}: {error}", file=sys.stderr)
 
 
 @contextmanager
@@ -314,13 +328,16 @@ def _stage_outputs(destinations: tuple[Path, ...], protected_inputs: list[Path])
         yield outputs
         with ExitStack() as locks, ExitStack() as rollback:
             for root in roots:
-                lock = root.parent / f".{root.name}.recall-lock"
+                lock = reservation_path(root)
                 try:
                     lock.mkdir()
                 except FileExistsError as error:
                     raise RuntimeError(f"matcher output is reserved: {lock}") from error
-                locks.callback(lock.rmdir)
+                locks.callback(_release_reservation, lock)
             for root in roots:
+                for parent in root.parents:
+                    if parent.name and reservation_path(parent).exists():
+                        raise RuntimeError(f"parent matcher output is reserved: {parent}")
                 _require_bucket_tree(root)
             for root, temp in staging.items():
                 backup = temp / "previous"

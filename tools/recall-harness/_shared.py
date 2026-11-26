@@ -84,3 +84,7 @@ def finding_id(finding: dict) -> str:
 
 def is_anchored(finding: dict) -> bool:
     return finding.get("file") is not None and finding.get("line") is not None
+
+
+def reservation_path(root: Path) -> Path:
+    return root.parent / f".{root.name}.recall-lock"
