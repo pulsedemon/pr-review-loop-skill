@@ -69,13 +69,7 @@ def _load_jsonl(path: Path) -> list[dict]:
 
 
 def _require_scorer(rows: list[dict], path: Path) -> None:
-    """Refuse matcher output scored by anything but the current scorer.
-
-    The staleness check downstream compares counts, which an output from before
-    the containment switch satisfies: it partitions the same corpus the same
-    way. Only the scores differ, and reading jaccard scores against containment
-    bins and the decision cut is silently wrong rather than visibly so.
-    """
+    """counts can agree even when different scoring rules change which findings match."""
     for row in rows:
         scorer = row.get("scorer")
         if scorer != EXPECTED_SCORER:
