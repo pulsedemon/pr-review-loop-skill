@@ -57,8 +57,9 @@ def test_check_returns_0_on_clean_tree(tmp_path: Path) -> None:
     assert rc == 0
 
 
-def test_check_returns_5_on_drift_in_any_one_surface(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+@pytest.mark.parametrize("surface", ["SKILL.md", "reviewers/alpha.md", "tests/scenarios/01.md"])
+def test_check_reports_drift_on_each_surface(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], surface: str
 ) -> None:
     manifest = write_personas_yaml(tmp_path, ["a", "b", "c"])  # n = 3
     root = _make_corpus(tmp_path)
@@ -68,11 +69,11 @@ def test_check_returns_5_on_drift_in_any_one_surface(
         "the panel of 99 personas\n"  # drifted: should be 3
         "<!-- regen:panel-count-total:end -->\n"
     )
-    (root / "reviewers" / "alpha.md").write_text(drifted)
+    (root / surface).write_text(drifted)
     rc = _run(["--check", "--manifest", str(manifest), "--corpus-root", str(root)])
     assert rc == generator_io.DRIFT_EXIT == 5
     err = capsys.readouterr().err
-    assert "alpha.md" in err
+    assert surface in err
     assert "regen.sh" in err
 
 
@@ -148,11 +149,7 @@ def test_subset_phrases_outside_regions_are_not_touched(tmp_path: Path) -> None:
     f.write_text(body)
     rc = _run(["--write", "--manifest", str(manifest), "--corpus-root", str(root)])
     assert rc == 0
-    out = f.read_text()
-    assert out.count("1 persona objected") == 2
-    assert out.count("2 personas approved") == 2
-    assert "the panel of 3 personas" in out
-    assert "the panel of 99 personas" not in out
+    assert f.read_text() == body.replace("the panel of 99 personas", "the panel of 3 personas")
 
 
 def test_validate_markers_passes_on_balanced_tree(tmp_path: Path) -> None:
@@ -217,7 +214,7 @@ def test_render_supports_markdown_formatting_around_n(tmp_path: Path) -> None:
     assert out == "the panel of `7` personas"
 
 
-def test_write_atomically_creates_no_tmp_files(tmp_path: Path) -> None:
+def test_write_replaces_target_and_leaves_no_tmp_files(tmp_path: Path) -> None:
     manifest = write_personas_yaml(tmp_path, ["a", "b"])  # n = 2
     root = _make_corpus(tmp_path)
     target = root / "SKILL.md"

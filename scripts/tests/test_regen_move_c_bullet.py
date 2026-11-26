@@ -38,16 +38,6 @@ def test_omits_adversary_even_if_named_in_panel(tmp_path: Path) -> None:
     assert "alpha" in out
 
 
-def test_alphabetical_order(tmp_path: Path) -> None:
-    yaml_path = write_personas_yaml(
-        tmp_path,
-        ["zeta", "alpha"],
-        carriers=["zeta", "alpha"],
-    )
-    out = render(yaml_path)
-    assert out.startswith("- **Move C (cross-doc consistency)**, `alpha`, `zeta`:")
-
-
 def test_no_bullet_when_no_persona_carries_the_move(tmp_path: Path) -> None:
     """A move nobody carries renders nothing, not a bullet with an empty list."""
     yaml_path = write_personas_yaml(
@@ -79,23 +69,22 @@ def test_default_manifest_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     assert render().startswith("- **Move C (cross-doc consistency)**, `alpha` only:")
 
 
-def test_move_c_uses_the_configured_schema_constraint_owner(tmp_path: Path) -> None:
+def test_move_c_sorts_carriers_and_names_the_configured_schema_owner(tmp_path: Path) -> None:
     manifest = write_personas_yaml(
-        tmp_path, ["type_design", "requirements"], carriers=["type_design"], owner_index=1
+        tmp_path, ["zeta", "requirements", "alpha"], carriers=["zeta", "alpha"], owner_index=1
     )
     out = render(manifest)
     assert "cross-reference `requirements` in `detail`" in out
     assert "`requirements` owns the blocker" in out
-    assert out.startswith("- **Move C (cross-doc consistency)**, `type_design` only:")
+    assert out.startswith("- **Move C (cross-doc consistency)**, `alpha`, `zeta`:")
 
 
 def test_load_manifest_failure_propagates(tmp_path: Path) -> None:
-    """If the manifest is malformed, render must surface the loader error
-    rather than swallowing it. A missing 'panel' key is the simplest
-    trigger."""
     bad = tmp_path / "personas.yaml"
-    bad.write_text("adversary:\n  name: x\n")
-    with pytest.raises(ManifestError):
+    bad.write_text(
+        "adversary:\n  name: adversary\n  description: adversary persona\naddendums: []\n"
+    )
+    with pytest.raises(ManifestError, match="'panel' must be a non-empty list"):
         render(bad)
 
 

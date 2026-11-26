@@ -101,6 +101,7 @@ check_design_only_file() {
 }
 
 @test "scenario file status lines match manifest tiers" {
+  cd "$BATS_TEST_TMPDIR" || return 1
   run manifest_list_checked tier-map
   [[ "$status" -eq 0 ]]
   tier_map="$output"

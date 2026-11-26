@@ -51,11 +51,6 @@ PY
   # When the manifest gains phantom, cog regenerates the SKILL.md
   # "Reviewer personas" section to include a phantom bullet — which
   # then diffs against the on-disk SKILL.md (which doesn't have one).
-  # Likewise scripts/regen_schema_enum.py regenerates the enum to
-  # include phantom and diffs against the on-disk schema. Either
-  # failure exits non-zero with a unified diff containing the literal
-  # 'phantom'.
-  #
   # regen-check.sh resolves its root via `git rev-parse --show-toplevel`,
   # which follows cwd — not the script's own location. Run it with cwd
   # inside $SKILL so it checks the fixture manifest, not the real repo.

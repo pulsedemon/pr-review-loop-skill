@@ -12,7 +12,7 @@ def write_personas_yaml(
     *,
     owner_index: int = 0,
 ) -> Path:
-    """write an ordered panel with one schema owner and the requested move carriers."""
+    """owner_index is the zero-based position of the schema owner in panel."""
     lines = ["panel:"]
     for index, name in enumerate(panel):
         lines.extend([f"  - name: {name}", f"    description: {name} persona"])
