@@ -185,7 +185,7 @@ def parse_pr_list(raw: str) -> list[int]:
 
     Strips whitespace and filters empty elements so a trailing comma or
     space-after-comma doesn't crash on int(). Raises ValueError (via int())
-    on a genuinely non-numeric element so typos surface loudly."""
+    on nonnumeric elements. PR numbers must be positive."""
     return [require_pr_number(int(s)) for s in raw.split(",") if s.strip()]
 
 
@@ -194,7 +194,10 @@ def read_manifest(path: Path) -> list[tuple[str, str, int]]:
     triples, in file order. csv handles quoting; pr is coerced to int so a
     non-numeric value raises loudly."""
     with path.open(newline="") as f:
-        return [(r["owner"], r["repo"], require_pr_number(int(r["pr"]))) for r in csv.DictReader(f)]
+        rows = csv.DictReader(f)
+        if not {"owner", "repo", "pr"}.issubset(rows.fieldnames or ()):
+            raise ValueError("manifest header must include owner,repo,pr")
+        return [(r["owner"], r["repo"], require_pr_number(int(r["pr"]))) for r in rows]
 
 
 class FetchResponseError(ValueError):
@@ -420,10 +423,16 @@ def _gh_api(path: str) -> list:
     i = 0
     while i < len(s):
         obj, end = decoder.raw_decode(s, i)
-        if isinstance(obj, list):
-            out.extend(obj)
-        else:
-            out.append(obj)
+        if not isinstance(obj, list) or not all(
+            isinstance(row, dict)
+            and "body" in row
+            and isinstance(row.get("body"), (str, type(None)))
+            and isinstance(row.get("user"), (dict, type(None)))
+            and "user" in row
+            for row in obj
+        ):
+            raise FetchResponseError(f"expected a page of comments or reviews for {path}")
+        out.extend(obj)
         i = end
         while i < len(s) and s[i].isspace():
             i += 1
@@ -463,7 +472,9 @@ def collect_pr(owner: str, repo: str, pr_number: int, include_open: bool = False
     if not isinstance(pr_meta, dict) or "mergedAt" not in pr_meta:
         raise FetchResponseError("expected PR metadata with mergedAt")
     merged_at = pr_meta["mergedAt"]
-    if not merged_at and not include_open:
+    if merged_at is not None and (not isinstance(merged_at, str) or not merged_at.strip()):
+        raise FetchResponseError("expected a merge timestamp or null for mergedAt")
+    if merged_at is None and not include_open:
         return {"corpus_version": CORPUS_VERSION, "pr": pr_number, "skipped": "not merged"}
     is_open = merged_at is None
 
@@ -610,7 +621,8 @@ def collect_pr(owner: str, repo: str, pr_number: int, include_open: bool = False
 
 _FETCH_ERRORS = (
     subprocess.CalledProcessError,
-    FileNotFoundError,
+    OSError,
+    UnicodeDecodeError,
     json.JSONDecodeError,
     FetchResponseError,
 )

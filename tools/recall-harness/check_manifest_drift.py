@@ -48,7 +48,7 @@ def main() -> int:
             file=sys.stderr,
         )
         return 2
-    except (FileNotFoundError, json.JSONDecodeError, FetchResponseError) as e:
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, FetchResponseError) as e:
         print(
             f"check_manifest_drift: cannot list merged PRs for {args.owner}/{args.repo}\n"
             f"{type(e).__name__}: {e}",
