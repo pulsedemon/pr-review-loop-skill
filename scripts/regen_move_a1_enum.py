@@ -256,7 +256,11 @@ def _scan_out_of_region(
     byte-order mark, and its suffix does not identify a text file."""
     mirror_set = {p.resolve() for p in mirror_paths}
     manifest_resolved = manifest.resolve()
-    text_suffixes = {path.suffix.lower() for path in [manifest, *mirror_paths]} | {".txt"}
+    text_suffixes = {path.suffix.lower() for path in [manifest, *mirror_paths]} | {
+        ".txt",
+        ".yaml",
+        ".yml",
+    }
     hits: list[str] = []
 
     def fail_walk(error: OSError) -> None:

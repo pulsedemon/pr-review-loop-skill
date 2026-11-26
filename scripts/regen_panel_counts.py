@@ -289,7 +289,7 @@ def _run_validate_markers(*, corpus_root: Path) -> int:
     return 0
 
 
-_TOTAL_PREFIX = r"(?i:(?:a\s+)?total\s+of|in\s+total,|panel\s+of)"
+_TOTAL_PREFIX = r"(?i:(?:a\s+)?total\s+of|in\s+total,?|total:|panel\s+of)"
 _PANEL_LABEL = r"(?i:\(panel\s*\+\s*adversary\))"
 # match wrapped counts while excluding embedded digits such as B2.
 _COVERAGE_BROAD_RE = re.compile(
@@ -319,7 +319,7 @@ _COVERAGE_ALLOW_PATTERNS: tuple[re.Pattern[str], ...] = (
 def _mask_word_markup(text: str) -> str:
     """keep source offsets and literal identifiers intact when masking paired delimiters."""
     chars = list(text)
-    openings: dict[str, int] = {}
+    openings: dict[str, list[int]] = {"*": [], "_": []}
     runs = list(_WORD_MARKUP.finditer(text))
     next_tick: dict[int, int] = {}
     closes_at: dict[int, int] = {}
@@ -352,11 +352,13 @@ def _mask_word_markup(text: str) -> str:
             continue
         left = text[start - 1] if start else " "
         right = text[end] if end < len(text) else " "
-        if not left.isspace() and not right.isalnum() and delimiter in openings:
-            opening = openings.pop(delimiter)
-            chars[opening : opening + len(delimiter)] = chars[start:end] = " " * len(delimiter)
-        elif not right.isspace() and not left.isalnum():
-            openings[delimiter] = start
+        pending = openings[delimiter[0]]
+        if not left.isspace() and not right.isalnum():
+            while start < end and pending:
+                chars[pending.pop()] = chars[start] = " "
+                start += 1
+        if not right.isspace() and not left.isalnum():
+            pending.extend(range(start, end))
     return "".join(chars)
 
 

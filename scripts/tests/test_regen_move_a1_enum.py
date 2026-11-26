@@ -336,20 +336,21 @@ def test_out_of_region_scan_rejects_undecodable_text_and_skips_binary(tmp_path: 
 
 
 @pytest.mark.parametrize(
-    "data",
+    ("suffix", "data"),
     [
-        "café cross_fixture".encode("utf-16le"),
-        "cross_fixture".encode("utf-16"),
-        b"\xef\xbb\xbf\x00\xffcross_fixture",
+        ("yml", "café cross_fixture".encode("utf-16le")),
+        ("txt", "café cross_fixture".encode("utf-16le")),
+        ("txt", "cross_fixture".encode("utf-16")),
+        ("txt", b"\xef\xbb\xbf\x00\xffcross_fixture"),
     ],
 )
-def test_scan_reports_undecodable_plain_text(tmp_path: Path, data: bytes) -> None:
+def test_scan_reports_undecodable_plain_text(tmp_path: Path, suffix: str, data: bytes) -> None:
     paths = _seed(tmp_path)
-    notes = tmp_path / "notes\nnext.txt"
+    notes = tmp_path / f"notes\nnext.{suffix}"
     notes.write_bytes(data)
     result = _run(paths, "--check", "--out-of-region-root", str(tmp_path))
     assert result.returncode == 3
-    assert f"cannot scan {tmp_path}/notes\\nnext.txt" in result.stderr
+    assert f"cannot scan {tmp_path}/notes\\nnext.{suffix}" in result.stderr
 
 
 def test_missing_scan_root_reports_incomplete_discovery_after_mirror_drift(tmp_path: Path) -> None:
