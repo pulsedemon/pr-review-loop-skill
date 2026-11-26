@@ -348,3 +348,43 @@ def test_drift_check_exits_2_on_unparseable_manifest(tmp_path, monkeypatch, caps
 
     assert _drift(monkeypatch, manifest, [1]) == 2
     assert "cannot read" in capsys.readouterr().err
+
+
+def test_pr_list_conflicts_with_merged_since():
+    result = subprocess.run(
+        [
+            sys.executable,
+            COLLECT_SCRIPT,
+            "--owner",
+            "o",
+            "--repo",
+            "r",
+            "--pr-list",
+            "1",
+            "--merged-since",
+            "2026-01-01",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 2
+    assert "--pr-list and --merged-since are mutually exclusive" in result.stderr
+
+
+@pytest.mark.parametrize("use_manifest", [True, False])
+def test_missing_gh_reports_the_failed_repository(tmp_path, use_manifest):
+    args = ["--owner", "acme", "--repo", "api", "--pr-list", "12"]
+    if use_manifest:
+        manifest = tmp_path / "manifest.csv"
+        manifest.write_text("owner,repo,pr\nacme,api,12\n")
+        args = ["--manifest", manifest]
+    result = subprocess.run(
+        [sys.executable, COLLECT_SCRIPT, *args, "--out-dir", tmp_path / "corpus"],
+        env={"PATH": str(tmp_path)},
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 1
+    assert "cannot collect acme/api" in result.stderr
+    assert "FileNotFoundError" in result.stderr
+    assert "Traceback" not in result.stderr
