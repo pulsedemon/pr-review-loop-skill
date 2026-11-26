@@ -204,14 +204,18 @@ class _MarkerError(Exception):
     """Raised when a corpus file has malformed or unbalanced region markers."""
 
 
-def _regenerate_text(text: str, panel_n: int, path: Path) -> str:
-    """Return ``text`` from ``path`` with every region's body re-rendered."""
-    lines = text.splitlines(keepends=True)
+def _read_lines(path: Path) -> list[str]:
+    with path.open(newline="") as source:
+        return source.readlines()
+
+
+def _regenerate_lines(lines: list[str], panel_n: int, path: Path) -> str:
+    """replace the body of each generated region, preserving its line ending."""
     for region in _parse_regions(lines, path):
         n = panel_n if region.kind == _KIND_TOTAL else panel_n + 1
         index = region.start_line + 2
         body = lines[index]
-        ending = body.removeprefix(body.splitlines()[0])
+        ending = body[len(body.rstrip("\r\n")) :]
         lines[index] = _render_template(region.template, n) + ending
     return "".join(lines)
 
@@ -227,13 +231,13 @@ def _run_check_or_write(*, write: bool, manifest_path: Path, corpus_root: Path) 
     drifted: list[Path] = []
     for path in _corpus_files(corpus_root):
         try:
-            with path.open(newline="") as source:
-                current = source.read()
+            lines = _read_lines(path)
         except (OSError, UnicodeDecodeError) as e:
             print(f"regen_panel_counts: failed to read {path}: {e}", file=sys.stderr)
             return generator_io.MANIFEST_ERROR_EXIT
+        current = "".join(lines)
         try:
-            regenerated = _regenerate_text(current, panel_n, path)
+            regenerated = _regenerate_lines(lines, panel_n, path)
         except _MarkerError as e:
             print(f"regen_panel_counts: {e}", file=sys.stderr)
             return generator_io.DRIFT_EXIT
@@ -260,12 +264,12 @@ def _run_validate_markers(*, corpus_root: Path) -> int:
     failures: list[str] = []
     for path in _corpus_files(corpus_root):
         try:
-            text = path.read_text()
+            lines = _read_lines(path)
         except (OSError, UnicodeDecodeError) as e:
             failures.append(f"{path}: failed to read: {e}")
             continue
         try:
-            _parse_regions(text.splitlines(keepends=False), path)
+            _parse_regions(lines, path)
         except _MarkerError as e:
             failures.append(str(e))
     if failures:
@@ -293,11 +297,10 @@ def _run_validate_coverage(*, corpus_root: Path) -> int:
     failures: list[str] = []
     for path in _corpus_files(corpus_root):
         try:
-            text = path.read_text()
+            lines = _read_lines(path)
         except (OSError, UnicodeDecodeError) as e:
             failures.append(f"{path}: failed to read: {e}")
             continue
-        lines = text.splitlines(keepends=False)
         try:
             regions = _parse_regions(lines, path)
         except _MarkerError as e:
@@ -308,7 +311,9 @@ def _run_validate_coverage(*, corpus_root: Path) -> int:
             for j in range(r.start_line, r.end_line + 1):
                 region_lines.add(j)
         # exclude generated regions while retaining line breaks for wrapped phrases.
-        scan_lines = ["" if idx in region_lines else line for idx, line in enumerate(lines)]
+        scan_lines = [
+            "" if idx in region_lines else line.rstrip("\r\n") for idx, line in enumerate(lines)
+        ]
         scan_text = "\n".join(scan_lines)
         allowed_spans = [
             match.span()

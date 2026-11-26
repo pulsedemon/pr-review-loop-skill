@@ -75,8 +75,10 @@ if phantom != {"name": "phantom", "description": "fixture stub", "move_c": True}
     raise SystemExit("expected the manifest to differ only by the appended phantom persona")
 
 lines = Path(sys.argv[3]).read_text().splitlines()
-added = [line[1:] for line in lines if line.startswith("+- ")]
-removed = [line[1:] for line in lines if line.startswith("-- ")]
+lines.remove("--- current SKILL.md")
+lines.remove("+++ changed SKILL.md")
+added = [line[1:] for line in lines if line.startswith("+")]
+removed = [line[1:] for line in lines if line.startswith("-")]
 added.remove("- `phantom.md`: fixture stub")
 prefix = "- **Move C (cross-doc consistency)**, "
 if len(removed) != 1 or not removed[0].startswith(prefix):
