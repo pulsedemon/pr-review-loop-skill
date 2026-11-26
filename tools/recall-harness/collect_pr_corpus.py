@@ -362,13 +362,7 @@ def parse_orchestrator_findings(body: str) -> list[dict]:
     FINDING block; caller fills in source/id/created_at from the parent comment.
     Bodies without any FINDING blocks return []; safe to call on any comment.
 
-    Raises RuntimeError if a parsed FINDING block has an empty file segment
-    (the regex's `[^|]+?` plus a downstream `.strip()` can produce ``""`` when
-    the upstream emits whitespace between the pipes). Empty file is unusable
-    downstream: match_external treats ``file=is not None`` as anchored while
-    report treats empty strings as unanchored, so the two consumers would
-    silently disagree on counts. Failing here pushes the break to the
-    producer."""
+    Reject blank paths because they identify no file."""
     if not body:
         return []
     out: list[dict] = []

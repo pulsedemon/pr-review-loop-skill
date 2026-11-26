@@ -28,6 +28,7 @@ from _shared import (
     DEFAULT_UNMATCHED_DIR,
     HARNESS_DIR,
     finding_id,
+    is_anchored,
     require_corpus_version,
     require_nested_layout,
 )
@@ -343,9 +344,7 @@ def main() -> int:
             continue
         externals = corpus.get("external_findings", [])
         total_external += len(externals)
-        anchored_externals = sum(
-            1 for e in externals if e.get("file") and e.get("line") is not None
-        )
+        anchored_externals = sum(1 for e in externals if is_anchored(e))
         total_anchored_external += anchored_externals
         unanchored_externals = len(externals) - anchored_externals
         total_unanchored_external += unanchored_externals
@@ -418,11 +417,7 @@ def main() -> int:
         # Loop-side mirror. _load_jsonl reads a missing file as an empty bucket,
         # so without this a pre-loop_unmatched A2 run would publish precision
         # over the matched rows alone with every uncorroborated finding absent.
-        anchored_loop = sum(
-            1
-            for f in corpus.get("loop_findings", [])
-            if f.get("file") and f.get("line") is not None
-        )
+        anchored_loop = sum(1 for f in corpus.get("loop_findings", []) if is_anchored(f))
         if len(paired_loop) + len(loop_unmatched_records) != anchored_loop:
             loop_invariant_violations.append(
                 (

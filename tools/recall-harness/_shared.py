@@ -62,3 +62,7 @@ def finding_id(finding: dict) -> str:
         sort_keys=True,
     )
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:12]
+
+
+def is_anchored(finding: dict) -> bool:
+    return finding.get("file") is not None and finding.get("line") is not None

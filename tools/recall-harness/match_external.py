@@ -38,6 +38,7 @@ from _shared import (
     DEFAULT_UNMATCHED_DIR,
     HARNESS_DIR,
     finding_id,
+    is_anchored,
     require_corpus_version,
     require_nested_layout,
 )
@@ -56,10 +57,6 @@ HARNESS_LINE_WINDOW = 15
 def _scorer_stamp(matcher: ModuleType) -> str:
     """stamp the scoring contract; record counts cannot detect stale scoring rules."""
     return f"token_containment@{matcher.CONTAINMENT_THRESHOLD:g}/win{HARNESS_LINE_WINDOW}"
-
-
-def _is_anchored(finding: dict) -> bool:
-    return finding.get("file") is not None and finding.get("line") is not None
 
 
 def _load_matcher(match_script: Path) -> ModuleType:
@@ -191,13 +188,13 @@ def process_corpus_file(
     matched_lines: list[str] = []
     unmatched_lines: list[str] = []
 
-    anchored_loop = [f for f in loop if _is_anchored(f)]
+    anchored_loop = [f for f in loop if is_anchored(f)]
     # Which loop findings some external corroborated. Tracked by index because
     # loop findings are plain dicts (unhashable) and carry no id of their own.
     corroborated_loop_idx: set[int] = set()
 
     for ext in external:
-        if not _is_anchored(ext):
+        if not is_anchored(ext):
             continue  # Unanchored externals never feed the matcher.
         ext_for_matcher = {
             "file": ext["file"],

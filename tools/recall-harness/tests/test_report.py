@@ -126,7 +126,7 @@ def _render_with_unmatched_records(tmp_path, unmatched, labels_rows=None) -> str
     stale matcher outputs` section, and a future test asserting that
     warning is absent from a clean fixture would false-fail. The mirrored
     externals carry the same file/line as the unmatched record so
-    `_is_anchored` (match_external.py) counts them."""
+    `is_anchored` (_shared.py) counts them."""
     (tmp_path / "corpus").mkdir(exist_ok=True)
     mirrored_externals = [
         {

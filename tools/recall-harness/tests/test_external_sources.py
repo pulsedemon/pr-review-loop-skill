@@ -139,10 +139,7 @@ def test_parse_orchestrator_findings_returns_empty_for_unrelated_body():
 
 
 def test_parse_orchestrator_findings_raises_on_empty_file_segment():
-    """match_external._is_anchored uses `is not None` while report.py uses a
-    truthy check; the two would disagree on a finding with file="". Fail at
-    the producer so the disagreement can't surface downstream as a false
-    PIPELINE WARNING."""
+    """a whitespace-only file field identifies no file."""
     import pytest
 
     body = (
