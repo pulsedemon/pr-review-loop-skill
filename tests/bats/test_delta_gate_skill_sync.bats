@@ -20,6 +20,10 @@ gate_enum_matches_panel() {
   gate_enum_matches_panel "$panel" <"${REPO_ROOT}/reviewers/gate.schema.json"
 }
 
+@test "the gate enum can list reviewers in a different order" {
+  gate_enum_matches_panel $'alpha\nbeta' <<<'{"properties":{"reviewer":{"enum":["beta","alpha"]}}}'
+}
+
 @test "a single comma-joined enum entry cannot match two panel names" {
   run gate_enum_matches_panel $'alpha\nbeta' <<<'{"properties":{"reviewer":{"enum":["alpha,beta"]}}}'
   [[ "$status" -eq 1 && "$output" == false ]]

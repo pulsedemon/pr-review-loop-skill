@@ -14,11 +14,11 @@ from personas_manifest import ManifestError  # type: ignore[import-not-found]
 def test_renders_only_move_c_personas(tmp_path: Path) -> None:
     yaml_path = write_personas_yaml(
         tmp_path,
-        ["alpha", "beta", "gamma"],
-        carriers=["alpha", "gamma"],
+        ["null", "beta", "off"],
+        carriers=["null", "off"],
     )
     out = render(yaml_path)
-    assert out.startswith("- **Move C (cross-doc consistency)**, `alpha`, `gamma`:")
+    assert out.startswith("- **Move C (cross-doc consistency)**, `null`, `off`:")
 
 
 def test_omits_adversary_even_if_named_in_panel(tmp_path: Path) -> None:

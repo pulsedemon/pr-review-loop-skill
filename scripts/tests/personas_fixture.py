@@ -3,6 +3,8 @@
 from collections.abc import Collection
 from pathlib import Path
 
+import yaml
+
 
 def write_personas_yaml(
     tmp_path: Path,
@@ -13,21 +15,19 @@ def write_personas_yaml(
     owner_index: int = 0,
 ) -> Path:
     """owner_index is the zero-based position of the schema owner in panel."""
-    lines = ["panel:"]
+    entries = []
     for index, name in enumerate(panel):
-        lines.extend([f"  - name: {name}", f"    description: {name} persona"])
+        entry: dict[str, str | bool] = {"name": name, "description": f"{name} persona"}
         if name in carriers:
-            lines.append(f"    {flag}: true")
+            entry[flag] = True
         if index == owner_index:
-            lines.append("    owns_schema_constraint_blocker: true")
-    lines.extend(
-        [
-            "adversary:",
-            "  name: adversary",
-            "  description: adversary persona",
-            "addendums: []",
-        ]
-    )
+            entry["owns_schema_constraint_blocker"] = True
+        entries.append(entry)
+    manifest = {
+        "panel": entries,
+        "adversary": {"name": "adversary", "description": "adversary persona"},
+        "addendums": [],
+    }
     path = tmp_path / "personas.yaml"
-    path.write_text("\n".join(lines) + "\n")
+    path.write_text(yaml.safe_dump(manifest, sort_keys=False))
     return path
