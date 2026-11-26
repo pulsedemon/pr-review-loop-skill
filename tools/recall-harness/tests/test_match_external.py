@@ -24,7 +24,7 @@ from match_external import (  # type: ignore[import-not-found]  # noqa: E402  â€
 from report import EXPECTED_SCORER  # noqa: E402
 
 
-def _run(corpus: dict, tmp_path: Path) -> dict:
+def _run(corpus: dict, tmp_path: Path, match_script: Path = MATCH_SCRIPT) -> dict:
     """Invoke match_external on a single in-memory corpus, return parsed buckets."""
     corpus_dir = tmp_path / "corpus"
     unmatched_dir = tmp_path / "unmatched"
@@ -47,7 +47,7 @@ def _run(corpus: dict, tmp_path: Path) -> dict:
             "--loop-unmatched-dir",
             str(loop_unmatched_dir),
             "--match-script",
-            str(MATCH_SCRIPT),
+            str(match_script),
         ],
         check=True,
     )
@@ -406,3 +406,19 @@ def test_malformed_external_raises_without_any_loop_finding(tmp_path, matcher_mo
             path, tmp_path / "unmatched", tmp_path / "matched", tmp_path / "lu", matcher_module
         )
     assert not (tmp_path / "unmatched").exists()
+
+
+def test_match_script_uses_the_supplied_scorer(tmp_path):
+    module = tmp_path / "matcher.py"
+    module.write_text(
+        "CONTAINMENT_THRESHOLD = 0.2\nMIN_CONTAINMENT_TOKENS = 1\n"
+        "def tokens(s): return s.split()\n"
+        "def token_containment(a, b): return 1.0\n"
+        "def is_match(a, b, **options): return True\n"
+    )
+    loop = {"file": "a", "line": 1, "summary": "one"}
+    external = {"file": "b", "line": 2, "summary": "two"}
+    result = _run(_corpus([loop], [external]), tmp_path, module)
+    (pair,) = result["matched"]
+    assert (pair["matched_loop"], pair["external"]) == (loop, external)
+    assert pair["scorer"] == "token_containment@0.2/win15"

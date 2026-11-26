@@ -350,7 +350,15 @@ def test_drift_check_exits_2_on_unparseable_manifest(tmp_path, monkeypatch, caps
     assert "cannot read" in capsys.readouterr().err
 
 
-def test_pr_list_conflicts_with_merged_since():
+@pytest.mark.parametrize(
+    ("selectors", "message"),
+    [
+        (["--pr-list", "1", "--merged-since", "2026-01-01"], "mutually exclusive"),
+        (["--pr-list", "nope"], "argument --pr-list"),
+    ],
+)
+def test_invalid_selectors_exit_before_fetch(tmp_path, selectors, message):
+    corpus = tmp_path / "corpus"
     result = subprocess.run(
         [
             sys.executable,
@@ -359,16 +367,42 @@ def test_pr_list_conflicts_with_merged_since():
             "o",
             "--repo",
             "r",
+            *selectors,
+            "--out-dir",
+            corpus,
+        ],
+        env={"PATH": str(tmp_path)},
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 2
+    assert message in result.stderr
+    assert not corpus.exists()
+
+
+def test_empty_selector_cannot_trigger_manifest_pruning(tmp_path):
+    manifest = tmp_path / "manifest.csv"
+    manifest.write_text("owner,repo,pr\n")
+    record = tmp_path / "corpus/o/r/pr-1.json"
+    record.parent.mkdir(parents=True)
+    record.write_text('{"pr":1}\n')
+    result = subprocess.run(
+        [
+            sys.executable,
+            COLLECT_SCRIPT,
+            "--manifest",
+            manifest,
             "--pr-list",
-            "1",
-            "--merged-since",
-            "2026-01-01",
+            "",
+            "--out-dir",
+            tmp_path / "corpus",
         ],
         capture_output=True,
         text=True,
     )
     assert result.returncode == 2
-    assert "--pr-list and --merged-since are mutually exclusive" in result.stderr
+    assert "mutually exclusive" in result.stderr
+    assert record.read_text() == '{"pr":1}\n'
 
 
 @pytest.mark.parametrize("use_manifest", [True, False])

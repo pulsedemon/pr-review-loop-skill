@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 import pytest
+import report
 from _shared import finding_id
 from collect_pr_corpus import (  # type: ignore[import-not-found]  # noqa: E402 : sibling module made importable by conftest.py
     CORPUS_VERSION,
@@ -1276,3 +1277,45 @@ def test_bucket_labels_match_the_labeling_protocol():
         if heading := re.match(r"`bucket = (\w+)`", section):
             documented[heading[1]] = frozenset(re.findall(r"^- `(\w+)`:", section, re.MULTILINE))
     assert documented == _BUCKET_LABELS
+
+
+def test_tuned_decision_cut_counts_each_persisted_score_once(tmp_path, monkeypatch, capsys):
+    external = {"file": "a", "line": 3, "summary": "sample"}
+    _corpus_path(tmp_path, 1).write_text(
+        json.dumps(_corpus_record(1, external_findings=[external]))
+    )
+    _write_jsonl(
+        _jsonl_path(tmp_path, "unmatched", 1),
+        [
+            {
+                "finding_id": "sample",
+                "external": external,
+                "scorer": "token_containment@0.5/win15",
+                "best_near_miss_score": 0.375,
+                "best_near_miss_loop_summary": "same file",
+            }
+        ],
+    )
+    _write_labels(tmp_path / "labels.csv", [(1, "unmatched", "sample", "real_miss", "")])
+    monkeypatch.setattr(report, "NEAR_MISS_DECISION_CUT", 0.35)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "report.py",
+            "--corpus-dir",
+            str(tmp_path / "corpus"),
+            "--unmatched-dir",
+            str(tmp_path / "unmatched"),
+            "--matched-dir",
+            str(tmp_path / "matched"),
+            "--loop-unmatched-dir",
+            str(tmp_path / "loop_unmatched"),
+            "--labels",
+            str(tmp_path / "labels.csv"),
+        ],
+    )
+    assert report.main() == 0
+    out = capsys.readouterr().out
+    assert "[0.35-0.40): 1" in out
+    assert sum(map(int, re.findall(r"^  \[.*?\): (\d+)$", out, re.MULTILINE))) == 1
