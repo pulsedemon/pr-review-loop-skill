@@ -544,7 +544,7 @@ load test_helper
   HOME="${fakehome}" XDG_CONFIG_HOME="${fakehome}/.config" CODEX_HOME="${fakehome}/.codex" run "${REPO_ROOT}/install.sh"
 
   [[ "$status" -eq 1 ]]
-  [[ "$output" == *"${fakehome}/.claude/skills/pr-review-loop exists and is not a symlink"* ]]
+  [[ "$output" == *"${fakehome}/.claude/skills/pr-review-loop exists and is not a symlink (Claude Code)."* ]]
   [[ -d "${fakehome}/.cursor/skills/pr-review-loop" ]]
   [[ -L "${fakehome}/.codex/skills/pr-review-loop" ]]
   [[ -L "${fakehome}/.config/opencode/skills/pr-review-loop" ]]
@@ -618,6 +618,7 @@ load test_helper
 
   [[ "$status" -eq 1 ]]
   [[ "$output" == *"skipped (symlink points elsewhere): ${fakehome}/.config/opencode/agent/prl-cheap.md"* ]]
+  [[ "$output" == *"rerun with --force to replace this symlink"* ]]
   [[ "$(readlink "${fakehome}/.config/opencode/agent/prl-cheap.md")" == "$other/prl-cheap.md" ]]
   [[ -L "${fakehome}/.config/opencode/skills/pr-review-loop" ]]
   [[ -L "${fakehome}/.config/opencode/agent/prl-standard.md" ]]
