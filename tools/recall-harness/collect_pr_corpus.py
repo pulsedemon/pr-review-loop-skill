@@ -24,8 +24,7 @@ byte-identical output. Comments are sorted by (file, line, created_at, id).
 Summaries are whitespace-collapsed.
 
 Recognized external review tools (currently `copilot` and `orchestrator-review`)
-live in the `EXTERNAL_REVIEW_TOOLS` registry below; `source: "toolkit"` is
-reserved for a future pr-review-toolkit addition.
+live in the `EXTERNAL_REVIEW_TOOLS` registry below.
 """
 
 from __future__ import annotations
@@ -113,13 +112,7 @@ def _validate_registry(tools: tuple[ExternalReviewTool, ...]) -> None:
                     )
 
 
-# Registry of recognized external review tools. To support a new tool, append
-# an entry here. The comment-walk loop in `collect_pr` calls
-# `parse_orchestrator_findings` on any comment whose source resolves through
-# the registry; if a new tool emits a different structured body format, add a
-# new parser function and dispatch on `source` at the call site. First match
-# wins; if two tools could plausibly match the same comment, order by
-# specificity.
+# see the Sources section in README.md when adding a review tool.
 EXTERNAL_REVIEW_TOOLS: tuple[ExternalReviewTool, ...] = (
     ExternalReviewTool(
         name="copilot",
@@ -221,12 +214,13 @@ def list_merged_prs(owner: str, repo: str, merged_since: str) -> list[int]:
     return sorted(item["number"] for item in json.loads(listing_raw.stdout))
 
 
+_PROMOTION_SUFFIX = r"(?:\s+\u2014\s+Promoted from suggestion.*)?$"
+
 # optional backticks keep both summary-renderer formats anchored.
 _BULLET_ANCHORED_EMDASH = re.compile(
     r"^-\s+`?(?P<file>[^\s:`]+):(?P<line>\d+)`?"
     r"(?P<note>\s*\([^)]*\))?"
-    r"\s*\u2014\s+(?P<summary>.+?)"
-    r"(?:\s+\u2014\s+Promoted from suggestion.*)?$",
+    r"\s*\u2014\s+(?P<summary>.+?)" + _PROMOTION_SUFFIX,
 )
 # Balanced backticks are the author marking an anchor explicitly, so any path
 # shape is admissible inside them: extensionless, and spaces too, since the
@@ -234,8 +228,7 @@ _BULLET_ANCHORED_EMDASH = re.compile(
 _BULLET_ANCHORED_COLON_TICKED = re.compile(
     r"^-\s+`(?P<file>[^`]+):(?P<line>\d+)`"
     r"(?P<note>\s*\([^)]*\))?"
-    r"\s*:\s+(?P<summary>.+?)"
-    r"(?:\s+\u2014\s+Promoted from suggestion.*)?$",
+    r"\s*:\s+(?P<summary>.+?)" + _PROMOTION_SUFFIX,
 )
 # Unticked, nothing separates a path from prose, and an extension cannot do it:
 # `example.com:8080` is shaped exactly like a file. Only a slash is decisive, so
@@ -245,8 +238,7 @@ _BULLET_ANCHORED_COLON_TICKED = re.compile(
 _BULLET_ANCHORED_COLON_BARE = re.compile(
     r"^-\s+(?P<file>[^\s:`/]*/[^\s:`]*):(?P<line>\d+)"
     r"(?P<note>\s*\([^)]*\))?"
-    r"\s*:\s+(?P<summary>.+?)"
-    r"(?:\s+\u2014\s+Promoted from suggestion.*)?$",
+    r"\s*:\s+(?P<summary>.+?)" + _PROMOTION_SUFFIX,
 )
 _BULLET_UNANCHORED = re.compile(r"^-\s+(?P<summary>.+?)$")
 
@@ -437,7 +429,7 @@ def collect_pr(owner: str, repo: str, pr_number: int, include_open: bool = False
             "--repo",
             f"{owner}/{repo}",
             "--json",
-            "number,title,author,mergedAt,mergeCommit,headRefOid,baseRefName,headRefName,body",
+            "title,mergedAt,mergeCommit,headRefOid,baseRefName,headRefName",
         ],
         check=True,
         capture_output=True,

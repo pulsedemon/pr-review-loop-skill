@@ -298,15 +298,12 @@ class _StubGhPrView:
         class Result:
             stdout = json.dumps(
                 {
-                    "number": 99,
                     "title": "t",
-                    "author": {"login": "x"},
                     "mergedAt": "2026-05-01T00:00:00Z" if self.merged else None,
                     "mergeCommit": {"oid": "abc"} if self.merged else None,
                     "headRefOid": "def",
                     "baseRefName": "main",
                     "headRefName": "feat",
-                    "body": "",
                 }
             )
 
