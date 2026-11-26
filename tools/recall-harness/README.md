@@ -83,6 +83,8 @@ It does not mean the panel found the issue *first*. A1 parses the current summar
 
 - `corpus/`, `unmatched/`, `matched/`, `loop_unmatched/`, `REPORT.md`: generated, regeneratable. `REPORT.md` is a view over `labels.csv` + the (gitignored, possibly private-repo) corpus, so it is machine-dependent; regenerate it on demand rather than committing it.
 
+Matcher output directories are dedicated to generated JSONL. Publication briefly reserves each outer output directory with a sibling `.<name>.recall-lock` directory. If a process stops during publication, inspect retained `.recall-*/previous` backups and confirm the owner has exited before clearing its reservation.
+
 ## Evaluating changes
 
 See [Evaluating reviewer changes](../../docs/editing-personas.md#evaluating-reviewer-changes)

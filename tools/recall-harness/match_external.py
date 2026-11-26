@@ -12,9 +12,9 @@ For each corpus file in --corpus-dir:
 - Write matched/<owner>/<repo>/pr-<N>.jsonl (full pair: external + matched_loop) and
   unmatched/<owner>/<repo>/pr-<N>.jsonl (external only).
 
-Each output line is one JSON object with stable keys: finding_id (recomputed
-from the external finding with _shared.finding_id),
-external, and matched_loop (matched only).
+Matched and unmatched rows carry the external finding and its ID. Matched rows
+also carry the loop finding. Loop-unmatched rows carry the loop finding and its ID.
+All three buckets record the scorer.
 
 the matcher module is imported once via --match-script (default
 scripts/finding_matcher.py). invalid matcher fields on anchored findings raise RuntimeError
@@ -94,12 +94,8 @@ def _run_matcher(matcher: ModuleType, a: dict, b: dict) -> bool:
     """return whether a and b match under the harness's containment scorer.
 
     containment accommodates the length difference between loop findings and
-    bot comments. malformed inputs raise RuntimeError so validation failures
-    cannot inflate the candidate-miss bucket.
+    bot comments. the caller validates each finding before candidate selection.
     """
-    where = f"{a.get('file')}:{a.get('line')} vs {b.get('file')}:{b.get('line')}"
-    _require_matcher_fields("a", a, where)
-    _require_matcher_fields("b", b, where)
     return matcher.is_match(
         a,
         b,
@@ -168,9 +164,9 @@ def process_corpus_file(
 ) -> None:
     corpus = json.loads(corpus_path.read_text())
     require_corpus_version(corpus, corpus_path, CORPUS_VERSION)
+    require_corpus_identity(corpus, corpus_path)
     if corpus.get("skipped"):
         return
-    require_corpus_identity(corpus, corpus_path)
     if corpus.get("is_open"):
         # In-flight PRs are surfaced separately by A4 (report.py); skip A2 so we
         # don't leave stale matched/unmatched JSONL behind once they merge.
@@ -257,9 +253,7 @@ def process_corpus_file(
     )
 
 
-@contextmanager
-def _stage_outputs(destinations: tuple[Path, ...], protected_inputs: list[Path]):
-    """keep prior buckets available if matching or publication fails."""
+def _output_layout(destinations: tuple[Path, ...], protected_inputs: list[Path]):
     paths = tuple(path.resolve() for path in destinations)
     if len(set(paths)) != len(paths):
         raise ValueError("each matcher output needs its own directory")
@@ -277,7 +271,34 @@ def _stage_outputs(destinations: tuple[Path, ...], protected_inputs: list[Path])
             raise ValueError(f"matcher output and corpus directories overlap: {path}")
         if path.exists() and not path.is_dir():
             raise NotADirectoryError(path)
-    roots = [path for path in paths if not any(parent in paths for parent in path.parents)]
+    existing = [path for path in paths if path.exists()]
+    if existing:
+        ancestors = {parent for source in inputs for parent in (source, *source.parents)}
+        for parent in ancestors:
+            if parent.exists() and any(parent.samefile(root) for root in existing):
+                raise ValueError(f"matcher output and corpus directories overlap: {parent}")
+    if len({(p.stat().st_dev, p.stat().st_ino) for p in existing}) != len(existing):
+        raise ValueError("each matcher output needs its own directory")
+    return paths, [path for path in paths if not any(parent in paths for parent in path.parents)]
+
+
+def _require_bucket_tree(directory: Path) -> None:
+    """directory replacement must leave links and unrelated files alone."""
+    if not directory.exists():
+        return
+    for child in directory.iterdir():
+        if child.is_symlink():
+            raise ValueError(f"matcher output contains a symlink: {child}")
+        if child.is_dir():
+            _require_bucket_tree(child)
+        elif not child.is_file() or child.suffix != ".jsonl":
+            raise ValueError(f"output contains an entry outside the matcher buckets: {child}")
+
+
+@contextmanager
+def _stage_outputs(destinations: tuple[Path, ...], protected_inputs: list[Path]):
+    """keep prior buckets available if matching or publication fails."""
+    paths, roots = _output_layout(destinations, protected_inputs)
     staging = {}
     published = False
     try:
@@ -291,7 +312,16 @@ def _stage_outputs(destinations: tuple[Path, ...], protected_inputs: list[Path])
             output.mkdir(parents=True, exist_ok=True)
             outputs.append(output)
         yield outputs
-        with ExitStack() as rollback:
+        with ExitStack() as locks, ExitStack() as rollback:
+            for root in roots:
+                lock = root.parent / f".{root.name}.recall-lock"
+                try:
+                    lock.mkdir()
+                except FileExistsError as error:
+                    raise RuntimeError(f"matcher output is reserved: {lock}") from error
+                locks.callback(lock.rmdir)
+            for root in roots:
+                _require_bucket_tree(root)
             for root, temp in staging.items():
                 backup = temp / "previous"
                 if root.exists():
@@ -310,7 +340,10 @@ def _stage_outputs(destinations: tuple[Path, ...], protected_inputs: list[Path])
                     file=sys.stderr,
                 )
             else:
-                shutil.rmtree(temp)
+                try:
+                    shutil.rmtree(temp)
+                except OSError as error:
+                    print(f"could not clean staging directory {temp}: {error}", file=sys.stderr)
 
 
 def main() -> int:
