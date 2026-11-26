@@ -458,6 +458,7 @@ def test_validate_coverage_allows_subset_phrases(tmp_path: Path) -> None:
         "The proposal was agreed by 3 personas in total silence.\n"
         "The revisions agreed by 3 personas total, on average, five pages.\n"
         "The reports agreed by 3 personas total, excluding appendices, five pages.\n"
+        "The decision was agreed by 3 personas in total across-the-board silence.\n"
         "The report was agreed by 3 personas in total, stunned silence.\n"
         "The revisions agreed by 3 personas total five pages.\n"
         "The revisions agreed by 3 personas total (on average) five pages.\n"
@@ -497,6 +498,10 @@ def test_validate_coverage_allows_subset_phrases(tmp_path: Path) -> None:
         ("agreed by 12 personas total (Panel + Adversary)", "12 personas total"),
         ("Agreed by 3 personas in total (Panel + Adversary)", "3 personas in total"),
         ("agreed by 12 personas in total", "12 personas in total"),
+        (
+            "agreed by 12 personas, in total, excluding Alex, Blair, and Casey.",
+            "12 personas, in total",
+        ),
         ("agreed by 12 personas in total, including two new members", "12 personas in total"),
     ],
 )
@@ -522,6 +527,7 @@ def test_allowed_subset_does_not_hide_an_explicit_total(
             "A total of 3 personas  \nIn total, 11 personas agreed",
             ["A total of 3 personas", "In total, 11 personas"],
         ),
+        ("Agreed by 3 personas in total  \n12 personas approved.", ["3 personas in total"]),
         ("Agreed by 3 personas  \nIn total, 11 personas agreed", ["In total, 11 personas"]),
     ],
 )

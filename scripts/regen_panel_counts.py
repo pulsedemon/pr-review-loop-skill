@@ -294,10 +294,11 @@ _PANEL_LABEL = r"(?i:\(panel\s*\+\s*adversary\))"
 # match wrapped counts while excluding embedded digits such as B2.
 _COVERAGE_BROAD_RE = re.compile(
     rf"\b(?:{_TOTAL_PREFIX}\s+)?\d+\s+(?:reviewer\s+)?personas?\b"
+    r"(?:(?:,?\s+(?i:in\s+total)(?= {2,}\n))|"
     rf"(?:(?!,?\s+{_TOTAL_PREFIX}\s+\d),?\s+"
-    rf"(?:(?i:total)(?=\s*{_PANEL_LABEL})|(?i:in\s+total)(?=,?\s+(?i:across)\b"
-    rf"|\s*(?:[.;:!?)]|$|{_PANEL_LABEL}|,\s*(?i:including|excluding)\b[^,.;!?\n]*(?:[.;!?]|$)"
-    rf"|{_TOTAL_PREFIX}\s+\d))))?"
+    rf"(?:(?i:total)(?=\s*{_PANEL_LABEL})|(?i:in\s+total)(?=,?\s+(?i:across)(?=\s)"
+    rf"|\s*(?:[.;:!?)]|$|{_PANEL_LABEL}|,\s*(?i:including|excluding)\b"
+    rf"|{_TOTAL_PREFIX}\s+\d)))))?"
 )
 _HEADING = re.compile(r"^[ \t]*(?:>[ \t]*|(?:[-+*]|\d{1,9}[.)])[ \t]+)*#{1,6}(?:[ \t]+.*)?$")
 _WORD_MARKUP = re.compile(r"\*+|_+|`+")

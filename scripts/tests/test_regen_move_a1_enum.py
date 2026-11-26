@@ -338,6 +338,7 @@ def test_out_of_region_scan_rejects_undecodable_text_and_skips_binary(tmp_path: 
 @pytest.mark.parametrize(
     ("suffix", "data"),
     [
+        ("txt", "future cross_fixture mirror".encode("utf-16le")),
         ("py", "café cross_fixture".encode("utf-16le")),
         ("yml", "café cross_fixture".encode("utf-16le")),
         ("txt", "café cross_fixture".encode("utf-16le")),

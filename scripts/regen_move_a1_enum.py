@@ -273,6 +273,11 @@ def _scan_out_of_region(
         ".yaml",
         ".yml",
     }
+    wide_values = [
+        value.encode(encoding)
+        for value in values
+        for encoding in ("utf-16-le", "utf-16-be", "utf-32-le", "utf-32-be")
+    ]
     hits: list[str] = []
 
     def fail_walk(error: OSError) -> None:
@@ -296,12 +301,17 @@ def _scan_out_of_region(
                 data = path.read_bytes()
             except OSError as error:
                 generator_io.fail(ascii(f"cannot scan {path}: {error}")[1:-1])
+            known_text = path.suffix.lower() in text_suffixes or path.name in {
+                "LICENSE",
+                ".gitignore",
+            }
+            if known_text and b"\0" in data and any(token in data for token in wide_values):
+                generator_io.fail(ascii(f"cannot scan {path}: expected UTF-8 enum text")[1:-1])
             try:
                 text = data.decode("utf-8")
             except UnicodeDecodeError as error:
                 if (
-                    path.suffix.lower() not in text_suffixes
-                    and path.name not in {"LICENSE", ".gitignore"}
+                    not known_text
                     and b"\0" in data
                     and not data.startswith(
                         (
