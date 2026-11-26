@@ -18,9 +18,7 @@ def test_renders_only_move_c_personas(tmp_path: Path) -> None:
         carriers=["alpha", "gamma"],
     )
     out = render(yaml_path)
-    assert "alpha" in out
-    assert "gamma" in out
-    assert "beta" not in out
+    assert out.startswith("- **Move C (cross-doc consistency)**, `alpha`, `gamma`:")
 
 
 def test_omits_adversary_even_if_named_in_panel(tmp_path: Path) -> None:
@@ -83,12 +81,12 @@ def test_default_manifest_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
 
 def test_move_c_uses_the_configured_schema_constraint_owner(tmp_path: Path) -> None:
     manifest = write_personas_yaml(
-        tmp_path, ["requirements", "type_design"], carriers=["requirements"]
+        tmp_path, ["requirements", "type_design"], carriers=["type_design"]
     )
     out = render(manifest)
     assert "cross-reference `requirements` in `detail`" in out
     assert "`requirements` owns the blocker" in out
-    assert "`type_design`" not in out
+    assert out.startswith("- **Move C (cross-doc consistency)**, `type_design` only:")
 
 
 def test_load_manifest_failure_propagates(tmp_path: Path) -> None:
