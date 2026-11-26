@@ -16,6 +16,9 @@ GENERATORS=(
   regen_dev_trees.py
 )
 
+# cog wraps manifest errors with its own exit status.
+python3 "$ROOT/scripts/personas_manifest.py" --list panel-names >/dev/null
+
 if [[ "${1:-}" == "--check" ]]; then
   # cog prints its diff on stdout; the generator contract puts drift on stderr.
   PYTHONIOENCODING=utf-8 python3 -m cogapp --check --diff \

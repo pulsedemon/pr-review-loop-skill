@@ -300,11 +300,12 @@ def _run_validate_markers(*, corpus_root: Path) -> int:
 
 # match punctuation-led and wrapped counts without matching tokens such as B2.
 _TOTAL_PREFIX = r"(?i:(?:a\s+)?total\s+of|in\s+total,|panel\s+of)"
+_PANEL_LABEL = r"(?i:\(panel\s*\+\s*adversary\))"
 _COVERAGE_BROAD_RE = re.compile(
     rf"\b(?:{_TOTAL_PREFIX}\s+)?\d+\s+(?:reviewer\s+)?personas?\b"
     rf"(?:(?!\s+{_TOTAL_PREFIX}\s+\d)"
     r"(?:\s+(?i:in\s+total)(?=\s+(?i:across)\b)"
-    r"|\s+(?i:total)(?=\s*\(panel\s*\+\s*adversary\))|\s+(?i:in\s+total)(?=\s*(?:[.;:!?)]|$|\(panel\s*\+\s*adversary\)"
+    rf"|\s+(?i:total)(?=\s*{_PANEL_LABEL})|\s+(?i:in\s+total)(?=\s*(?:[.;:!?)]|$|{_PANEL_LABEL}"
     rf"|,\s*(?i:including|excluding)\b[^,.;!?\n]*(?:[.;!?]|$)|{_TOTAL_PREFIX}\s+\d))))?"
 )
 _PARAGRAPH_BOUNDARY = re.compile(

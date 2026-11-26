@@ -52,6 +52,26 @@ assert_every_generator_ran() {
   [[ "$stderr" == *"cog output"* ]]
 }
 
+@test "both regeneration modes report a legacy persona file key as a manifest error" {
+  local tree="$BATS_TEST_TMPDIR/legacy"
+  copy_skill_tree --git "$tree"
+  cd "$tree"
+  python3 - <<'PYTHON'
+from pathlib import Path
+
+import yaml
+
+path = Path("reviewers/personas.yaml")
+manifest = yaml.safe_load(path.read_text(encoding="utf-8"))
+manifest["panel"][0]["file"] = "legacy.md"
+path.write_text(yaml.safe_dump(manifest), encoding="utf-8")
+PYTHON
+  run bash scripts/regen.sh
+  [[ "$status" -eq 3 && "$output" == *"unknown key(s): ['file']"* ]]
+  run bash scripts/regen-check.sh
+  [[ "$status" -eq 3 && "$output" == *"unknown key(s): ['file']"* ]]
+}
+
 @test "regen.sh --check passes a generator's drift exit through" {
   # cog runs first, so drift it also sees cannot show a generator's status
   # being swallowed; this drift is visible to regen_dev_trees.py alone.
