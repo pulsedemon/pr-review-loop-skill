@@ -29,6 +29,7 @@ import json
 import shutil
 import sys
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from types import ModuleType
 
 from _shared import (
@@ -185,10 +186,12 @@ def process_corpus_file(
     # loop findings are plain dicts (unhashable) and carry no id of their own.
     corroborated_loop_idx: set[int] = set()
 
-    for ext in external:
+    for index, ext in enumerate(external):
         if not is_anchored(ext):
             continue  # Unanchored externals never feed the matcher.
-        _require_matcher_fields("external", ext, f"{owner}/{repo} PR #{pr}")
+        _require_matcher_fields(
+            "external", ext, f"{owner}/{repo} PR #{pr} external_findings[{index}]"
+        )
         ext_for_matcher = {
             "file": ext["file"],
             "line": ext["line"],
@@ -274,22 +277,19 @@ def main() -> int:
     matcher = _load_matcher(args.match_script)
     corpora = sorted(args.corpus_dir.glob("*/*/pr-*.json"))
     require_nested_layout(args.corpus_dir, corpora, CORPUS_VERSION)
-    # Derived outputs are 100% a function of the corpus; rebuild from scratch so
-    # neither stale flat leftovers nor stale nested files (PRs since removed from
-    # the corpus) can persist. Runs only after the layout guard passes, so a
-    # guard failure never destroys prior good outputs.
-    for derived in (args.unmatched_dir, args.matched_dir, args.loop_unmatched_dir):
-        if derived.is_dir():
-            shutil.rmtree(derived)
-        derived.mkdir(parents=True, exist_ok=True)
-    for corpus_path in corpora:
-        process_corpus_file(
-            corpus_path,
-            args.unmatched_dir,
-            args.matched_dir,
-            args.loop_unmatched_dir,
-            matcher,
-        )
+    # publish only after every corpus record has been matched successfully.
+    destinations = (args.unmatched_dir, args.matched_dir, args.loop_unmatched_dir)
+    with TemporaryDirectory() as scratch:
+        staged = tuple(Path(scratch) / name for name in ("unmatched", "matched", "loop_unmatched"))
+        for directory in staged:
+            directory.mkdir()
+        for corpus_path in corpora:
+            process_corpus_file(corpus_path, *staged, matcher)
+        for destination in destinations:
+            destination.mkdir(parents=True, exist_ok=True)
+        for source, destination in zip(staged, destinations, strict=True):
+            shutil.rmtree(destination)
+            shutil.move(source, destination)
 
     return 0
 
