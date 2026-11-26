@@ -86,12 +86,6 @@ class Manifest:
             seen_files.add(scenario.file)
             previous = scenario.number
 
-    def by_number(self, number: int) -> Scenario:
-        for scenario in self.scenarios:
-            if scenario.number == number:
-                return scenario
-        raise ManifestError(f"unknown scenario number: {number}")
-
     def by_file(self, file: str) -> Scenario:
         for scenario in self.scenarios:
             if scenario.file == file:
