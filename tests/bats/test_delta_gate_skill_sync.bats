@@ -12,7 +12,7 @@ load test_helper
 @test "gate.schema.json reviewer enum matches the personas.yaml panel" {
   local enum panel
   enum=$(python3 -c "import json;print(','.join(sorted(json.load(open('${REPO_ROOT}/reviewers/gate.schema.json'))['properties']['reviewer']['enum'])))")
-  panel=$(python3 -c "import yaml;print(','.join(sorted(p['name'] for p in yaml.safe_load(open('${REPO_ROOT}/reviewers/personas.yaml'))['panel'])))")
+  panel=$(python3 "${SCRIPTS}/personas_manifest.py" --list panel-names | LC_ALL=C sort | paste -sd, -)
   [ "$enum" = "$panel" ]
 }
 
