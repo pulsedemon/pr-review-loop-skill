@@ -204,24 +204,35 @@ def test_unicode_separator_in_prose_does_not_start_a_marker_line(
     assert path.read_text() == original
 
 
-@pytest.mark.parametrize("prefix", ["", "2 personas\u2028"])
-def test_write_preserves_a_malformed_region_containing_another_marker(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str], prefix: str
+@pytest.mark.parametrize(
+    ("template", "body", "error_line"),
+    [
+        ("{n} personas", "<!-- regen:panel-count-total:start -->", 3),
+        ("{n} personas", "    <!-- regen:panel-count-total:end -->", 3),
+        ("{n} personas", "2 personas\u2028<!-- regen:panel-count-total:start -->", 3),
+        ("{n} personas", "2 personas <!-- regen:panel-count-total:end -->", 3),
+        ("{n} personas", "<!-- template: extra -->", 3),
+        ("<!-- regen:panel-count-total:start -->", "ordinary prose", 2),
+    ],
+)
+def test_write_preserves_a_region_containing_another_marker(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], template: str, body: str, error_line: int
 ) -> None:
     root = _make_corpus(tmp_path)
     path = root / "SKILL.md"
-    original = _total_region("{n} personas", prefix + "<!-- regen:panel-count-total:start -->")
-    path.write_text(original)
+    original = _total_region(template, body).encode()
+    path.write_bytes(original)
     manifest = write_personas_yaml(tmp_path, ["a", "b"])
     assert _run(["--write", "--corpus-root", str(root), "--manifest", str(manifest)]) == 5
-    assert "line 3:" in capsys.readouterr().err
-    assert path.read_text() == original
+    assert f"line {error_line}:" in capsys.readouterr().err
+    assert path.read_bytes() == original
 
 
 def test_validate_markers_passes_on_balanced_tree(tmp_path: Path) -> None:
     root = _make_corpus(tmp_path)
     (root / "SKILL.md").write_text(
-        _total_region("{n} {personas|persona}", "2 personas")
+        "Inline example: `<!-- regen:panel-count-total:start -->`.\n"
+        + _total_region("{n} {personas|persona}", "2 personas")
         + _total_plus_1_region("{n} personas", "3 personas")
     )
     rc = _run(["--validate-markers", "--corpus-root", str(root)])
@@ -394,16 +405,32 @@ def test_validate_coverage_allows_subset_phrases(tmp_path: Path) -> None:
     assert rc == 0
 
 
-def test_allowed_subset_does_not_hide_a_total_on_the_same_line(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+@pytest.mark.parametrize(
+    ("phrase", "total"),
+    [
+        ("The panel of 999 personas agreed", "panel of 999 personas"),
+        ("The other 10 personas agreed", "The other 10 personas"),
+        ("agreed by 12 personas total", "12 personas total"),
+        ("All 11 personas agreed", "All 11 personas"),
+    ],
+)
+def test_allowed_subset_does_not_hide_an_explicit_total(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], phrase: str, total: str
 ) -> None:
     root = _make_corpus(tmp_path)
-    (root / "SKILL.md").write_text("The panel of 999 personas agreed; 2 personas approved.\n")
-    rc = _run(["--validate-coverage", "--corpus-root", str(root)])
-    assert rc == 5
+    (root / "SKILL.md").write_text(f"{phrase}; 2 personas approved.\n")
+    assert _run(["--validate-coverage", "--corpus-root", str(root)]) == 5
     err = capsys.readouterr().err
-    assert "999 personas" in err
+    assert repr(total) in err
     assert "2 personas approved" not in err
+
+
+def test_blank_lines_separate_total_qualifiers_from_allowed_subsets(tmp_path: Path) -> None:
+    root = _make_corpus(tmp_path)
+    (root / "SKILL.md").write_text(
+        "## The Other\n \n2 personas approved.\n\nagreed by 3 personas\n\nTotal elapsed time.\n"
+    )
+    assert _run(["--validate-coverage", "--corpus-root", str(root)]) == 0
 
 
 def test_validate_coverage_catches_phrase_split_across_lines(

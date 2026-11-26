@@ -13,7 +13,9 @@ to either be wrapped in a region or match a maintained allowlist.
 Authors wrap each panel-count phrase in named-region markers and supply the
 *template* on the line immediately after the start marker, in a hidden
 ``<!-- template: ... -->`` HTML comment. The line after the template holds
-the rendered prose. The end marker closes the region:
+the rendered prose. Region boundaries occupy whole physical lines. Template
+text and rendered bodies cannot contain another control comment. The end
+marker closes the region:
 
 ```
 <!-- regen:panel-count-total:start -->
@@ -82,6 +84,7 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -90,9 +93,8 @@ from personas_manifest import ManifestError, load_manifest
 
 _KIND_TOTAL = "total"
 
-_START_RE = re.compile(r"^<!-- regen:panel-count-(total|total-plus-1):start -->\s*$")
-_END_RE = re.compile(r"^<!-- regen:panel-count-(total|total-plus-1):end -->\s*$")
-_TEMPLATE_RE = re.compile(r"^<!-- template: (.+?) -->\s*$")
+_CONTROL_RE = re.compile(r"<!-- regen:panel-count-(total|total-plus-1):(start|end) -->")
+_TEMPLATE_RE = re.compile(r"<!-- template: (.+?) -->")
 
 _PLACEHOLDER_PERSONAS = "{personas|persona}"
 _PLACEHOLDER_N = "{n}"
@@ -145,7 +147,7 @@ def _parse_regions(lines: list[str], path: Path) -> list[_Region]:
         if "<!-- regen:panel-count-" in line:
             fragments = line.splitlines()
             if len(fragments) > 1 and any(
-                _START_RE.fullmatch(part) or _END_RE.fullmatch(part) for part in fragments
+                _CONTROL_RE.fullmatch(part.rstrip()) for part in fragments
             ):
                 raise _MarkerError(
                     f"{path}: line {number}: put the marker on its own physical line"
@@ -155,23 +157,22 @@ def _parse_regions(lines: list[str], path: Path) -> list[_Region]:
     n_lines = len(lines)
     while i < n_lines:
         line = lines[i]
-        start_m = _START_RE.match(line)
-        end_m = _END_RE.match(line)
-        if end_m and not start_m:
+        marker = _CONTROL_RE.fullmatch(line.rstrip())
+        if marker and marker[2] == "end":
             raise _MarkerError(
                 f"{path}: line {i + 1}: orphan end marker for "
-                f"regen:panel-count-{end_m.group(1)} (no matching start)"
+                f"regen:panel-count-{marker[1]} (no matching start)"
             )
-        if not start_m:
+        if not marker:
             i += 1
             continue
-        kind = start_m.group(1)
+        kind = marker[1]
         if i + 1 >= n_lines:
             raise _MarkerError(
                 f"{path}: line {i + 1}: regen:panel-count-{kind}:start has no body "
                 f"(template comment expected on next line)"
             )
-        template_m = _TEMPLATE_RE.match(lines[i + 1])
+        template_m = _TEMPLATE_RE.fullmatch(lines[i + 1].rstrip())
         if template_m is None:
             raise _MarkerError(
                 f"{path}: line {i + 2}: expected <!-- template: ... --> directly after "
@@ -186,10 +187,13 @@ def _parse_regions(lines: list[str], path: Path) -> list[_Region]:
             raise _MarkerError(
                 f"{path}: line {i + 1}: regen:panel-count-{kind}:start without matching :end marker"
             )
-        if _START_RE.fullmatch(lines[i + 2]) or _END_RE.fullmatch(lines[i + 2]):
-            raise _MarkerError(f"{path}: line {i + 3}: expected rendered prose, found a marker")
-        end_line_m = _END_RE.match(lines[i + 3])
-        if end_line_m is None:
+        for number, content in ((i + 2, template_m[1]), (i + 3, lines[i + 2])):
+            if _CONTROL_RE.search(content) or _TEMPLATE_RE.search(content):
+                raise _MarkerError(
+                    f"{path}: line {number}: expected panel-count prose, found a marker"
+                )
+        end_line_m = _CONTROL_RE.fullmatch(lines[i + 3].rstrip())
+        if end_line_m is None or end_line_m[2] != "end":
             raise _MarkerError(
                 f"{path}: line {i + 4}: expected regen:panel-count-{kind}:end "
                 f"after rendered body, got: {lines[i + 3]!r}"
@@ -293,7 +297,7 @@ def _run_validate_markers(*, corpus_root: Path) -> int:
 
 # match punctuation-led and wrapped counts without matching tokens such as B2.
 _COVERAGE_BROAD_RE = re.compile(
-    r"\b(?:(?i:panel\s+of|the\s+other)\s+)?\d+\s+(?:reviewer\s+)?personas?\b(?:\s+(?i:total)\b)?"
+    r"\b(?:(?i:panel\s+of|the\s+other|all)\s+)?\d+\s+(?:reviewer\s+)?personas?\b(?:\s+(?i:total)\b)?"
 )
 
 # total-shaped phrases must stay generated even when their counts currently match.
@@ -304,6 +308,17 @@ _COVERAGE_ALLOW_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"agreed\s+by\s+\d+\s+personas?"),
     re.compile(r"\d+\s+Move\s+C\s+personas?"),
 )
+
+
+def _unwrapped_counts(paragraph: str) -> Iterator[re.Match[str]]:
+    allowed_spans = [
+        match.span()
+        for pattern in _COVERAGE_ALLOW_PATTERNS
+        for match in pattern.finditer(paragraph)
+    ]
+    for match in _COVERAGE_BROAD_RE.finditer(paragraph):
+        if not any(start <= match.start() and match.end() <= end for start, end in allowed_spans):
+            yield match
 
 
 def _run_validate_coverage(*, corpus_root: Path) -> int:
@@ -328,22 +343,20 @@ def _run_validate_coverage(*, corpus_root: Path) -> int:
             "" if idx in region_lines else line.rstrip("\r\n") for idx, line in enumerate(lines)
         ]
         scan_text = "\n".join(scan_lines)
-        allowed_spans = [
-            match.span()
-            for pattern in _COVERAGE_ALLOW_PATTERNS
-            for match in pattern.finditer(scan_text)
-        ]
-        for m in _COVERAGE_BROAD_RE.finditer(scan_text):
-            if any(start <= m.start() and m.end() <= end for start, end in allowed_spans):
-                continue
-            start_line_idx = scan_text.count("\n", 0, m.start())
-            failures.append(
-                f"{path}: line {start_line_idx + 1}: unhandled numbered persona-count phrase: "
-                f"{m.group(0)!r}\n"
-                f"    fix: wrap the phrase in a regen:panel-count region, OR add an "
-                f"allowlist pattern to _COVERAGE_ALLOW_PATTERNS in "
-                f"scripts/regen_panel_counts.py."
-            )
+        line_number = 1
+        # keep the delimiters so diagnostics retain physical line numbers.
+        for paragraph in re.split(r"(\n[^\S\n]*\n)", scan_text):
+            for m in _unwrapped_counts(paragraph):
+                start_line = line_number + paragraph.count("\n", 0, m.start())
+                failures.append(
+                    f"{path}: line {start_line}: unhandled numbered persona-count phrase: "
+                    f"{m.group(0)!r}\n"
+                    f"    fix: wrap the phrase in a regen:panel-count region, OR add an "
+                    f"allowlist pattern to _COVERAGE_ALLOW_PATTERNS in "
+                    f"scripts/regen_panel_counts.py."
+                )
+            line_number += paragraph.count("\n")
+
     if failures:
         print("regen_panel_counts: coverage check failed:", file=sys.stderr)
         for f in failures:
