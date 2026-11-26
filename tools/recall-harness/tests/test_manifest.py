@@ -224,26 +224,8 @@ def test_manifest_mode_hard_fails_on_unreachable_repo(tmp_path, monkeypatch, cap
     assert stale.read_text() == '{"pr":99}\n'
 
 
-# The drift check exists because nothing else compares the manifest against the
-# merged set. `test_corpus_is_subset_of_manifest` above compares two local
-# artifacts and skips when corpus/ is absent, which is always true on CI's
-# fresh checkout, so a PR merged into neither corpus nor manifest is invisible
-# to it.
-#
-# Mutation-tested before requesting review:
-#   - drop a merged PR row from the manifest -> exit 1 and that PR named in
-#     stderr (verified against the live repo: it caught #105, unmanifested at
-#     the time).
-#   - add a manifest row the merged set lacks -> still exit 0. a PR merged
-#     before the --merged-since window is legitimately manifested.
-#   - point owner/repo at a repo the manifest also lists -> rows for other
-#     repos are filtered out rather than counted as coverage.
-#   - drop the FileNotFoundError/JSONDecodeError handler -> both fetch-failure
-#     tests fail. only CalledProcessError was caught at first, so a missing gh
-#     escaped as a stack trace: still non-zero, but it reads in the workflow
-#     log like drift rather than a broken fetch.
-def _drift(monkeypatch, manifest, merged, owner="acme", repo="api"):
-    monkeypatch.setattr(check_manifest_drift, "list_merged_prs", lambda *_: merged)
+def _drift(monkeypatch, manifest, merged=(), owner="acme", repo="api", fetch=None):
+    monkeypatch.setattr(check_manifest_drift, "list_merged_prs", fetch or (lambda *_: merged))
     argv = [
         "check_manifest_drift.py",
         "--owner",
@@ -313,24 +295,7 @@ def test_drift_check_exits_2_when_gh_is_missing(tmp_path, monkeypatch, capsys):
     def boom(*_):
         raise FileNotFoundError(2, "No such file or directory: 'gh'")
 
-    monkeypatch.setattr(check_manifest_drift, "list_merged_prs", boom)
-    monkeypatch.setattr(
-        sys,
-        "argv",
-        [
-            "check_manifest_drift.py",
-            "--owner",
-            "acme",
-            "--repo",
-            "api",
-            "--merged-since",
-            "2026-01-01",
-            "--manifest",
-            str(manifest),
-        ],
-    )
-
-    assert check_manifest_drift.main() == 2
+    assert _drift(monkeypatch, manifest, fetch=boom) == 2
     assert "FileNotFoundError" in capsys.readouterr().err
 
 
@@ -344,24 +309,7 @@ def test_drift_check_exits_2_on_non_json_gh_output(tmp_path, monkeypatch, capsys
     def boom(*_):
         raise json.JSONDecodeError("Expecting value", "not json", 0)
 
-    monkeypatch.setattr(check_manifest_drift, "list_merged_prs", boom)
-    monkeypatch.setattr(
-        sys,
-        "argv",
-        [
-            "check_manifest_drift.py",
-            "--owner",
-            "acme",
-            "--repo",
-            "api",
-            "--merged-since",
-            "2026-01-01",
-            "--manifest",
-            str(manifest),
-        ],
-    )
-
-    assert check_manifest_drift.main() == 2
+    assert _drift(monkeypatch, manifest, fetch=boom) == 2
     assert "JSONDecodeError" in capsys.readouterr().err
 
 
@@ -398,22 +346,5 @@ def test_drift_check_exits_2_on_unparseable_manifest(tmp_path, monkeypatch, caps
     manifest = tmp_path / "m.csv"
     manifest.write_text("owner,repo,pr\nacme,api,notanumber\n")
 
-    monkeypatch.setattr(check_manifest_drift, "list_merged_prs", lambda *_: [1])
-    monkeypatch.setattr(
-        sys,
-        "argv",
-        [
-            "check_manifest_drift.py",
-            "--owner",
-            "acme",
-            "--repo",
-            "api",
-            "--merged-since",
-            "2026-01-01",
-            "--manifest",
-            str(manifest),
-        ],
-    )
-
-    assert check_manifest_drift.main() == 2
+    assert _drift(monkeypatch, manifest, [1]) == 2
     assert "cannot read" in capsys.readouterr().err
